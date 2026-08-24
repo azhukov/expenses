@@ -1,0 +1,70 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
+
+# ─────────────────────────────────────────────────────────────
+# Working discipline
+# ─────────────────────────────────────────────────────────────
+
+rules:
+  tasks:
+    - Every behaviour task must be preceded by the task that writes its failing test.
+      A section that implements behaviour starts at X.0 with the tests for that
+      section, and no implementation task in it may be started while X.0 is unchecked.
+    - Trailing "unit-test X" tasks are not acceptable. A test written after the
+      code it covers is a regression guard, not a specification, and it silently
+      passes for the wrong reasons.
+    - Tasks that produce no behaviour - scaffolding, package references, docker
+      files, generated migrations, documentation - are exempt and should say so
+      rather than inventing a test to satisfy the rule.
+    - Name the spec scenario a test comes from where one exists, so the task list
+      and the specs stay traceable to each other.
+
+operations:
+  apply:
+    guidance:
+      - Test first, without exception, for anything that changes behaviour. Write the
+        test, run it, and see it fail for the reason you expect before writing the
+        implementation. A test that passes the first time you run it has told you
+        nothing and must be treated as broken until you have seen it fail.
+      - Red, green, refactor - in that order, one behaviour at a time. Do not write
+        three tests and then three implementations; the point is the feedback between
+        each pair.
+      - Derive test cases from the spec scenarios rather than from the code you intend
+        to write. The scenarios in `specs/**/spec.md` are already written as
+        WHEN/THEN pairs; each is a test case, and its wording belongs in the test name.
+      - When a test cannot be written first because the seam does not exist yet, that
+        is a design signal, not a licence to skip it. Introduce the seam.
+      - Never weaken or delete a failing test to make a suite green. If a test is
+        wrong, say why in the same change that alters it.
+      - Report honestly which tests were run and what they returned. "Tests pass" with
+        no output is not a result.
