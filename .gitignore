@@ -1,0 +1,45 @@
+# ---- .NET ----
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+artifacts/
+TestResults/
+*.trx
+*.coverage
+*.coverlet.json
+coverage*.xml
+coverage*.json
+.vs/
+project.lock.json
+project.fragment.lock.json
+msbuild.log
+msbuild.binlog
+
+# ---- Node / React (FE) ----
+node_modules/
+dist/
+build/
+.vite/
+.parcel-cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ---- Environment / local secrets ----
+.env
+.env.local
+.env.*.local
+*.local.json
+appsettings.Local.json
+
+# ---- Editors / OS ----
+.idea/
+.DS_Store
+Thumbs.db

@@ -26,7 +26,7 @@ The second motivation is that this ledger should be usable *conversationally*. E
 ### New Capabilities
 
 - `purchase-recording`: Recording a purchase and its expense lines, the container relationship between them, the merchant a purchase was made at, list price and discount on a line, the reconciliation invariant between a purchase amount and the sum of its expenses, and the `(OccurredAt, Amount)` idempotency guard.
-- `receipt-ingestion`: Uploading a receipt image, attaching it to a purchase, storing the bytes, capturing fiscal receipt identity where a receipt carries it, and the staged extraction cascade that turns an image into candidate expense lines — including arithmetic validation of a result, the placeholder vision stage, and how unvalidated or failed extractions surface.
+- `receipt-ingestion`: Uploading a receipt image, attaching it to a purchase, storing the bytes as a file the ledger refers to, capturing fiscal receipt identity where a receipt carries it, and the staged extraction cascade that turns an image into transient candidate expense lines that are never persisted — including arithmetic validation of a result, the placeholder vision stage, and how unvalidated or failed extractions surface.
 - `reference-data`: The category, unit and merchant dictionaries — stable codes, display names, seeding, activation, hierarchy, how a learned dictionary differs from a seeded one, and how verbatim text captured from a receipt is preserved alongside the normalised reference.
 - `api-surface`: The two front doors. REST endpoints for the React client including multipart receipt upload, and the MCP tool surface for assistant-driven recording and querying, both delegating to the same Application use cases.
 

@@ -53,21 +53,22 @@ The system SHALL expose an HTTP interface covering recording, retrieving and lis
 
 ### Requirement: Receipt upload is HTTP-only
 
-Receipt image upload SHALL be accepted over HTTP as a multipart form submission carrying the raw file. The MCP interface SHALL NOT accept image bytes as tool arguments. MCP SHALL instead be able to reference images already stored, and to trigger and read extraction for them.
+Receipt image upload SHALL be accepted over HTTP as a multipart form submission carrying the raw file, addressed to the purchase the receipt belongs to. The MCP interface SHALL NOT accept image bytes as tool arguments. MCP SHALL instead be able to reference receipts already stored, and to trigger and read extraction for them. Neither interface SHALL expose an identifier for a receipt image: a receipt is addressed by its purchase.
 
 #### Scenario: Upload over HTTP
 
-- **WHEN** a receipt image is submitted as a multipart form upload
-- **THEN** the image is stored and attached to the purchase
+- **WHEN** a receipt image is submitted as a multipart form upload for a purchase
+- **THEN** the image is stored and attached to that purchase
+- **AND** the response identifies it by the purchase rather than by an image identifier
 
-#### Scenario: MCP references a stored image
+#### Scenario: MCP references a stored receipt
 
-- **WHEN** an assistant asks over MCP for the extraction state of a stored receipt image
+- **WHEN** an assistant asks over MCP for the extraction state of the receipt of a purchase
 - **THEN** the state and any candidate lines are returned
 
 #### Scenario: MCP triggers extraction
 
-- **WHEN** an assistant asks over MCP to re-run extraction for a stored image
+- **WHEN** an assistant asks over MCP to re-run extraction for the receipt of a purchase
 - **THEN** extraction is started and the resulting state is reported
 
 ### Requirement: MCP tool surface
@@ -164,7 +165,7 @@ Both interfaces SHALL accept a merchant when a purchase is recorded, and SHALL a
 
 ### Requirement: Extraction results are legible over both interfaces
 
-Both interfaces SHALL report, for an extraction, the stages that ran, the stage that produced each value, the outcome of each arithmetic check, and any fiscal identifiers with whether they were corroborated. A result produced by a placeholder engine SHALL be identifiable as such wherever it is surfaced.
+Both interfaces SHALL report, for an extraction, the stages that ran, the stage that produced each value, the outcome of each arithmetic check, and any fiscal identifiers with whether they were corroborated. A result produced by a placeholder engine SHALL be identifiable as such wherever it is surfaced. Because candidates are not persisted, both interfaces SHALL be able to report a purchase whose candidates are no longer held: the recorded extraction state SHALL still be returned, the absence of candidates SHALL be distinguishable from an extraction that produced none, and neither interface SHALL start extraction in response to a read.
 
 #### Scenario: Reading a validated extraction
 
@@ -180,6 +181,13 @@ Both interfaces SHALL report, for an extraction, the stages that ran, the stage 
 
 - **WHEN** candidates produced by a placeholder stage are retrieved over either interface
 - **THEN** both identify the engine and stage that produced them
+
+#### Scenario: Reading an image whose candidates are no longer held
+
+- **WHEN** the extraction of a purchase whose candidates were discarded on restart is read over either interface
+- **THEN** both report the recorded extraction state and that no candidates are available
+- **AND** neither starts extraction
+- **AND** the response distinguishes this from an extraction that produced no lines
 
 ### Requirement: Fiscal identifiers may accompany an upload
 

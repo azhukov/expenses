@@ -1,0 +1,103 @@
+# The whole local stack: the database, the HTTP host, and the MCP host over HTTP.
+#
+#   docker compose up -d --build
+#
+#   API      http://localhost:5082        Swagger UI at /swagger, OpenAPI at /openapi/v1.json
+#   MCP      http://localhost:5083        HTTP transport; stdio is a `dotnet run` on the host
+#   Postgres localhost:5432               user/password/database all `expenses`
+#
+# `postgres` alone is still all the test suite and a locally-run host need:
+#
+#   docker compose up -d postgres
+
+name: expenses
+
+services:
+  # Local PostgreSQL for development. The database itself is created by the mounted script rather
+  # than by the image's POSTGRES_DB, because encoding, locale provider and collation are decided at
+  # creation and cannot be altered afterwards (D13) — the image would create it with the wrong ones.
+  #
+  # Scripts in docker-entrypoint-initdb.d run once, on an empty data directory. If the volume already
+  # exists, remove it (`docker compose down -v`) before changing provisioning.
+  postgres:
+    image: postgres:17-alpine
+    container_name: expenses-postgres
+    environment:
+      POSTGRES_USER: expenses
+      POSTGRES_PASSWORD: expenses
+      # The maintenance database. The ledger's own database is created by the init script.
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./BE/db/init:/docker-entrypoint-initdb.d:ro
+      - expenses-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expenses -d expenses"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # The HTTP front door, and — because it runs as Development here — the one process that applies
+  # migrations (D15). Its healthcheck is what the MCP host waits on: Kestrel does not listen until
+  # after `PrepareExpensesDatabase`, so "answering" means "the schema is there".
+  api:
+    build:
+      context: ./BE
+      dockerfile: Expenses.Api/Dockerfile
+    container_name: expenses-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__Expenses: "Host=postgres;Port=5432;Database=expenses;Username=expenses;Password=expenses"
+      # Receipt bytes are files referenced from the ledger (D11), so they need a volume of their
+      # own: a database dump is no longer a complete backup, and container-local disk would lose
+      # every image on the next `docker compose up --build`.
+      Receipts__RootPath: /var/lib/expenses/receipts
+    volumes:
+      - expenses-receipts:/var/lib/expenses/receipts
+    ports:
+      # 5082 outside to match the `dotnet run` profile, so a client's base address is the same
+      # whether the API is containerised or not.
+      - "5082:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/openapi/v1.json > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # The second front door, a separate process that never talks to the HTTP host (D1). It never
+  # migrates — two hosts doing that would race — which is why it waits for the API to be healthy
+  # rather than only for the database to accept connections.
+  mcp:
+    build:
+      context: ./BE
+      dockerfile: Expenses.Mcp/Dockerfile
+    container_name: expenses-mcp
+    environment:
+      EXPENSES_MCP_TRANSPORT: http
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__Expenses: "Host=postgres;Port=5432;Database=expenses;Username=expenses;Password=expenses"
+      # The same store as the API: this host drains extraction too, and extraction reads the file
+      # a purchase refers to (D11).
+      Receipts__RootPath: /var/lib/expenses/receipts
+    volumes:
+      - expenses-receipts:/var/lib/expenses/receipts
+    ports:
+      - "5083:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+volumes:
+  expenses-data:
+
+  # The other half of a backup: the ledger points at these files and cannot reproduce them (D11).
+  expenses-receipts:

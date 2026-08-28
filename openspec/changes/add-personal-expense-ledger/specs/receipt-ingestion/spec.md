@@ -1,17 +1,29 @@
 ## Purpose
 
-Defines how a receipt image is uploaded, attached to a purchase, and stored; how the fiscal identity a receipt carries is captured; and how the system turns that image into candidate expense lines through an ordered cascade of extraction stages whose result is validated arithmetically before a user reviews and confirms it.
+Defines how a receipt image is uploaded, attached to a purchase, and stored as a file the ledger refers to; how the fiscal identity a receipt carries is captured; and how the system turns that image into candidate expense lines — held only until they are confirmed or discarded — through an ordered cascade of extraction stages whose result is validated arithmetically before a user reviews and confirms it.
 
 ## ADDED Requirements
 
 ### Requirement: A purchase carries at most one receipt image
 
-A purchase SHALL have zero or one receipt image. A purchase created by manual entry SHALL have none. The system SHALL reject an attempt to attach a second image to a purchase that already has one, and SHALL leave the existing image untouched.
+A purchase SHALL have zero or one receipt image. A purchase created by manual entry SHALL have none. The system SHALL reject an attempt to attach a second image to a purchase that already has one, and SHALL leave the existing image untouched. A receipt SHALL belong to exactly one purchase and SHALL have no identity of its own: every operation on a receipt — uploading it, retrieving its bytes, reading its extraction state, re-running extraction — SHALL address it by the purchase that carries it. An image SHALL NOT exist in the system unattached.
 
 #### Scenario: Attach an image to a purchase
 
 - **WHEN** a receipt image is uploaded for a purchase that has no image
 - **THEN** the image is stored and attached to that purchase
+
+#### Scenario: Upload for a purchase that does not exist
+
+- **WHEN** a receipt image is uploaded for a purchase identifier that matches no purchase
+- **THEN** the system rejects the upload and reports that the purchase was not found
+- **AND** nothing is stored
+
+#### Scenario: A receipt is addressed through its purchase
+
+- **WHEN** the receipt of a purchase is retrieved, its extraction state read, or its extraction re-run
+- **THEN** the purchase identifies it in every case
+- **AND** no separate image identifier is required or exposed
 
 #### Scenario: Attach a second image
 
@@ -49,24 +61,87 @@ The system SHALL accept receipt images in JPEG, PNG, WebP and HEIC formats, and 
 - **WHEN** a file whose content is not an accepted format is uploaded while declaring itself to be a JPEG
 - **THEN** the system rejects the upload
 
-### Requirement: The same image file is not stored twice
+### Requirement: The same bytes are not stored twice
 
-The system SHALL detect when uploaded bytes are identical to those of an image already stored, and SHALL reuse the stored image rather than storing a second copy. Reuse SHALL NOT prevent the image from being attached to a different purchase.
+The system SHALL detect when uploaded bytes are identical to those of an image already stored, and SHALL retain a single copy of them rather than a second. Sharing one stored copy SHALL NOT be observable to either purchase: each SHALL carry its own receipt, its own extraction state and its own fiscal identifiers, and neither SHALL be affected by what happens to the other.
 
 #### Scenario: Identical bytes uploaded again
 
-- **WHEN** an image is uploaded whose bytes are identical to an already stored image
-- **THEN** the stored image is reused
-- **AND** only one copy of the bytes is retained
+- **WHEN** an image is uploaded for a second purchase whose bytes are identical to one already stored
+- **THEN** only one copy of the bytes is retained
+- **AND** both purchases carry a receipt of their own
+
+#### Scenario: Sharing is not visible in behaviour
+
+- **WHEN** two purchases carry receipts with identical bytes and extraction is re-run for one of them
+- **THEN** only that purchase's extraction state and candidates change
+- **AND** the other purchase is unaffected
 
 #### Scenario: Re-photographed receipt
 
 - **WHEN** a second, visually similar but not byte-identical photograph of the same paper receipt is uploaded
 - **THEN** it is treated as a new image and stored
+- **AND** a second file is written for it
+
+### Requirement: Receipt bytes are stored as files the purchase refers to
+
+The system SHALL store the bytes of a receipt in a file under a configured receipt store, and SHALL record against the purchase only the reference to that file together with the content hash, content type and size of the image. The ledger SHALL NOT contain the bytes themselves. The reference SHALL be retained as recorded rather than recomputed, so that the layout of the store can change without invalidating existing references. The system SHALL write the file before recording the reference, and SHALL clear the reference before deleting the file, so that a reference to an absent file is never created by an interruption.
+
+#### Scenario: Stored bytes are outside the ledger
+
+- **WHEN** a receipt image is uploaded for a purchase
+- **THEN** its bytes are written to a file in the receipt store
+- **AND** the purchase records the reference to that file, its content hash, content type and size, and not its bytes
+
+#### Scenario: A purchase either carries a whole receipt or none
+
+- **WHEN** a purchase is retrieved
+- **THEN** either it carries a file reference, content hash, content type, size and extraction state together, or it carries none of them
+- **AND** no partial receipt is ever recorded
+
+#### Scenario: Interrupted upload leaves no broken reference
+
+- **WHEN** an upload is interrupted after the file is written and before the reference is recorded
+- **THEN** the purchase carries no receipt
+- **AND** the ledger contains no reference to that file
+
+#### Scenario: Interrupted deletion leaves no broken reference
+
+- **WHEN** a receipt is deleted and the process is interrupted after the reference is cleared and before the file is
+- **THEN** the ledger contains no reference to that file
+- **AND** the remaining file is unreferenced and safe to discard
+
+#### Scenario: Deleting a receipt whose bytes another purchase shares
+
+- **WHEN** the receipt of one purchase is deleted while another purchase references the same content hash
+- **THEN** the file is retained
+- **AND** the other purchase's receipt can still be retrieved
+
+#### Scenario: Deleting the last receipt referencing a file
+
+- **WHEN** the receipt of the only purchase referencing a file is deleted
+- **THEN** the file is removed from the receipt store
+
+#### Scenario: Deleting a purchase takes its receipt reference with it
+
+- **WHEN** a purchase carrying a receipt is deleted
+- **THEN** nothing referring to that receipt remains in the ledger
+- **AND** its file is dealt with under the same sharing rule
+
+#### Scenario: Receipt store is unavailable at startup
+
+- **WHEN** the configured receipt store is missing or cannot be written to
+- **THEN** the system refuses to start and states which location it could not use
+
+#### Scenario: A referenced file is missing
+
+- **WHEN** the bytes of a stored image are requested and the file it refers to is not present
+- **THEN** the system reports the image as unavailable rather than as a server fault
+- **AND** the purchase, its expenses and the image's recorded metadata are unchanged
 
 ### Requirement: Extraction lifecycle
 
-Every attached receipt image SHALL have an extraction state, and that state SHALL be observable. The states SHALL be Pending, Extracting, Extracted, NeedsReview and Failed. Extraction SHALL NOT block the upload response.
+Every attached receipt image SHALL have an extraction state, recorded against the purchase that carries it, and that state SHALL be observable. The states SHALL be Pending, Extracting, Extracted, NeedsReview and Failed. A purchase with no receipt SHALL have no extraction state. Extraction SHALL NOT block the upload response.
 
 #### Scenario: State on upload
 
@@ -131,9 +206,44 @@ Extraction SHALL NOT alter the expenses of a purchase directly. Extracted values
 - **THEN** the candidates are removed
 - **AND** the image and the purchase remain
 
+### Requirement: Candidates are transient and are not part of the ledger
+
+Candidate lines and the extraction result that produced them SHALL NOT be persisted in the ledger. They SHALL be held against the purchase whose receipt produced them, and SHALL be available only until they are confirmed, discarded, replaced by a re-run, or the system restarts. What outlives a restart SHALL be the confirmed expenses, and the extraction state, failure reason and fiscal identifiers recorded on the purchase. Candidates being unavailable SHALL be reported as absence rather than as an error, and SHALL NOT be interpreted as an extraction failure. The system SHALL NOT re-run extraction merely because candidates were requested and found absent; re-running SHALL be an explicit action.
+
+#### Scenario: Candidates do not outlive a restart
+
+- **WHEN** an image has unconfirmed candidates and the system is restarted
+- **THEN** the candidates are no longer available
+- **AND** the extraction state, failure reason and fiscal identifiers recorded for that image are unchanged
+
+#### Scenario: Confirmed lines are unaffected by a restart
+
+- **WHEN** candidates were confirmed into expenses and the system is restarted
+- **THEN** those expenses are unchanged
+- **AND** the purchase still reconciles
+
+#### Scenario: Requesting candidates that are no longer held
+
+- **WHEN** the candidates of an image whose recorded state is Extracted are requested and none are held
+- **THEN** the response reports that no candidates are available, together with the recorded state
+- **AND** it is not reported as an extraction failure
+- **AND** extraction is not started
+
+#### Scenario: Re-running restores candidates
+
+- **WHEN** extraction is re-run for an image whose candidates are no longer held
+- **THEN** candidates are produced again
+- **AND** any expenses already confirmed for that purchase are unchanged
+
+#### Scenario: Extraction work still in flight when the system stops
+
+- **WHEN** the system restarts while images are Pending or mid-extraction
+- **THEN** those images are extracted again
+- **AND** no image is left permanently mid-extraction
+
 ### Requirement: Verbatim receipt text is preserved
 
-For every extracted line, the system SHALL retain the category and unit text exactly as it appeared on the receipt, in addition to any reference data value it was matched to. Verbatim text SHALL be retained even when no match is found, and SHALL survive later re-matching.
+For every extracted line, the system SHALL retain the category and unit text exactly as it appeared on the receipt, in addition to any reference data value it was matched to. Verbatim text SHALL be retained even when no match is found, and SHALL survive later re-matching. Because a candidate is transient, verbatim text SHALL be carried into the expense when the line is confirmed, so that what the receipt printed is retained by the ledger and not only by the candidate.
 
 #### Scenario: Unit text is preserved alongside a match
 
@@ -145,6 +255,12 @@ For every extracted line, the system SHALL retain the category and unit text exa
 - **WHEN** a line reading "Pfand" is extracted and matches no known unit
 - **THEN** the verbatim text "Pfand" is retained
 - **AND** the line has no matched unit
+
+#### Scenario: Verbatim text survives confirmation
+
+- **WHEN** a candidate line carrying verbatim category and unit text is confirmed into an expense
+- **THEN** the expense retains that text unchanged
+- **AND** it remains available after the candidate is gone
 
 #### Scenario: Non-Latin receipt text
 

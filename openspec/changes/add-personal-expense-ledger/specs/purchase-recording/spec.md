@@ -47,7 +47,7 @@ The sum of the amounts of the expenses within a purchase SHALL equal the purchas
 
 ### Requirement: Monetary amounts are exact
 
-All monetary amounts SHALL be stored and returned as exact decimal values with four decimal places of precision, and SHALL NOT be subject to binary floating-point rounding. Amounts SHALL be returned with the same precision they were accepted with.
+All monetary amounts SHALL be stored and returned as exact decimal values with two decimal places of precision, and SHALL NOT be subject to binary floating-point rounding. Amounts SHALL be returned with the same precision they were accepted with.
 
 #### Scenario: Precision is preserved
 

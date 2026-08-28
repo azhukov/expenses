@@ -51,6 +51,8 @@ BE/
 
 A manual entry constructs a purchase with a single expense. There is no separate manual path.
 
+**The receipt is part of the aggregate, not a neighbour of it** (D11): its file reference, extraction state and fiscal identifiers are values on `Purchase`, mapped to columns of `Purchases`. There is no `ReceiptImage` entity, no repository for one and no id to address one by — a receipt is reached through the purchase that owns it, which is the only way it was ever meaningfully reached.
+
 **Alternative considered — Expense as its own root with an optional purchase reference:** rejected because it makes the reconciliation invariant unenforceable (nothing owns it), and because every report would then have to handle expenses that belong to a purchase and expenses that do not.
 
 ### D3 — The duplicate guard is an idempotency guard, not deduplication
@@ -69,7 +71,7 @@ Naming follows the intent throughout — `DuplicatePurchaseGuard`, `PurchaseAlre
 ### D4 — The guard is enforced by a unique index, with a query-first fast path
 
 ```
-UNIQUE INDEX ix_purchases_occurred_at_amount ON purchases (occurred_at, amount)
+UNIQUE INDEX ix_purchases_occurred_at_amount ON "Purchases" ("OccurredAt", "Amount")
 ```
 
 Flow: query for a match first and return it if found; otherwise insert; if the insert violates the unique index, re-query and return the winner.
@@ -78,7 +80,9 @@ Flow: query for a match first and return it if found; otherwise insert; if the i
 
 **Alternative considered — a client-supplied UUIDv7 primary key as the idempotency token:** cleaner, since the primary key itself enforces it. Rejected because the identifier was specified as an artificial, database-owned surrogate. Recorded here as the natural upgrade path if the guard ever needs to be strengthened.
 
-### D5 — `occurred_at` is `timestamp without time zone`
+### D5 — `OccurredAt` is `timestamp without time zone`
+
+**Amended by D22:** the rule stands; the `Occurrence` helper it described is now a private method of `Purchase`.
 
 A receipt prints local wall-clock time and carries no offset. Storing it as an absolute instant would require inventing a timezone in order to normalise it, which is fabricated precision. Three concrete consequences drove the choice:
 
@@ -96,15 +100,21 @@ Within an expense, `Amount` is authoritative and `Quantity`, `Unit` and `UnitPri
 
 `Quantity` is non-nullable and defaults to `1`, so the simple case reads coherently without a nullable that every consumer must guard.
 
+**`Quantity` is a plain `decimal`, not a value object.** It has exactly one entry point — the `Expense` factory — and no foreseeable second field, so a wrapper would buy one rule a home it already has at the cost of a type every caller, mapper and adapter must unwrap. The rules still hold: non-negative, three decimal places, defaulting to `1`; they are enforced where the expense is constructed. Monetary amounts are plain decimals for the same reason — see D7, which states the general rule.
+
 `ListUnitPrice` and `DiscountAmount` join `Quantity`, `Unit` and `UnitPrice` on the descriptive side — see D19. Nothing on the descriptive side participates in reconciliation, and nothing on it is recomputed from anything else.
 
-### D7 — Money is a value object over `decimal`, with no currency field
+### D7 — Money is a plain `decimal` with shared validation, and there is no currency field
 
-`Money` is a `readonly record struct` wrapping a single `decimal`, giving the non-negativity rule and precision one home rather than scattering guard clauses. It is mapped as an EF complex type onto a single `numeric(19,4)` column, so the storage shape is identical to a bare decimal.
+**Amended by D22:** the rule stands; the shared `MonetaryAmount` validator is now a private method of each entity that owns amount fields, because the domain holds entities only.
 
-**Why not a bare `decimal`:** the validation would have to be duplicated at every entry point, and adding a currency later would be a model-wide edit instead of a contained one.
+Every monetary amount — `Purchase.Amount`, `Expense.Amount`, `UnitPrice`, `ListUnitPrice`, `DiscountAmount` — is a `decimal`. The two rules that govern all of them, non-negativity and at most two decimal places, live in one shared `MonetaryAmount` validator that the entity factories call as they build each field. The storage type is `numeric(19,2)`.
 
-**Why no currency field now:** single-currency is a specified constraint. A currency column that is always the same value is noise that every query and index must carry. Adding it later is one migration plus one index rebuild, which is a known and acceptable cost.
+**Why not a `Money` value object.** An earlier revision of this design wrapped the decimal in a `readonly record struct`. The rules it was meant to centralise are already centralised — there are exactly two entity factories (`Purchase.Record`, `Expense.Record`), both of which validate their other fields in the same place, so a wrapper gives the rule a home it already had. Against that, the wrapper is paid for everywhere else: an EF complex-type mapping for a single column, a wrap on every adapter DTO in and an unwrap on every DTO out, across two front doors. Shared functions over a primitive give the same guarantee at none of that cost. A discount stays a positive magnitude either way (D19), so nothing about the non-negativity rule is relaxed by dropping the type.
+
+**Why no currency field now:** single-currency is a specified constraint. A currency column that is always the same value is noise that every query and index must carry. Adding it later is one migration plus one index rebuild, which is a known and acceptable cost. That migration is not made harder by the absence of a wrapper: the amount columns are what change, and they change either way.
+
+**The general rule this follows.** Do not introduce a type over a single primitive. Reach for one only where there are genuinely many independent entry points sharing an invariant, or a second field is already foreseeable. Entities, closed-set enums and multi-field records are not what this excludes. The same reasoning removed a `Quantity` wrapper — see D6.
 
 ### D8 — Reference data: dictionary tables keyed by immutable `code`
 
@@ -114,56 +124,68 @@ Within an expense, `Amount` is authoritative and `Quantity`, `Unit` and `UnitPri
 
 **No translation tables.** Multilingual support means content is stored in whatever language it arrived in — not that concepts have several renderings. Category and unit names are single strings.
 
-Categories are hierarchical via a nullable `parent_id`, with cycle rejection in the domain. This was cheap to include now and expensive to retrofit, since every report and rollup would need reworking.
+Categories are hierarchical via a nullable `ParentId`, with cycle rejection in the domain. This was cheap to include now and expensive to retrofit, since every report and rollup would need reworking.
 
 Retirement is by an `is_active` flag rather than deletion, because deleting a category would either orphan or rewrite history. `is_system` marks seeded entries as undeletable.
 
 ### D9 — Verbatim receipt text is stored beside every normalised reference
 
 ```
-expenses.category_id   FK -> categories   nullable
-expenses.category_raw  text               nullable
-expenses.unit_id       FK -> units        nullable
-expenses.unit_raw      text               nullable
-purchases.merchant_id  FK -> merchants    nullable
-purchases.merchant_raw text               nullable
+Expenses.CategoryId    FK -> Categories   nullable
+Expenses.CategoryRaw   text               nullable
+Expenses.UnitId        FK -> Units        nullable
+Expenses.UnitRaw       text               nullable
+Purchases.MerchantId   FK -> Merchants    nullable
+Purchases.MerchantRaw  text               nullable
 ```
 
-Extraction fills the `_raw` columns unconditionally and the foreign keys only when a confident match exists. This is what makes the closed unit dictionary safe: real receipts print `Bund`, `Stk`, `Pack`, `100g`, `Pfand`, and a closed enum alone would discard that text at the moment of capture. Keeping the raw string means matching can be improved later and re-run over historical rows without re-reading any images.
+Extraction fills the `*Raw` columns unconditionally and the foreign keys only when a confident match exists. This is what makes the closed unit dictionary safe: real receipts print `Bund`, `Stk`, `Pack`, `100g`, `Pfand`, and a closed enum alone would discard that text at the moment of capture. Keeping the raw string means matching can be improved later and re-run over historical rows without re-reading any images.
 
 The columns are populated by extraction but are not exclusive to it; manual entry may set them too.
 
-`merchant_raw` follows the same rule one level up, on the purchase rather than the expense — see D18. Deliberately the same mechanism rather than a new one: there is one answer in this design to "what happens when receipt text does not match anything we know", and it is to keep the text.
+`MerchantRaw` follows the same rule one level up, on the purchase rather than the expense — see D18. Deliberately the same mechanism rather than a new one: there is one answer in this design to "what happens when receipt text does not match anything we know", and it is to keep the text.
 
 ### D10 — PostgreSQL column types
 
 | Column | Type | Rationale |
 | --- | --- | --- |
 | all `id` | `bigint GENERATED ALWAYS AS IDENTITY` | Database-owned artificial key, as specified |
-| `purchases.occurred_at` | `timestamp` | See D5 |
-| `purchases.amount`, `expenses.amount`, `expenses.unit_price` | `numeric(19,4)` | Exact decimal; never `float` or `money` |
-| `expenses.quantity` | `numeric(12,3)` | Fractional mass and volume; three decimals covers fuel volumes |
-| `expenses.list_unit_price`, `expenses.discount_amount` | `numeric(19,4)` nullable | Descriptive, per D19; null means the receipt printed no discount, not a discount of zero |
-| `merchants.tax_id` | `varchar(32)` nullable, `UNIQUE` | Natural key where a receipt carries one, per D18 |
-| `merchants.parent_id` | `bigint` nullable, FK -> `merchants` | Branch to chain |
-| `purchases.merchant_id` | `bigint` nullable, FK -> `merchants` | Nullable: a purchase need not name where it happened |
-| `receipt_images.fiscal_*` | `text` nullable | Fiscal receipt identity as printed, per D20; no format is imposed |
-| descriptions, names, `_raw` columns | `text` + `CHECK (length(...) <= n)` | In PostgreSQL `text` and `varchar(n)` perform identically; a length `CHECK` can be altered cheaply while `varchar(n)` widening rewrites intent into the type |
-| `categories.code`, `units.code` | `varchar(64)` / `varchar(16)`, `UNIQUE` | ASCII, uppercase, stable |
-| `receipt_images.content` | `bytea` | See D11 |
-| `receipt_images.content_hash` | `bytea(32)`, `UNIQUE` | SHA-256 of the raw bytes |
+| `Purchases.OccurredAt` | `timestamp` | See D5 |
+| `Purchases.Amount`, `Expenses.Amount`, `Expenses.UnitPrice` | `numeric(19,2)` | Exact decimal; never `float` or `money`. Mapped from a plain `decimal` property, per D7 |
+| `Expenses.Quantity` | `numeric(12,3)` | Fractional mass and volume; three decimals covers fuel volumes |
+| `Expenses.ListUnitPrice`, `Expenses.DiscountAmount` | `numeric(19,2)` nullable | Descriptive, per D19; null means the receipt printed no discount, not a discount of zero |
+| `Merchants.TaxId` | `varchar(32)` nullable, `UNIQUE` | Natural key where a receipt carries one, per D18 |
+| `Merchants.ParentId` | `bigint` nullable, FK -> `merchants` | Branch to chain |
+| `Purchases.MerchantId` | `bigint` nullable, FK -> `merchants` | Nullable: a purchase need not name where it happened |
+| `Purchases.Fiscal*` | `text` nullable | Fiscal receipt identity as printed, per D20; no format is imposed |
+| descriptions, names, `*Raw` columns | `text` + `CHECK (length(...) <= n)` | In PostgreSQL `text` and `varchar(n)` perform identically; a length `CHECK` can be altered cheaply while `varchar(n)` widening rewrites intent into the type |
+| `Categories.Code`, `Units.Code` | `varchar(64)` / `varchar(16)`, `UNIQUE` | ASCII, uppercase, stable |
+| `Purchases.ReceiptStorageKey` | `text` + `CHECK (length <= 256)` nullable, **not** unique | Path of the file relative to the receipt root, per D11; two purchases may share one file |
+| `Purchases.ReceiptContentHash` | `bytea(32)` nullable, plain index | SHA-256 of the raw bytes; the index answers "does anything else still reference this file" |
 
-### D11 — Receipt bytes live in `bytea`
+### D11 — Receipt bytes live in files, referenced by the purchase
 
-Images are stored in the database rather than on disk or in object storage.
+Images are written to files under a configured receipt root. The purchase row holds the identity of its file — SHA-256, content type, size, and the `ReceiptStorageKey` that locates it — and never its content. There is no `bytea` content column, and **no `ReceiptImages` table**: the reference is columns on `Purchases`.
 
-**Why:** it keeps image and metadata in one transaction and one backup, and removes an entire class of bug where the row and the file disagree — an orphaned file, or a row pointing at a file that was never written. For a personal ledger the volume is small: a few thousand receipts at roughly 1 MB is single-digit gigabytes.
+**Why files rather than `bytea`:** a receipt image is a large opaque blob that is only ever written once and read whole. Putting it in the database makes every dump, restore and replication of the ledger carry gigabytes that the ledger itself never queries, and pushes those bytes through the database connection on every view. Files keep the database small enough to dump casually, and let the bytes be served directly.
 
-**Cost accepted:** larger dumps, and image bytes travelling through the connection rather than being served directly. Mitigated by never selecting `content` unless the bytes are actually being served — enforced by keeping `ReceiptImage` content behind a separate query rather than a navigation property that could be loaded accidentally.
+**Why on `Purchases` rather than a table of its own:** the relationship was always one-to-at-most-one and the receipt has no life of its own — `receipt-ingestion` already forbids a second image on a purchase, and nothing ever asks a question about an image that is not really a question about its purchase. A separate table modelled that as a nullable foreign key plus a `RESTRICT` edge plus an identity to address images by, and then had to defend the one-to-one with application code anyway. As columns, "this purchase has a receipt in this state" is one row, one read, and one lifetime. This also restores D2 exactly: `Purchase` is the only aggregate root, and the receipt is a value inside it rather than a second entity beside it.
 
-Access goes through an `IReceiptImageStore` port, so moving to object storage later is one adapter plus a data migration and touches nothing above `Infrastructure`.
+**Consequence — a receipt is addressed by its purchase.** There is no image id anywhere in the API, the MCP tools, or the extraction pipeline; everything that used to take one takes a purchase id. Uploading a receipt is an operation *on an existing purchase*.
+
+**Layout:** content-addressed from the hash — `<root>/<aa>/<bb>/<full hex><extension>`, fanned out two levels so no directory grows unbounded, with the extension derived from the sniffed content type rather than the uploaded file name. The whole relative path is stored rather than recomputed, so the layout can change without rewriting history.
+
+**Deduplication moves from the database to the store.** Identical bytes hash to the same path, so the second write is a no-op and one file backs both purchases. That is why `ReceiptStorageKey` is not unique — the old unique index on image content hash existed to make one row per blob, and one row per blob is no longer the model. The cost is that deletion must ask whether anything else references the same hash before removing the file; the plain index on `ReceiptContentHash` makes that a lookup.
+
+**The row and the file cannot disagree in the direction that matters.** The file is written first — an atomic write to a temporary name, then a rename — and the reference is recorded after. A crash between them leaves a file nothing points at, which is inert garbage. The reverse, a purchase pointing at a file that was never written, cannot happen. Deletion runs the same way round: clear the reference, then delete the file if it is unreferenced.
+
+**Costs accepted:** the database dump is no longer a complete backup — the receipt root must be backed up beside it, and this is recorded in the risks. Orphaned files accumulate slowly and are collectable; nothing depends on their absence.
+
+Access still goes through the `IReceiptImageStore` port, so the filesystem adapter and a later object-storage adapter are interchangeable and nothing above `Infrastructure` knows which is in use.
 
 ### D12 — Extraction: port now, placeholder adapter now, real engine later
+
+**Amended by D22:** `ExtractionResult` and `ExtractionCandidate` remain domain types; everything else the extraction pipeline needs lives in `Application`. They are domain types that are never persisted — see "candidates are not persisted" below.
 
 D20 refines this decision into an ordered cascade and replaces model-reported confidence with computed arithmetic validation. Read the two together; where they differ, D20 wins.
 
@@ -175,9 +197,17 @@ Infrastructure:  PlaceholderReceiptExtractor   (this change)
 
 Everything except the analysis is real: the lifecycle states, candidate storage, validation, `NeedsReview` and `Failed` handling, re-extraction, and the engine identifier recorded on every result. (D20 narrows what drives `NeedsReview` from a reported confidence threshold to an arithmetic check.) The placeholder derives deterministic output from the image hash and can be configured to simulate low confidence and failure, so both non-happy paths are exercised.
 
-**Why candidates are stored separately from expenses** rather than written straight into the purchase: extraction is a suggestion, and the reconciliation invariant would otherwise be violated by an engine that misreads a total. Storing candidates in their own table lets an unconfirmed extraction exist without the aggregate ever being invalid, and makes re-extraction non-destructive to confirmed data.
+**Why candidates are held apart from expenses** rather than written straight into the purchase: extraction is a suggestion, and the reconciliation invariant would otherwise be violated by an engine that misreads a total. Keeping candidates outside the aggregate lets an unconfirmed extraction exist without the aggregate ever being invalid, and makes re-extraction non-destructive to confirmed data.
 
-Recording the engine name and version on each result means a later real engine can be told apart from placeholder output already in the database — which matters, because rows created now will still be there.
+**Candidates and extraction results are not persisted.** There is no `ExtractionResults` table and no `ExtractionCandidates` table. An `ExtractionResult` — its candidate lines, its provenance, its reported confidences, its arithmetic check outcomes — is held by `IExtractionCandidateStore` in process memory, keyed by purchase id, and is discarded when the process ends.
+
+**Why:** a candidate exists to be confirmed, edited or discarded within one sitting. Once confirmed it is an `Expense` and the candidate is redundant; if it is never confirmed it is a proposal nobody accepted. Persisting it buys nothing that re-running extraction does not buy more cheaply, while costing two tables, a cascade, a retention policy for stale rows, and a second representation of every line item that queries and reports must be careful never to mistake for the ledger. Deleting the tables deletes that whole class of question: the database contains what a person confirmed, and nothing an engine guessed.
+
+**What survives a restart** is exactly what is durable elsewhere: the confirmed `Expenses`, and the `Receipt*` and `Fiscal*` columns on the purchase carrying the state of the last attempt, its failure reason, and the fiscal identity it established. What is lost is the unconfirmed candidate set.
+
+**Consequence — candidates can be absent for an image whose state says `Extracted`.** That is reported as absence, not as an error, and re-running extraction regenerates them. Retrieval deliberately does not re-run extraction implicitly: a paid stage must never fire because someone opened a page. The startup sweep therefore re-queues only purchases whose `ReceiptState` is `Pending` or stranded at `Extracting`, exactly as before — it does not sweep every receipt whose candidates evaporated.
+
+Recording the engine name and version on each result still matters, because a result is read beside placeholder-produced output within the same session; it is simply reported rather than stored.
 
 Extraction runs off the request path via an in-process background queue (a bounded `Channel` drained by a `BackgroundService`). **Trade-off:** work queued but not yet run is lost on restart. Mitigated by `Pending` being persisted, so a startup sweep re-queues anything still pending. A durable queue is unnecessary for a single-user ledger and is the obvious upgrade if that changes.
 
@@ -201,7 +231,7 @@ Everything else is EF Migrations, including `HasPostgresExtension` for `unaccent
 
 ### D14 — Search uses `unaccent` + `pg_trgm`, not full-text search
 
-Trigram matching over expense descriptions and over merchant names — both the dictionary `merchants.name` and the verbatim `purchases.merchant_raw`, since an unmatched merchant is exactly the one a user will search for by half-remembered name — with a GIN index using `gin_trgm_ops`.
+Trigram matching over expense descriptions and over merchant names — both the dictionary `Merchants.Name` and the verbatim `Purchases.MerchantRaw`, since an unmatched merchant is exactly the one a user will search for by half-remembered name — with a GIN index using `gin_trgm_ops`.
 
 **Why not `tsvector`:** full-text search needs a per-language configuration, which means correctly detecting the language of every row. Receipt line items are short, abbreviated and frequently mis-OCR'd — poor input for stemming, and the language detection would itself be unreliable. Trigram matching is language-agnostic and tolerates exactly the character-level noise this data has.
 
@@ -233,14 +263,14 @@ Domain and Application tests need no database.
 ### D18 — Merchant is a learned dictionary, keyed by tax identification number
 
 ```
-merchants.id         bigint identity
-merchants.name       text                      -- "AROMA"
-merchants.tax_id     varchar(32) UNIQUE null   -- "02440261"
-merchants.parent_id  bigint null -> merchants  -- branch -> chain
-merchants.is_active  boolean
+Merchants.Id        bigint identity
+Merchants.Name      text                      -- "AROMA"
+Merchants.TaxId     varchar(32) UNIQUE null   -- "02440261"
+Merchants.ParentId  bigint null -> Merchants  -- branch -> chain
+Merchants.IsActive  boolean
 
-purchases.merchant_id   FK -> merchants  nullable
-purchases.merchant_raw  text             nullable
+Purchases.MerchantId   FK -> Merchants  nullable
+Purchases.MerchantRaw  text             nullable
 ```
 
 A fiscalised receipt names its merchant at up to six levels of precision. A real example:
@@ -254,19 +284,19 @@ Filipa Kovacevica 24   branch address
 ENU 20345/hi8211c718   point-of-sale terminal
 ```
 
-Only two of those are modelled: a merchant, and optionally its parent merchant. The chain is the parent, the branch is the child, and a purchase points at whichever one was identified. The rest — legal entity, address, terminal — is kept in `merchant_raw` and not decomposed, because nothing in this change reads it and a wrong decomposition is worse than an undecomposed string.
+Only two of those are modelled: a merchant, and optionally its parent merchant. The chain is the parent, the branch is the child, and a purchase points at whichever one was identified. The rest — legal entity, address, terminal — is kept in `MerchantRaw` and not decomposed, because nothing in this change reads it and a wrong decomposition is worse than an undecomposed string.
 
 **Why merchants are unlike categories and units, and why that is stated rather than assumed.** D8 makes `code` mandatory, stable and known in advance, because categories and units are *seeded*. Merchants are *discovered* — the first time a receipt from a new shop is ingested, an entry appears. Three consequences follow, and each is a deliberate divergence from D8:
 
-- **There is no `code`.** A merchant's stable identity is its `tax_id` where the receipt prints one, and nothing where it does not. `tax_id` is therefore nullable and unique-when-present, not a mandatory key.
+- **There is no `code`.** A merchant's stable identity is its `TaxId` where the receipt prints one, and nothing where it does not. `TaxId` is therefore nullable and unique-when-present, not a mandatory key.
 - **There is no seeding and no `is_system`.** No merchant ships with the product, so nothing needs protecting from deletion by a seed run.
-- **A merchant may be unidentifiable.** A market stall issues no tax number and possibly no name. `purchases.merchant_id` is nullable and `merchant_raw` carries whatever was printed.
+- **A merchant may be unidentifiable.** A market stall issues no tax number and possibly no name. `Purchases.MerchantId` is nullable and `MerchantRaw` carries whatever was printed.
 
-**Why `tax_id` rather than name as the natural key:** the name on the paper is a brand, is inconsistently abbreviated, and is the field OCR is most likely to mangle. The tax number is fixed-format, machine-checkable, and printed on every fiscalised receipt in the jurisdictions this ledger is used in. Matching on it means "the same shop" is a fact rather than a fuzzy string comparison.
+**Why `TaxId` rather than name as the natural key:** the name on the paper is a brand, is inconsistently abbreviated, and is the field OCR is most likely to mangle. The tax number is fixed-format, machine-checkable, and printed on every fiscalised receipt in the jurisdictions this ledger is used in. Matching on it means "the same shop" is a fact rather than a fuzzy string comparison.
 
-**Alternative considered — merchant as free text on the purchase, with no dictionary:** simpler, and defensible for a single-user ledger. Rejected because "what do I spend at this shop" is one of the two questions the ledger exists to answer (the other being "on what"), and answering it over free text means grouping by a string that varies per receipt. The `merchant_raw` column means nothing is lost by also having the dictionary.
+**Alternative considered — merchant as free text on the purchase, with no dictionary:** simpler, and defensible for a single-user ledger. Rejected because "what do I spend at this shop" is one of the two questions the ledger exists to answer (the other being "on what"), and answering it over free text means grouping by a string that varies per receipt. The `MerchantRaw` column means nothing is lost by also having the dictionary.
 
-**Alternative considered — modelling terminal, address and legal entity as their own columns:** rejected as speculative. They are on the paper, they are in the stored image, they are in `merchant_raw`, and no requirement reads them. Adding them later is one migration.
+**Alternative considered — modelling terminal, address and legal entity as their own columns:** rejected as speculative. They are on the paper, they are in the stored image, they are in `MerchantRaw`, and no requirement reads them. Adding them later is one migration.
 
 ### D19 — Discount is descriptive; the percentage is derived and never stored
 
@@ -282,26 +312,28 @@ Sladoled Milka Mini Sticks MPK 6x50ml   1 x 4.49   4.49
 Stored:
 
 ```
-expenses.amount            4.49   authoritative, reconciles with the purchase
-expenses.list_unit_price   8.50   descriptive
-expenses.discount_amount   4.01   descriptive, a positive magnitude
+Expenses.Amount           4.49   authoritative, reconciles with the purchase
+Expenses.ListUnitPrice    8.50   descriptive
+Expenses.DiscountAmount   4.01   descriptive, a positive magnitude
 ```
 
 **The percentage is not stored.** `47.18%` is a rounded rendering of `4.01 / 8.50`; keeping it creates a second, lossy source of truth for one fact and guarantees a row will eventually exist where the stored percentage and the stored amounts disagree. It is computed for display.
 
-**`discount_amount` is a positive magnitude, not a negative amount.** This is what keeps D7's non-negativity rule intact. The discount is a number subtracted from a list price, not money with a sign. `Money` never becomes signed and no guard clause is relaxed.
+**`discount_amount` is a positive magnitude, not a negative amount.** This is what keeps D7's non-negativity rule intact. The discount is a number subtracted from a list price, not money with a sign. A monetary amount never becomes signed and no guard clause is relaxed.
 
 **Reconciliation is untouched.** Only `Amount` participates, exactly as in D6. A purchase of `8.48` containing lines of `4.49` and `3.99` reconciles whether or not either line carries a discount, and the discount columns are never consulted when checking it.
 
-**"How much did I save" is derived, not stored.** A purchase-level saved total is `SUM(discount_amount)` over its expenses. Storing a rollup would be a third source of truth for the same fact and would need maintaining on every edit.
+**"How much did I save" is derived, not stored.** A purchase-level saved total is `SUM("DiscountAmount")` over its expenses. Storing a rollup would be a third source of truth for the same fact and would need maintaining on every edit.
 
 **Null means "no discount printed", not "a discount of zero".** Both columns are nullable and are set together or not at all. This matters for reporting: a ledger that cannot distinguish "not discounted" from "discounted by nothing" reports a misleading saving rate.
 
-**What this deliberately does not cover:** a discount applied to the *basket* rather than to a line — a loyalty coupon taken off the total. It cannot be expressed here, and forcing it into a line would break reconciliation. It is recorded as an open question rather than solved, because solving it is the same decision as whether `Money` may ever be negative, and that decision should be made against a real receipt that needs it.
+**What this deliberately does not cover:** a discount applied to the *basket* rather than to a line — a loyalty coupon taken off the total. It cannot be expressed here, and forcing it into a line would break reconciliation. It is recorded as an open question rather than solved, because solving it is the same decision as whether a monetary amount may ever be negative, and that decision should be made against a real receipt that needs it.
 
 ### D20 — Extraction is an ordered cascade, and its confidence is computed rather than reported
 
-This refines D12. The port, the lifecycle, the candidate table and the engine-identity recording all stand. What changes is that extraction is not one engine but an ordered sequence of stages, and that the threshold separating `Extracted` from `NeedsReview` is an arithmetic check rather than a number a model reports about itself.
+**Amended by D22:** the oracle is unchanged but lives in `Expenses.Application.Extraction` — it is a function, not an entity.
+
+This refines D12. The port, the lifecycle, the transient candidate set and the engine-identity recording all stand. What changes is that extraction is not one engine but an ordered sequence of stages, and that the threshold separating `Extracted` from `NeedsReview` is an arithmetic check rather than a number a model reports about itself.
 
 ```
   stage 0  fiscal QR decode (client, at capture)   free      out of scope here (FE)
@@ -358,7 +390,7 @@ The code is not at fault and the crop is not at fault: all three finder patterns
 
 **Why decoding the QR is worth less than it appears.** Every field the fiscal QR encodes is also printed as plain text on the receipt — the tax number, the receipt ordinal, the timestamp, the total, the terminal codes, and both fiscal identifiers. A QR decode is a convenience, not a unique source. The only thing it would uniquely unlock is calling the tax authority's verification service for authoritative data, and that is deliberately not attempted — see the open questions.
 
-**Every stage records what it contributed.** D12 already requires an engine name and version on each result; the cascade extends that to which stage produced each field, so a value read by the cheap tier, a value corrected by the expensive tier, and a value decoded exactly from a QR are distinguishable in the stored data forever.
+**Every stage records what it contributed.** D12 already requires an engine name and version on each result; the cascade extends that to which stage produced each field, so a value read by the cheap tier, a value corrected by the expensive tier, and a value decoded exactly from a QR are distinguishable in the result a reviewer reads. That provenance travels with the result rather than outliving it: it is not persisted, and re-running the cascade produces it again.
 
 ### D21 — Test-first is the working discipline, and the task list enforces it
 
@@ -376,6 +408,29 @@ Every task that changes behaviour is preceded by the task that writes its failin
 
 **Cost accepted.** Test-first is slower per task and faster per change, and the arithmetic on that is well established enough not to relitigate here. The specific local cost is that the cascade, the validator and the merchant matcher all need their seams to exist before their first test can run, which front-loads the port definitions in section 3. That is the design signal working as intended rather than an obstacle.
 
+### D22 — `Expenses.Domain` contains entities and nothing else
+
+The domain project holds `Purchase`, `Expense`, `Category`, `Unit`, `Merchant`, `ReceiptImage`, `ExtractionResult` and `ExtractionCandidate`, plus the enums those entities nest inside themselves. No shared validators, no error type, no error-code table, no services, no records. This narrows D7's "do not introduce a type over a single primitive" into a stronger and simpler rule: if it is not an entity, it does not live in the domain.
+
+**What moved, and where it went:**
+
+| Was | Now |
+| --- | --- |
+| `MonetaryAmount.Validate` | private `ValidateAmount` in `Expense` and in `Purchase` |
+| `Occurrence.Normalise` / `FromDate` | private `NormaliseOccurrence` in `Purchase`, and `DateOnly.ToDateTime` at its call site |
+| `DomainException` + `DomainErrors` | the framework exceptions, plus the codes in `ApplicationErrors` |
+| `UnitKind`, `ExtractionState`, `FiscalSource`, `FiscalCorroboration` | nested inside `Unit` and `ReceiptImage` |
+| `ArithmeticValidator` and its records (D20) | `Expenses.Application.Extraction` |
+| `ExtractedValues` | `Expenses.Application.Extraction` |
+
+**How a rule is signalled now.** An entity throws the framework exception that fits: `ArgumentException` with a `paramName` for a missing or contradictory argument, `ArgumentOutOfRangeException` carrying the offending value for a negative or over-precise number, `InvalidOperationException` for an invariant of the whole entity — reconciliation, a parent cycle, a disallowed lifecycle transition. The rules themselves are untouched; only what is thrown changed.
+
+**The cost, stated plainly.** Two things get worse. Amount validation is written twice, in `Expense` and in `Purchase`, because there is no longer a place to share it from — roughly twenty duplicated lines, in the two factories that already validate everything else about their fields. And the stable error codes no longer travel with the exception: the use case that called the entity names the code, so the mapping from "this entity threw" to `amount.negative` lives in `Application` rather than being carried out of the domain for free. Tests correspondingly assert on exception type and `ParamName` rather than on a code.
+
+**What is bought.** One rule about the innermost ring that needs no judgement to apply, and a domain with no vocabulary of its own for an adapter, a mapper or a reviewer to learn. The codes remain a single stable list, now wholly in `ApplicationErrors` — one contract in one place rather than one split across two rings.
+
+**Where this contradicts an earlier decision, this one wins.** D7's `MonetaryAmount` and D5's `Occurrence` are gone as types; both rules survive. D20's oracle is still pure and still computed rather than reported — it simply is not a domain type, since it is not an entity.
+
 ## Risks / Trade-offs
 
 - **The idempotency guard blocks legitimate identical same-day purchases** (two €2.90 coffees, both without times) → Specified explicitly in `purchase-recording` with two escape hatches, and the second-entry response must name them rather than reporting a bare conflict. Accepted deliberately: the guard mildly pressures the user toward more precise data, which is a defensible bias for a ledger.
@@ -384,7 +439,13 @@ Every task that changes behaviour is preceded by the task that writes its failin
 
 - **Mocked extraction can create false confidence that the feature works** → Every result records its engine, the specs require placeholder output to be identifiable wherever candidates are surfaced, and the placeholder must be able to produce `NeedsReview` and `Failed` so those paths are genuinely exercised rather than theoretically present.
 
-- **`bytea` growth degrades dumps and restores as the ledger ages** (D11) → Bounded by the single-user scale; `IReceiptImageStore` keeps the migration path to object storage contained to one adapter.
+- **The database dump is no longer a complete backup** (D11) → Receipt bytes live in files, so a restore from a dump alone yields rows pointing at files that are not there. Mitigated by making the receipt root an explicit, configured directory documented as backup scope in `BE/db/schema.md`, and by the image read path reporting a missing file as a missing image rather than as a server fault. Accepted deliberately: the alternative is carrying gigabytes through every dump.
+
+- **Orphaned receipt files accumulate** (D11) → A crash between writing the file and recording the reference, or between clearing the reference and deleting the file, leaves a file nothing references. Bounded, inert, and collectable by comparing the store against `ReceiptStorageKey`. The ordering is chosen so the opposite failure — a purchase with no file — cannot occur.
+
+- **Deleting one purchase could delete a file another purchase is still showing** (D11) → Content addressing means byte-identical receipts share a file, so deletion is conditional on no other purchase carrying the same `ReceiptContentHash`, backed by an index on that column. The failure mode if that check is ever skipped is silent and only visible when someone opens the other purchase, which is why it is stated as a rule in `receipt-ingestion` rather than left to the adapter.
+
+- **Unconfirmed candidates vanish on restart** (D12) → Accepted as the direct consequence of not persisting them. A review interrupted by a deploy has to re-run extraction, which re-fires paid stages for that image. At single-user volume this is a handful of cents a year, and confirmed expenses are never at risk because they are in `expenses`.
 
 - **Database provisioning drift between environments fails silently** (D13) → A startup integration check asserts encoding and collation, converting a silent wrong-sort into a loud failure.
 
@@ -398,7 +459,7 @@ Every task that changes behaviour is preceded by the task that writes its failin
 
 - **The cascade makes cost non-obvious per receipt** — a receipt that fails stage 3 costs several times one that passes. At single-user volume the absolute numbers are negligible, but the stage that fired must be recorded per extraction so the shape of that distribution is visible rather than inferred.
 
-- **A merchant dictionary learned from OCR will accumulate near-duplicate entries** (D18) — the same shop read as "AROMA" and "AR0MA" becomes two merchants when neither receipt printed a usable tax number. Mitigated by `tax_id` matching where present, by trigram search over merchant names (D14), and by `merchant_raw` making a later re-match possible without re-reading images. Not mitigated at all where no tax number exists; accepted.
+- **A merchant dictionary learned from OCR will accumulate near-duplicate entries** (D18) — the same shop read as "AROMA" and "AR0MA" becomes two merchants when neither receipt printed a usable tax number. Mitigated by `TaxId` matching where present, by trigram search over merchant names (D14), and by `MerchantRaw` making a later re-match possible without re-reading images. Not mitigated at all where no tax number exists; accepted.
 
 - **Test-first erodes quietly, and nothing in the repository would notice** (D21) → The rule lives in `openspec/config.yaml` where the apply phase reads it, and the task list is structured so that skipping it requires visibly checking `X.0` without having written anything. Neither is enforcement. The honest position is that this is a discipline held by the people doing the work, and the structure only makes lapses visible.
 
@@ -409,11 +470,13 @@ Every task that changes behaviour is preceded by the task that writes its failin
 No existing system, no data, no rollback of user data to consider. Deployment order matters only in that provisioning must precede migration:
 
 1. Provision the database with the required encoding and collation (D13). This cannot be undone in place.
-2. Apply the initial EF migration: tables, unique index on `(occurred_at, amount)`, GIN trigram indexes, `unaccent` and `pg_trgm` extensions, `HasData` units.
+2. Apply the initial EF migration: tables, unique index on `("OccurredAt", "Amount")`, GIN trigram indexes, `unaccent` and `pg_trgm` extensions, `HasData` units.
 3. Run category seeding (D15) — idempotent, safe to repeat.
 4. Start `Expenses.Api` and `Expenses.Mcp`.
 
-Rollback during development is dropping and recreating the database. Once real receipts exist, rollback means restoring a dump, since `bytea` content is not reproducible from anywhere else.
+Provisioning also creates the receipt root (D11) and grants the API process write access to it; the API refuses to start if it is missing or unwritable, for the same reason the encoding check exists — a silent misconfiguration here loses images.
+
+Rollback during development is dropping and recreating the database and emptying the receipt root together. Once real receipts exist, rollback means restoring the dump **and** the receipt root from the same point in time; neither is reproducible from the other.
 
 ## Open Questions
 
@@ -422,7 +485,7 @@ These are deferrable without changing the specs, the approach, or the task break
 - **Which real extraction engine** eventually replaces the placeholder — a vision model or a document-intelligence service. `IReceiptExtractor` is deliberately shaped around structured line output with per-field confidence, which both can satisfy.
 - ~~**The confidence threshold** separating `Extracted` from `NeedsReview`.~~ **Answered by D20** — for numeric fields there is no threshold to choose, because correctness is decided arithmetically. A threshold remains only for descriptions, merchant names and category guesses, where it gates a review marker rather than the state of the extraction.
 
-- **Basket-level discounts.** A loyalty coupon applied to a total rather than to a line cannot be expressed under D19, and forcing it into a line would break reconciliation. The same decision covers deposit returns, bag fees and rounding adjustments. Deferred deliberately, because it is really the question "may `Money` ever be negative", and D7 should not be reopened speculatively — it should be reopened by a receipt that needs it.
+- **Basket-level discounts.** A loyalty coupon applied to a total rather than to a line cannot be expressed under D19, and forcing it into a line would break reconciliation. The same decision covers deposit returns, bag fees and rounding adjustments. Deferred deliberately, because it is really the question "may a monetary amount ever be negative", and D7 should not be reopened speculatively — it should be reopened by a receipt that needs it.
 
 - **Whether to query a tax authority's receipt verification service.** Decoding a fiscal QR yields a verification URL, and for Montenegro that service exists. Not attempted in this change, for four reasons that would each need resolving first: verification expires ninety days after issuance, so it can never serve backfill; there is no documented public API, only a consumer web portal, so any integration is scraping; it is unconfirmed whether the portal returns line items at all rather than only totals and tax; and it is jurisdiction-specific in a way nothing else in this design is.
 
@@ -431,4 +494,37 @@ These are deferrable without changing the specs, the approach, or the task break
 - **How chain and branch are told apart during ingestion.** D18 models the relationship but does not decide who populates it. A receipt printing both a brand and a branch code gives an extractor enough to propose the pair; whether it does so automatically or leaves it to the user is a behaviour question that needs real extraction output to answer.
 - **Initial category taxonomy** — which categories ship seeded and how deep the hierarchy goes. Content, not structure; changing it is editing seed data.
 - **Whether the React client is a separate origin** (Vite dev server proxying, or served as static files by `Expenses.Api`). Only affects CORS configuration, and only once `FE/` has content.
-- **Retention of unconfirmed extraction candidates.** Whether stale candidates are ever swept, and after how long. No behaviour depends on it yet.
+- ~~**Retention of unconfirmed extraction candidates.**~~ **Answered by D12** — candidates are never persisted, so there is nothing to sweep. They live in memory for the process lifetime and are regenerated by re-running extraction.
+
+- **Collection of orphaned receipt files** (D11). Whether the store is ever reconciled against `storage_key`, and on what trigger. Nothing depends on it: an orphan is inert. It becomes worth deciding if receipts are ever deleted in bulk.
+
+### D23 — Table and column names are PascalCase
+
+Every table and column is named exactly as the entity and property it maps: `Purchases.OccurredAt`,
+`Expenses.ListUnitPrice`, `Merchants.TaxId`. Not `Purchases.OccurredAt`.
+
+**Why:** there is one name for each thing across the whole system. A column read in a query, a
+property read in an aggregate and a field read in an API response are spelled identically, so nobody
+translates between two conventions in their head or in a mapping table — and no mapping can drift,
+because there is nothing left to state. The configurations lost roughly sixty `HasColumnName` calls
+that did nothing but restate the property in another casing; what survives is only the handful whose
+name genuinely differs, where the owned `Receipt` value flattens onto the purchase row and
+`ContentHash` becomes `ReceiptContentHash` (D11).
+
+**The cost, stated plainly, because it is real:** PostgreSQL folds an unquoted identifier to lower
+case, so a PascalCase name must be double-quoted every time it is written by hand —
+`select "OccurredAt" from "Purchases"`. EF and Npgsql quote everything they generate, so nothing in
+the application notices; what notices is a check constraint, an index filter, a migration written by
+hand, and a person at a `psql` prompt. Getting it wrong is loud rather than subtle: the query fails
+with "column occurred_at does not exist" rather than quietly reading the wrong thing.
+
+**Index and constraint names stay lower snake_case** behind their `ix_` and `ck_` prefixes —
+`ix_purchases_occurred_at_amount`, `ck_expenses_description_length`. They name no property, they are
+never written outside a migration, and the prefix is what makes them scannable in `\di` output. The
+rule is therefore "identifiers that mirror the model are PascalCase; identifiers that describe the
+schema are snake_case", which is decidable without judgement.
+
+**Alternative considered — lower snake_case throughout,** the PostgreSQL house style, which needs no
+quoting anywhere. Rejected because this database has exactly one consumer and it is EF: the quoting
+cost falls on a handful of constraint strings and the occasional `psql` session, while the naming
+mismatch would fall on every query anyone reads for the life of the ledger.
