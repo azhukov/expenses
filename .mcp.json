@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "expenses": {
+      "type": "http",
+      "url": "http://localhost:5083"
+    }
+  }
+}
