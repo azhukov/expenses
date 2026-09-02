@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using Expenses.Application.Abstractions;
-using Expenses.Application.Errors;
 
 namespace Expenses.Infrastructure.Receipts;
 
@@ -63,20 +62,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
 
     public async Task<StoredReceiptFile> Save(byte[] content, CancellationToken cancellationToken = default)
     {
-        if (content.LongLength > ReceiptContent.MaximumSizeInBytes)
-        {
-            throw ExpensesException.For(
-                ApplicationErrors.ReceiptImageTooLarge,
-                $"A receipt image may be at most {ReceiptContent.MaximumSizeInBytes / (1024 * 1024)} MB.",
-                ("sizeInBytes", content.LongLength),
-                ("maximumSizeInBytes", ReceiptContent.MaximumSizeInBytes));
-        }
-
-        var contentType = ReceiptContent.Detect(content)
-            ?? throw ExpensesException.For(
-                ApplicationErrors.ReceiptImageUnsupportedFormat,
-                $"A receipt image must be one of {string.Join(", ", ReceiptContent.Accepted)}.",
-                ("acceptedContentTypes", ReceiptContent.Accepted));
+        var contentType = ReceiptContent.Validate(content);
 
         var hash = SHA256.HashData(content);
         var storageKey = StorageKey(hash, contentType);

@@ -1,6 +1,5 @@
 using Expenses.Application.Abstractions;
 using Expenses.Application.Errors;
-using Expenses.Application.Extraction;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
 using Microsoft.AspNetCore.Mvc;
@@ -9,54 +8,14 @@ namespace Expenses.Api.Controllers;
 
 /// <summary>
 /// Receipts and the extraction that reads them. A receipt belongs to exactly one purchase and has
-/// no identifier of its own (D11), so every route here hangs off the purchase. As with every
-/// adapter action, binding and shaping is all that happens (D1).
+/// no identifier of its own (D11), so every route here hangs off the purchase — except capture,
+/// which precedes any purchase and lives on <see cref="CapturesController"/>. As with every adapter
+/// action, binding and shaping is all that happens (D1).
 /// </summary>
 [ApiController]
 [Route("purchases/{id:long}")]
 public sealed class ReceiptsController : ControllerBase
 {
-    /// <summary>Enforced before the body is read, so an oversized upload is never buffered.</summary>
-    public const long MaximumUploadBytes = 15 * 1024 * 1024;
-
-    /// <summary>Attaches a receipt image to a purchase, with any fiscal identifiers decoded at capture.</summary>
-    [HttpPost("receipt")]
-    [Produces("application/json")]
-    [EndpointName("UploadReceiptImage")]
-    public async Task<ActionResult<ReceiptView>> Upload(
-        long id,
-        [FromServices] AttachReceiptImage attach,
-        CancellationToken cancellationToken)
-    {
-        var form = await Request.ReadFormAsync(cancellationToken);
-        var file = form.Files["file"]
-            ?? throw ExpensesException.For(
-                ApplicationErrors.ReceiptImageUnsupportedFormat,
-                "The upload carried no file part named 'file'.");
-
-        // Checked from the declared length before a byte is copied: the limit exists to stop
-        // the request being buffered, so enforcing it after buffering would miss the point.
-        if (file.Length > MaximumUploadBytes)
-        {
-            throw ExpensesException.For(
-                ApplicationErrors.ReceiptImageTooLarge,
-                $"A receipt image may be at most {MaximumUploadBytes / (1024 * 1024)} MB.",
-                ("sizeInBytes", file.Length),
-                ("maximumSizeInBytes", MaximumUploadBytes));
-        }
-
-        using var buffer = new MemoryStream();
-        await file.CopyToAsync(buffer, cancellationToken);
-
-        // Identifiers a client decoded at capture, accepted without extraction having run (D20).
-        var supplied = new FiscalIdentifiers(form["fiscalIkof"], form["fiscalJikr"]);
-
-        var receipt = await attach.Execute(id, buffer.ToArray(), supplied, cancellationToken);
-
-        // Located by the purchase, because that is the only way a receipt is addressed (D11).
-        return Created($"/purchases/{id}/receipt", receipt);
-    }
-
     /// <summary>Returns the stored bytes of a purchase's receipt with its content type.</summary>
     [HttpGet("receipt/content")]
     [EndpointName("DownloadReceiptImage")]
@@ -140,14 +99,20 @@ public sealed class ReceiptsController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Returns a receipt to Pending and queues it for extraction again.</summary>
+    /// <summary>Runs extraction again for a purchase's receipt, synchronously, and returns the full result.</summary>
     [HttpPost("extraction/rerun")]
     [Produces("application/json")]
     [EndpointName("RerunExtraction")]
-    public async Task<ActionResult<ReceiptView>> Rerun(
+    public async Task<ActionResult<ExtractionResponse>> Rerun(
         long id,
-        [FromServices] RequeueExtraction requeue,
-        CancellationToken cancellationToken) => Accepted(
-            $"/purchases/{id}/extraction",
-            await requeue.Execute(id, cancellationToken));
+        [FromServices] RerunExtraction rerun,
+        [FromServices] GetExtractionCandidates candidates,
+        CancellationToken cancellationToken)
+    {
+        await rerun.Execute(id, cancellationToken);
+
+        // Read back rather than returned by the re-run itself, so the shape matches GetExtraction
+        // exactly — the candidates it just replaced, in the same response.
+        return Ok(ExtractionResponse.Of(await candidates.Execute(id, cancellationToken)));
+    }
 }

@@ -11,11 +11,14 @@ public sealed class Receipt
 
     public const int StorageKeyMaxLength = 256;
 
-    /// <summary>The lifecycle of an attached receipt.</summary>
+    /// <summary>
+    /// The lifecycle of an attached receipt. Every member is terminal: extraction always runs to
+    /// completion within the request that triggered it, so there is nothing between requests for a
+    /// receipt to sit in. The numeric values are unchanged from when <c>Pending</c> and
+    /// <c>Extracting</c> existed, so persisted terminal states need no remapping.
+    /// </summary>
     public enum ExtractionState
     {
-        Pending = 0,
-        Extracting = 1,
         Extracted = 2,
         NeedsReview = 3,
         Failed = 4,
@@ -63,28 +66,6 @@ public sealed class Receipt
         /// <summary>Two sources disagree. Both values are retained.</summary>
         Disagreed = 3,
     }
-
-    /// <summary>
-    /// Pending is the only way back in, so re-running is always an explicit act rather than a
-    /// terminal state quietly turning into another one.
-    /// </summary>
-    private static readonly Dictionary<ExtractionState, ExtractionState[]> AllowedTransitions = new()
-    {
-        [ExtractionState.Pending] = [ExtractionState.Extracting],
-
-        // Back to Pending as well, because a process that stopped mid-run leaves a receipt here and
-        // nothing else would ever move it: the startup sweep returns it and extracts it again (D12).
-        [ExtractionState.Extracting] =
-        [
-            ExtractionState.Extracted,
-            ExtractionState.NeedsReview,
-            ExtractionState.Failed,
-            ExtractionState.Pending,
-        ],
-        [ExtractionState.Extracted] = [ExtractionState.Pending],
-        [ExtractionState.NeedsReview] = [ExtractionState.Pending],
-        [ExtractionState.Failed] = [ExtractionState.Pending],
-    };
 
     private Receipt()
     {
@@ -205,9 +186,17 @@ public sealed class Receipt
 
     /// <summary>
     /// The reference to a file already written to the store. Constructed only after the bytes are
-    /// on disk, so a purchase can never point at a file that was never written (D11).
+    /// on disk, so a purchase can never point at a file that was never written (D11) — and only
+    /// once extraction has already reached a terminal state, since extraction always runs to
+    /// completion within the request that produced this receipt.
     /// </summary>
-    public static Receipt Of(byte[] contentHash, string storageKey, string contentType, long sizeInBytes)
+    public static Receipt Of(
+        byte[] contentHash,
+        string storageKey,
+        string contentType,
+        long sizeInBytes,
+        ExtractionState state,
+        string? failureReason = null)
     {
         if (contentHash.Length != ContentHashLength)
         {
@@ -251,22 +240,18 @@ public sealed class Receipt
             StorageKey = storageKey.Trim(),
             ContentType = contentType.Trim(),
             SizeInBytes = sizeInBytes,
-            State = ExtractionState.Pending,
+            State = state,
+            FailureReason = state == ExtractionState.Failed ? failureReason : null,
         };
     }
 
-    /// <summary>Rejects any transition the lifecycle does not allow.</summary>
+    /// <summary>
+    /// Re-extracting an already-attached receipt: every state is terminal, so this is always a
+    /// single, direct terminal-to-terminal move, never a multi-step lifecycle.
+    /// </summary>
     public void TransitionTo(ExtractionState next, string? failureReason = null)
     {
-        if (!IsTransitionAllowed(State, next))
-        {
-            throw new InvalidOperationException($"A receipt cannot move from {State} to {next}.");
-        }
-
         State = next;
         FailureReason = next == ExtractionState.Failed ? failureReason : null;
     }
-
-    public static bool IsTransitionAllowed(ExtractionState from, ExtractionState to) =>
-        AllowedTransitions.TryGetValue(from, out var allowed) && allowed.Contains(to);
 }

@@ -3,6 +3,7 @@ using Expenses.Application.Merchants;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
 using Expenses.Application.ReferenceData;
+using Expenses.Domain;
 
 namespace Expenses.Api;
 
@@ -46,11 +47,44 @@ public sealed record MerchantRequest(string Text, string? TaxId = null)
     public MerchantCommand ToCommand() => new(Text, TaxId);
 }
 
+/// <summary>
+/// What a client resubmits from a capture response in order to confirm it — the temporary key,
+/// and the extraction outcome exactly as capture reported it (D12: nothing about a capture is held
+/// server-side, so this is the only way the server learns it again).
+/// </summary>
+public sealed record CapturedReceiptRequest(
+    Guid TempKey,
+    Receipt.ExtractionState State,
+    string? FailureReason = null,
+    string? SuppliedIkof = null,
+    string? SuppliedJikr = null,
+    string? ExtractedIkof = null,
+    string? ExtractedJikr = null,
+    Receipt.FiscalSource FiscalExtractedSource = Receipt.FiscalSource.None,
+    string? FiscalCreatedAt = null)
+{
+    public CapturedReceiptCommand ToCommand() => new(
+        TempKey,
+        State,
+        FailureReason,
+        SuppliedIkof,
+        SuppliedJikr,
+        ExtractedIkof,
+        ExtractedJikr,
+        FiscalExtractedSource,
+        FiscalCreatedAt);
+}
+
+/// <summary>
+/// <see cref="OccurredAt"/> may be omitted only when <see cref="Capture"/> is supplied and its
+/// fiscal QR decoded an invoice creation timestamp (D5).
+/// </summary>
 public sealed record RecordPurchaseRequest(
-    DateTime OccurredAt,
     decimal Amount,
     IReadOnlyList<ExpenseRequest> Expenses,
-    MerchantRequest? Merchant = null);
+    MerchantRequest? Merchant = null,
+    DateTime? OccurredAt = null,
+    CapturedReceiptRequest? Capture = null);
 
 public sealed record ConfirmCandidatesRequest(IReadOnlyList<ExpenseRequest>? Expenses = null);
 

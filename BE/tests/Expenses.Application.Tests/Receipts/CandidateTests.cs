@@ -1,3 +1,4 @@
+using Expenses.Application.Abstractions;
 using Expenses.Application.Errors;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
@@ -9,8 +10,7 @@ namespace Expenses.Application.Tests.Receipts;
 
 /// <summary>
 /// Scenarios from receipt-ingestion: "Extracted lines are candidates until confirmed",
-/// "Candidates are transient and are not part of the ledger", "Extraction can be re-run",
-/// "Verbatim receipt text is preserved".
+/// "Candidates are transient and are not part of the ledger", "Verbatim receipt text is preserved".
 /// </summary>
 public sealed class CandidateTests
 {
@@ -46,16 +46,18 @@ public sealed class CandidateTests
     }
 
     [Fact]
-    public async Task Reading_candidates_for_a_receipt_that_was_never_extracted()
+    public async Task Reading_candidates_for_a_freshly_confirmed_receipt()
     {
-        var purchase = GivenPurchase();
-        await Attach(purchase);
+        // A capture's candidates are never held server-side at all: confirming it creates the
+        // expenses directly from what the caller submitted, so the freshly created purchase has
+        // none held even though its receipt is already Extracted.
+        var purchase = GivenPurchaseWithReceipt();
 
         var view = await Read.Execute(purchase.Id);
 
         Assert.Null(view.Result);
         Assert.False(view.CandidatesHeld);
-        Assert.Equal(Receipt.ExtractionState.Pending, view.Receipt.State);
+        Assert.Equal(Receipt.ExtractionState.Extracted, view.Receipt.State);
     }
 
     /// <summary>
@@ -66,8 +68,6 @@ public sealed class CandidateTests
     public async Task Requesting_candidates_that_are_no_longer_held()
     {
         var purchase = await GivenExtractedPurchase();
-        purchase.Receipt!.TransitionTo(Receipt.ExtractionState.Extracting);
-        purchase.Receipt!.TransitionTo(Receipt.ExtractionState.Extracted);
         await _ledger.Discard(purchase.Id);
 
         var view = await Read.Execute(purchase.Id);
@@ -77,7 +77,6 @@ public sealed class CandidateTests
 
         // Absence, not failure — and reading never starts extraction.
         Assert.Equal(Receipt.ExtractionState.Extracted, view.Receipt.State);
-        Assert.Empty(_ledger.Queued.Skip(1));
     }
 
     [Fact]
@@ -158,8 +157,7 @@ public sealed class CandidateTests
     [Fact]
     public async Task Confirming_edited_lines_when_no_candidates_are_held()
     {
-        var purchase = GivenPurchase();
-        await Attach(purchase);
+        var purchase = GivenPurchaseWithReceipt();
 
         var confirmed = await Confirm.Execute(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m)]);
 
@@ -169,8 +167,7 @@ public sealed class CandidateTests
     [Fact]
     public async Task Confirming_candidates_that_were_never_produced()
     {
-        var purchase = GivenPurchase();
-        await Attach(purchase);
+        var purchase = GivenPurchaseWithReceipt();
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Confirm.Execute(purchase.Id));
 
@@ -189,31 +186,23 @@ public sealed class CandidateTests
         Assert.Single(purchase.Expenses);
     }
 
-    [Fact]
-    public async Task Re_run_after_confirmation()
+    private Purchase GivenPurchaseWithReceipt(decimal amount = 8.48m)
     {
-        var purchase = await GivenExtractedPurchase();
-        await Confirm.Execute(purchase.Id);
+        var stored = _ledger.GivenReceiptFile(Jpeg(1));
 
-        var requeued = await new RequeueExtraction(_ledger, _ledger, _ledger).Execute(purchase.Id);
-
-        Assert.Equal(Receipt.ExtractionState.Pending, requeued.State);
-        Assert.Equal(["Sladoled", "Cokolada"], purchase.Expenses.Select(expense => expense.Description));
+        return _ledger.Given(Purchase.Record(
+            Occurred,
+            amount,
+            [Expense.Record("Groceries", amount)],
+            receipt: stored.AsReceipt(Receipt.ExtractionState.Extracted)));
     }
 
-    private Purchase GivenPurchase(decimal amount = 8.48m) =>
-        _ledger.Given(Purchase.Record(Occurred, amount, [Expense.Record("Groceries", amount)]));
-
-    private Task Attach(Purchase purchase) =>
-        new AttachReceiptImage(_ledger, _ledger, _ledger, _ledger).Execute(purchase.Id, Jpeg(1));
-
-    private async Task<Purchase> GivenExtractedPurchase(
+    private Task<Purchase> GivenExtractedPurchase(
         decimal secondAmount = 3.99m,
         long? unitId = null,
         string? unitRaw = null)
     {
-        var purchase = GivenPurchase();
-        await Attach(purchase);
+        var purchase = GivenPurchaseWithReceipt();
 
         _ledger.Given(purchase.Id, ExtractionResult.From(
             purchase.Id,
@@ -232,7 +221,7 @@ public sealed class CandidateTests
             ],
             total: 4.49m + secondAmount));
 
-        return purchase;
+        return Task.FromResult(purchase);
     }
 
     private static byte[] Jpeg(byte seed) => [0xFF, 0xD8, 0xFF, seed, 0x01, 0x02];

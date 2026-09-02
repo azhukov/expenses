@@ -59,9 +59,7 @@ public static class ErrorHandling
     {
         _ when code.EndsWith(".not_found", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
 
-        ApplicationErrors.PurchaseImageAlreadyAttached
-            or ApplicationErrors.ReceiptImageAlreadyAttached
-            or ApplicationErrors.CategoryDuplicateCode
+        ApplicationErrors.CategoryDuplicateCode
             or ApplicationErrors.MerchantDuplicateTaxId => StatusCodes.Status409Conflict,
 
         ApplicationErrors.ReceiptImageTooLarge => StatusCodes.Status413PayloadTooLarge,

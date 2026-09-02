@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Expenses.Application.Purchases;
+using Expenses.Domain;
 using ModelContextProtocol.Server;
 
 namespace Expenses.Mcp.Tools;
@@ -35,6 +36,45 @@ public sealed record ExpenseArgument(
         CategoryCode,
         ListUnitPrice: ListUnitPrice,
         DiscountAmount: DiscountAmount);
+}
+
+/// <summary>
+/// What a capture reported, resubmitted to confirm it. Nothing about a capture is held server-side
+/// (D12), so an assistant carries this forward exactly as the capture tool returned it — or edited,
+/// where the extraction result needed correcting.
+/// </summary>
+public sealed record CapturedReceiptArgument(
+    [property: Description("The temporary key the capture response returned.")]
+    Guid TempKey,
+    [property: Description("The extraction outcome the capture response reported: Extracted, NeedsReview or Failed.")]
+    Receipt.ExtractionState State,
+    [property: Description("Why extraction failed, when the state is Failed.")]
+    string? FailureReason = null,
+    [property: Description("The IKOF fiscal identifier supplied at capture, if any.")]
+    string? SuppliedIkof = null,
+    [property: Description("The JIKR fiscal identifier supplied at capture, if any.")]
+    string? SuppliedJikr = null,
+    [property: Description("The IKOF fiscal identifier extraction read from the image, if any.")]
+    string? ExtractedIkof = null,
+    [property: Description("The JIKR fiscal identifier extraction read from the image, if any.")]
+    string? ExtractedJikr = null,
+    [property: Description("How the extracted fiscal identifiers were obtained, as capture reported it.")]
+    Receipt.FiscalSource FiscalExtractedSource = Receipt.FiscalSource.None,
+    [property: Description(
+        "The invoice creation timestamp a fiscal QR decoded, if any, as capture reported it. Used to "
+        + "default the purchase's date when none is supplied.")]
+    string? FiscalCreatedAt = null)
+{
+    public CapturedReceiptCommand ToCommand() => new(
+        TempKey,
+        State,
+        FailureReason,
+        SuppliedIkof,
+        SuppliedJikr,
+        ExtractedIkof,
+        ExtractedJikr,
+        FiscalExtractedSource,
+        FiscalCreatedAt);
 }
 
 public sealed record MerchantArgument(
@@ -108,6 +148,35 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
                 amount,
                 [.. expenses.Select(expense => expense.ToCommand())],
                 merchant?.ToCommand()),
+            cancellationToken));
+
+    [McpServerTool(Name = "confirm_capture")]
+    [Description("""
+        Confirms a capture — made over HTTP, since image bytes are never a tool argument here — into
+        a new purchase. Resubmit exactly what the capture response reported (or corrected values,
+        where extraction needed fixing): its temporary key and extraction outcome, together with the
+        date, amount and expense lines the user is asserting. The promoted image is attached as the
+        purchase's receipt, already in that extraction state; nothing further is extracted. The
+        expense amounts must sum exactly to the purchase amount. The date may be omitted only when
+        the capture's fiscal QR decoded an invoice creation timestamp.
+        """)]
+    public async Task<RecordPurchaseToolResult> ConfirmCapture(
+        [Description("What the capture response reported, to confirm it.")]
+        CapturedReceiptArgument capture,
+        [Description("The total paid.")] decimal amount,
+        [Description("The lines making up the purchase. Their amounts must sum to the total.")]
+        IReadOnlyList<ExpenseArgument> expenses,
+        [Description("When the purchase happened. Omit only if the capture's fiscal QR decoded a timestamp.")]
+        DateTime? occurredAt = null,
+        [Description("Where the purchase was made, if known.")] MerchantArgument? merchant = null,
+        CancellationToken cancellationToken = default) =>
+        RecordPurchaseToolResult.Of(await recordPurchase.Execute(
+            new RecordPurchaseCommand(
+                occurredAt,
+                amount,
+                [.. expenses.Select(expense => expense.ToCommand())],
+                merchant?.ToCommand(),
+                capture.ToCommand()),
             cancellationToken));
 
     [McpServerTool(Name = "get_purchase")]

@@ -12,7 +12,8 @@ public sealed record ReceiptImageContent(long PurchaseId, string ContentType, by
 /// </summary>
 public sealed record StoredReceiptFile(byte[] ContentHash, string StorageKey, string ContentType, long SizeInBytes)
 {
-    public Receipt AsReceipt() => Receipt.Of(ContentHash, StorageKey, ContentType, SizeInBytes);
+    public Receipt AsReceipt(Receipt.ExtractionState state, string? failureReason = null) =>
+        Receipt.Of(ContentHash, StorageKey, ContentType, SizeInBytes, state, failureReason);
 }
 
 /// <summary>

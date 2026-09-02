@@ -137,8 +137,12 @@ Configuration:
 | `Extraction:Placeholder:Outcome` | `Reconciling` | `Reconciling`, `NonReconciling`, `LowConfidence` or `Failure` — see below. |
 | `Extraction:Portal:BaseAddress` | `https://mapr.tax.gov.me` | The fiscal verification service stage 2 asks. |
 | `Extraction:Portal:TimeoutMilliseconds` | `5000` | Past this, retrieval produced nothing and the cascade goes on. |
-| `Extraction:Queue:Capacity` | `256` | Bounded in-process queue. |
-| `Extraction:DrainInBackground` | `true` | Whether this process drains the queue. |
+| `TemporaryReceipts:RootPath` | `<app dir>/receipts-temp` | Where captures wait to be confirmed, distinct from the permanent receipt store. |
+| `TemporaryReceipts:Sweep:Interval` | `1.00:00:00` | How often the orphan-capture sweep runs. |
+| `TemporaryReceipts:Sweep:MaxAge` | `1.00:00:00` | How old an unconfirmed capture must be before the sweep removes it. |
+
+Extraction is synchronous now: a capture or a re-run runs the cascade directly in the request, so
+there is no queue and nothing to configure about draining one.
 
 ### The placeholder extractor
 

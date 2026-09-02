@@ -19,7 +19,7 @@ public sealed class RecordPurchaseTests
     private readonly InMemoryLedger _ledger = new();
 
     private RecordPurchase Subject =>
-        new(_ledger, _ledger, _ledger, new ResolveMerchant(_ledger, _ledger), _ledger);
+        new(_ledger, _ledger, _ledger, new ResolveMerchant(_ledger, _ledger), _ledger, _ledger, _ledger);
 
     [Fact]
     public async Task Manual_single_line_entry()
@@ -395,4 +395,120 @@ public sealed class RecordPurchaseTests
 
         Assert.Equal(ApplicationErrors.ExpenseDiscountIncomplete, error.Error.Code);
     }
+
+    // ---- Confirming a capture (receipt-ingestion) --------------------------
+
+    [Fact]
+    public async Task A_confirmed_capture_becomes_a_whole_purchase()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(1));
+
+        var result = await Subject.Execute(new RecordPurchaseCommand(
+            Occurred,
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m)],
+            Capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted)));
+
+        Assert.False(result.AlreadyRecorded);
+        Assert.True(result.Purchase.HasReceipt);
+        Assert.Equal(Receipt.ExtractionState.Extracted, _ledger.Purchases[0].Receipt!.State);
+    }
+
+    [Fact]
+    public async Task Confirming_promotes_the_temporary_image()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(2));
+
+        await Subject.Execute(new RecordPurchaseCommand(
+            Occurred,
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m)],
+            Capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted)));
+
+        Assert.False(_ledger.HasTemporaryCapture(tempKey));
+        Assert.Single(_ledger.Files);
+    }
+
+    [Fact]
+    public async Task Confirmation_that_does_not_reconcile()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(3));
+
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
+            Occurred,
+            8.48m,
+            [new ExpenseCommand("Groceries", 5.00m)],
+            Capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted))));
+
+        Assert.Equal(ApplicationErrors.PurchaseReconciliationMismatch, error.Error.Code);
+        Assert.Empty(_ledger.Purchases);
+
+        // The temporary capture is left in place, available to confirm again.
+        Assert.True(_ledger.HasTemporaryCapture(tempKey));
+        Assert.Empty(_ledger.Files);
+    }
+
+    [Fact]
+    public async Task Confirming_an_unknown_or_expired_key()
+    {
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
+            Occurred,
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m)],
+            Capture: new CapturedReceiptCommand(Guid.NewGuid(), Receipt.ExtractionState.Extracted))));
+
+        Assert.Equal(ApplicationErrors.CaptureNotFound, error.Error.Code);
+        Assert.Empty(_ledger.Purchases);
+    }
+
+    [Fact]
+    public async Task Date_taken_from_a_decoded_fiscal_receipt()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(4));
+
+        var result = await Subject.Execute(new RecordPurchaseCommand(
+            OccurredAt: null,
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m)],
+            Capture: new CapturedReceiptCommand(
+                tempKey,
+                Receipt.ExtractionState.Extracted,
+                FiscalCreatedAt: "2026-08-24T12:50:08+02:00")));
+
+        Assert.Equal(new DateTime(2026, 8, 24, 12, 50, 8), result.Purchase.OccurredAt);
+    }
+
+    [Fact]
+    public async Task Callers_date_overrides_the_receipt()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(5));
+
+        var result = await Subject.Execute(new RecordPurchaseCommand(
+            new DateTime(2026, 8, 25, 9, 0, 0, DateTimeKind.Unspecified),
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m)],
+            Capture: new CapturedReceiptCommand(
+                tempKey,
+                Receipt.ExtractionState.Extracted,
+                FiscalCreatedAt: "2026-08-24T12:50:08+02:00")));
+
+        Assert.Equal(new DateTime(2026, 8, 25, 9, 0, 0), result.Purchase.OccurredAt);
+    }
+
+    [Fact]
+    public async Task No_date_anywhere()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(6));
+
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
+            OccurredAt: null,
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m)],
+            Capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted))));
+
+        Assert.Equal(ApplicationErrors.PurchaseOccurrenceRequired, error.Error.Code);
+        Assert.Empty(_ledger.Purchases);
+    }
+
+    private static byte[] Jpeg(byte seed) => [0xFF, 0xD8, 0xFF, seed, 0x01, 0x02];
 }

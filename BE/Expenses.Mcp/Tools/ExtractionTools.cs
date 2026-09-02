@@ -72,8 +72,6 @@ public sealed record ExtractionToolResult(
 
         var state = view.Receipt.State switch
         {
-            Domain.Receipt.ExtractionState.Pending => "Extraction has not run yet for this receipt.",
-            Domain.Receipt.ExtractionState.Extracting => "Extraction is running for this receipt.",
             Domain.Receipt.ExtractionState.Extracted =>
                 $"Extraction read {view.Result?.Candidates.Count ?? 0} lines and the numbers add up.",
             Domain.Receipt.ExtractionState.NeedsReview =>
@@ -128,7 +126,7 @@ public sealed record ExtractionToolResult(
 [McpServerToolType]
 public sealed class ExtractionTools(
     GetExtractionCandidates getCandidates,
-    RequeueExtraction requeueExtraction,
+    RerunExtraction rerunExtraction,
     ConfirmCandidates confirmCandidates,
     DiscardCandidates discardCandidates)
 {
@@ -148,18 +146,19 @@ public sealed class ExtractionTools(
 
     [McpServerTool(Name = "rerun_extraction")]
     [Description("""
-        Runs extraction again for a purchase's receipt, replacing any candidate lines that were not
-        confirmed. Expenses already confirmed onto the purchase are left alone. Use it when the
-        previous attempt failed, read the receipt badly, or its candidate lines are no longer held.
+        Runs extraction again for a purchase's receipt, synchronously, replacing any candidate lines
+        that were not confirmed. Expenses already confirmed onto the purchase are left alone. Use it
+        when the previous attempt failed, read the receipt badly, or its candidate lines are no
+        longer held. The new state and candidates are returned in this same call.
         """)]
     public async Task<ExtractionToolResult> RerunExtraction(
         [Description("The purchase whose receipt to extract again.")] long purchaseId,
         CancellationToken cancellationToken = default)
     {
-        await requeueExtraction.Execute(purchaseId, cancellationToken);
+        await rerunExtraction.Execute(purchaseId, cancellationToken);
 
-        // Read back rather than reported from the requeue itself, so what the assistant sees is the
-        // state as stored — extraction runs off the request path and may not have started (D12).
+        // Read back rather than reported from the re-run itself, so the shape matches get_extraction
+        // exactly — the candidates it just replaced, in the same response.
         return ExtractionToolResult.Of(await getCandidates.Execute(purchaseId, cancellationToken));
     }
 

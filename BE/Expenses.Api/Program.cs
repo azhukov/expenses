@@ -43,7 +43,7 @@ builder.Services.AddOpenApi();
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
     // The limit is refused before the body is buffered rather than after (D11).
-    options.MultipartBodyLengthLimit = ReceiptsController.MaximumUploadBytes;
+    options.MultipartBodyLengthLimit = CapturesController.MaximumUploadBytes;
 });
 
 var app = builder.Build();

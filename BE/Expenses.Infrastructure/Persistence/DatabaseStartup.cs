@@ -32,5 +32,9 @@ public static class DatabaseStartup
         // The receipt store is half of what the ledger is stored in now (D11), so it is checked
         // here, beside the database, rather than discovered at the first upload.
         ReceiptFileStore.Verify(scope.ServiceProvider.GetRequiredService<ReceiptStoreOptions>());
+
+        // The temporary store is where every capture lands before it is confirmed, so it is
+        // checked with the same urgency as the permanent one.
+        TemporaryReceiptFileStore.Verify(scope.ServiceProvider.GetRequiredService<TemporaryReceiptStoreOptions>());
     }
 }

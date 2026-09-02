@@ -8,67 +8,52 @@ using Expenses.Domain.Extraction;
 namespace Expenses.Application.Receipts;
 
 /// <summary>
-/// Attaches the one receipt a purchase may have (D11, D12). The upload does not wait for
-/// extraction; the receipt is left <c>Pending</c> and queued.
+/// What capturing an image produced. Nothing here is held server-side (D12): the caller carries
+/// this forward and resubmits what it needs — the temporary key, and whatever of this it wants to
+/// assert unchanged or edited — when it confirms.
 /// </summary>
-public sealed class AttachReceiptImage(
-    IPurchaseRepository purchases,
-    IReceiptImageStore images,
-    IExtractionQueue queue,
-    IUnitOfWork unitOfWork)
+public sealed record CaptureResult(
+    Guid TempKey,
+    Receipt.ExtractionState State,
+    string? FailureReason,
+    ExtractionResultView? Result,
+    ArithmeticValidationReport? Validation,
+    FiscalIdentifiers Supplied,
+    FiscalIdentifiers Extracted,
+    Receipt.FiscalSource FiscalSource);
+
+/// <summary>
+/// Captures an image with no purchase behind it: stores it temporarily and runs extraction
+/// synchronously against it. Persists nothing to the database — not even the temporary key, which
+/// exists only as the filename the temporary store gave it.
+/// </summary>
+public sealed class CaptureReceipt(ITemporaryReceiptStore tempStore, ExtractionCascade cascade)
 {
-    public async Task<ReceiptView> Execute(
-        long purchaseId,
+    public async Task<CaptureResult> Execute(
         byte[] content,
         FiscalIdentifiers? suppliedFiscalIdentifiers = null,
         CancellationToken cancellationToken = default)
     {
-        var purchase = await purchases.Require(purchaseId, cancellationToken);
+        // Rejected before anything is written, even temporarily: the same format/size checks the
+        // permanent store applies, reused rather than duplicated.
+        var capture = await tempStore.Save(content, cancellationToken);
 
-        // Checked before the bytes are written, so a rejected second upload leaves nothing behind
-        // and the existing receipt is untouched.
-        if (purchase.Receipt is not null)
-        {
-            throw ExpensesException.For(
-                ApplicationErrors.PurchaseImageAlreadyAttached,
-                $"Purchase {purchaseId} already has a receipt image.",
-                ("purchaseId", purchaseId));
-        }
+        // No purchase exists yet, so there is nothing to identify this image by beyond its own
+        // bytes; the cascade's purchase identifier is purely descriptive metadata on the result.
+        var image = new ReceiptImageContent(PurchaseId: 0, capture.ContentType, content);
+        var supplied = suppliedFiscalIdentifiers ?? FiscalIdentifiers.None;
 
-        // The file first, the reference second: a file nothing points at is inert, while a purchase
-        // pointing at a file that was never written would not be (D11).
-        var stored = await images.Save(content, cancellationToken);
+        var outcome = await cascade.Run(image, supplied, cancellationToken);
 
-        Receipt receipt;
-        try
-        {
-            receipt = stored.AsReceipt();
-        }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
-        {
-            throw DomainErrorTranslation.Receipt(exception);
-        }
-
-        // Accepted without extraction having run, because a client that decoded them at capture
-        // should not depend on the server rediscovering them (D20).
-        if (suppliedFiscalIdentifiers is { IsEmpty: false } supplied)
-        {
-            receipt.SupplyFiscalIdentifiers(supplied.Ikof, supplied.Jikr);
-        }
-
-        try
-        {
-            purchase.AttachReceipt(receipt);
-        }
-        catch (InvalidOperationException exception)
-        {
-            throw DomainErrorTranslation.Receipt(exception);
-        }
-
-        await unitOfWork.SaveChanges(cancellationToken);
-        await queue.Enqueue(purchase.Id, cancellationToken);
-
-        return ReceiptView.Of(receipt);
+        return new CaptureResult(
+            capture.Key,
+            outcome.State,
+            outcome.FailureReason,
+            outcome.Result is null ? null : ExtractionResultView.Of(outcome.Result),
+            outcome.Validation,
+            supplied,
+            outcome.Extracted,
+            outcome.FiscalSource);
     }
 }
 
@@ -229,46 +214,10 @@ public sealed class DeleteReceipt(
 }
 
 /// <summary>
-/// Returns a receipt to <c>Pending</c> and queues it again, whatever terminal state it was in.
-/// Confirmed expenses are never altered by a re-run.
+/// Re-runs extraction for a receipt already attached to a purchase, synchronously, replacing any
+/// unconfirmed candidates with the new outcome. Expenses already confirmed are never touched.
 /// </summary>
-public sealed class RequeueExtraction(
-    IPurchaseRepository purchases,
-    IExtractionQueue queue,
-    IUnitOfWork unitOfWork)
-{
-    public async Task<ReceiptView> Execute(long purchaseId, CancellationToken cancellationToken = default)
-    {
-        var purchase = await purchases.Require(purchaseId, cancellationToken);
-        var receipt = purchase.RequireReceipt();
-
-        // Pending is the only way back in, so re-running is always an explicit act. Asking for a
-        // re-run of a receipt already waiting for one is absorbed rather than refused: the caller
-        // wants it extracted again, and it is already going to be.
-        if (receipt.State != Receipt.ExtractionState.Pending)
-        {
-            try
-            {
-                receipt.TransitionTo(Receipt.ExtractionState.Pending);
-            }
-            catch (InvalidOperationException exception)
-            {
-                throw DomainErrorTranslation.Receipt(exception);
-            }
-        }
-
-        await unitOfWork.SaveChanges(cancellationToken);
-        await queue.Enqueue(purchase.Id, cancellationToken);
-
-        return ReceiptView.Of(receipt);
-    }
-}
-
-/// <summary>
-/// Drives one receipt through the cascade and records what it decided. Called by the background
-/// drain rather than by a request (D12).
-/// </summary>
-public sealed class RunExtraction(
+public sealed class RerunExtraction(
     IPurchaseRepository purchases,
     IReceiptImageStore images,
     IExtractionCandidateStore candidates,
@@ -288,23 +237,6 @@ public sealed class RunExtraction(
                 ("storageKey", receipt.StorageKey));
 
         var content = new ReceiptImageContent(purchase.Id, receipt.ContentType, bytes);
-
-        try
-        {
-            // A receipt found still Extracting was stranded by a restart, not by another run in
-            // flight: the queue is in-process, so nothing else can be extracting it (D12).
-            if (receipt.State == Receipt.ExtractionState.Extracting)
-            {
-                receipt.TransitionTo(Receipt.ExtractionState.Pending);
-            }
-
-            receipt.TransitionTo(Receipt.ExtractionState.Extracting);
-        }
-        catch (InvalidOperationException exception)
-        {
-            throw DomainErrorTranslation.Receipt(exception);
-        }
-
         var supplied = new FiscalIdentifiers(receipt.FiscalIkofSupplied, receipt.FiscalJikrSupplied);
         var outcome = await cascade.Run(content, supplied, cancellationToken);
 

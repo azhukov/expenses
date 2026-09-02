@@ -168,17 +168,26 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         await using var services = postgres.Services(("Extraction:Placeholder:Outcome", "Reconciling"));
         using var scope = services.CreateScope();
 
-        var purchase = await scope.ServiceProvider.GetRequiredService<RecordPurchase>()
-            .Execute(new RecordPurchaseCommand(Next(), 10.00m, [new ExpenseCommand("Line", 10.00m)]));
-
-        await scope.ServiceProvider.GetRequiredService<AttachReceiptImage>().Execute(
-            purchase.Purchase.Id,
+        var captured = await scope.ServiceProvider.GetRequiredService<CaptureReceipt>().Execute(
             QrReceipt("https://mapr.tax.gov.me/ic/#/verify?iic=DECODED-FROM-IMAGE"),
             new FiscalIdentifiers("SUPPLIED-AT-UPLOAD"));
 
-        var purchaseId = purchase.Purchase.Id;
-        await scope.ServiceProvider.GetRequiredService<RunExtraction>().Execute(purchaseId);
+        var purchase = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
+            new RecordPurchaseCommand(
+                Next(),
+                10.00m,
+                [new ExpenseCommand("Line", 10.00m)],
+                Capture: new CapturedReceiptCommand(
+                    captured.TempKey,
+                    captured.State,
+                    captured.FailureReason,
+                    captured.Supplied.Ikof,
+                    captured.Supplied.Jikr,
+                    captured.Extracted.Ikof,
+                    captured.Extracted.Jikr,
+                    captured.FiscalSource)));
 
+        var purchaseId = purchase.Purchase.Id;
         var view = await scope.ServiceProvider.GetRequiredService<GetExtractionCandidates>().Execute(purchaseId);
 
         Assert.Equal("SUPPLIED-AT-UPLOAD", view.Receipt.FiscalIkofSupplied);
@@ -186,8 +195,10 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         Assert.Equal(Receipt.FiscalCorroboration.Disagreed, view.Receipt.Corroboration);
         Assert.Equal(Receipt.ExtractionState.NeedsReview, view.Receipt.State);
 
-        // The numbers were fine; it is the disagreement alone that put it in front of a human.
-        Assert.True(view.Validation?.Passed);
+        // The numbers were fine; it is the disagreement alone that put it in front of a human. The
+        // capture's own validation is what proves that, since a freshly confirmed receipt holds no
+        // candidates server-side to recompute it from.
+        Assert.True(captured.Validation?.Passed);
     }
 
     [Fact]

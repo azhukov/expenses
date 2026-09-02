@@ -55,6 +55,12 @@ public static class ExpensesInfrastructure
         services.AddSingleton(receipts);
         services.AddSingleton<IReceiptImageStore, ReceiptFileStore>();
 
+        // A distinct root from the permanent store's, so a capture waiting to be confirmed is never
+        // mistaken for a confirmed receipt by a naive directory walk over either one.
+        var temporaryReceipts = Bind<TemporaryReceiptStoreOptions>(configuration, "TemporaryReceipts");
+        services.AddSingleton(temporaryReceipts);
+        services.AddSingleton<ITemporaryReceiptStore, TemporaryReceiptFileStore>();
+
         // A singleton because candidates are transient and shared across scopes: the background
         // drain produces them and a later request reads them, both within one process (D12).
         services.AddSingleton<IExtractionCandidateStore, InMemoryExtractionCandidateStore>();
@@ -74,11 +80,9 @@ public static class ExpensesInfrastructure
     {
         var extraction = Bind<ExtractionOptions>(configuration, "Extraction");
         var placeholder = Bind<PlaceholderOptions>(configuration, "Extraction:Placeholder");
-        var queue = Bind<QueueOptions>(configuration, "Extraction:Queue");
 
         services.AddSingleton(extraction);
         services.AddSingleton(placeholder);
-        services.AddSingleton(queue);
 
         // No options of its own: the preprocessing ladder the budget bounded is gone, because the
         // measured hit needed none of it and no amount of it rescued a measured miss (D21).
@@ -122,17 +126,10 @@ public static class ExpensesInfrastructure
             provider.GetServices<IExtractionStage>(),
             provider.GetRequiredService<ExtractionOptions>()));
 
-        services.AddSingleton<ExtractionQueue>();
-        services.AddSingleton<IExtractionQueue>(provider => provider.GetRequiredService<ExtractionQueue>());
-
-        // Registered but not necessarily hosted: the queue is always there to accept work, while
-        // draining it is this process's job only when it is configured to be.
-        services.AddSingleton<ExtractionService>();
-
-        if (Bind<ExtractionHostingOptions>(configuration, "Extraction").DrainInBackground)
-        {
-            services.AddHostedService(provider => provider.GetRequiredService<ExtractionService>());
-        }
+        // The one piece of background processing this change keeps, unrelated to extraction:
+        // extraction itself always runs synchronously in the request from here on.
+        services.AddSingleton(Bind<OrphanCaptureSweepOptions>(configuration, "TemporaryReceipts:Sweep"));
+        services.AddHostedService<OrphanCaptureSweep>();
     }
 
     /// <summary>
@@ -159,13 +156,12 @@ public static class ExpensesInfrastructure
         services.AddScoped<SetMerchantParent>();
         services.AddScoped<DeactivateMerchant>();
 
-        services.AddScoped<AttachReceiptImage>();
+        services.AddScoped<CaptureReceipt>();
         services.AddScoped<DeleteReceipt>();
         services.AddScoped<GetExtractionCandidates>();
         services.AddScoped<ConfirmCandidates>();
         services.AddScoped<DiscardCandidates>();
-        services.AddScoped<RequeueExtraction>();
-        services.AddScoped<RunExtraction>();
+        services.AddScoped<RerunExtraction>();
     }
 
     private static TOptions Bind<TOptions>(IConfiguration configuration, string section)

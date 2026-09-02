@@ -46,6 +46,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Contains("search_merchants", names);
         Assert.Contains("get_extraction", names);
         Assert.Contains("rerun_extraction", names);
+        Assert.Contains("confirm_capture", names);
 
         // Each tool says what it does and when to use it, and declares its arguments.
         Assert.All(tools, tool =>
@@ -188,6 +189,10 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     {
         var purchaseId = await GivenExtractedReceipt();
 
+        // A capture's candidates are never held server-side, so confirming it leaves none held;
+        // re-running produces them, synchronously, against the now-promoted image.
+        await Call("rerun_extraction", new Dictionary<string, object?> { ["purchaseId"] = purchaseId });
+
         var extraction = await Call("get_extraction", new Dictionary<string, object?>
         {
             ["purchaseId"] = purchaseId,
@@ -217,23 +222,30 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             ["purchaseId"] = purchaseId,
         });
 
-        Assert.Equal("Pending", reran.GetProperty("state").GetString());
+        // Synchronous now: the new terminal state and candidates are back in this same response.
+        Assert.Contains(reran.GetProperty("state").GetString(), new[] { "Extracted", "NeedsReview", "Failed" });
     }
 
     private async Task<long> GivenExtractedReceipt()
     {
-        var recorded = await _mcp.Resolve<RecordPurchase>().Execute(new RecordPurchaseCommand(
-            Next(),
-            10.00m,
-            [new ExpenseCommand("Placeholder", 10.00m)]));
-
-        await _mcp.Resolve<AttachReceiptImage>().Execute(
-            recorded.Purchase.Id,
+        var captured = await _mcp.Resolve<CaptureReceipt>().Execute(
             [0xFF, 0xD8, 0xFF, 0xE0, (byte)_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x04],
             new Application.Extraction.FiscalIdentifiers("MCP-IKOF-1"));
 
         // A receipt is addressed by its purchase; there is no image identifier anywhere (D11).
-        await _mcp.Resolve<RunExtraction>().Execute(recorded.Purchase.Id);
+        var recorded = await _mcp.Resolve<RecordPurchase>().Execute(new RecordPurchaseCommand(
+            Next(),
+            10.00m,
+            [new ExpenseCommand("Placeholder", 10.00m)],
+            Capture: new CapturedReceiptCommand(
+                captured.TempKey,
+                captured.State,
+                captured.FailureReason,
+                captured.Supplied.Ikof,
+                captured.Supplied.Jikr,
+                captured.Extracted.Ikof,
+                captured.Extracted.Jikr,
+                captured.FiscalSource)));
 
         return recorded.Purchase.Id;
     }

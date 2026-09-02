@@ -18,8 +18,8 @@ internal sealed class InMemoryLedger :
     IUnitRepository,
     IMerchantRepository,
     IReceiptImageStore,
+    ITemporaryReceiptStore,
     IExtractionCandidateStore,
-    IExtractionQueue,
     IUnitOfWork
 {
     private readonly List<Purchase> _purchases = [];
@@ -30,14 +30,12 @@ internal sealed class InMemoryLedger :
     private readonly List<Merchant> _merchants = [];
     private readonly List<Merchant> _uncommittedMerchants = [];
     private readonly Dictionary<string, byte[]> _files = [];
+    private readonly Dictionary<Guid, (byte[] Content, DateTimeOffset WrittenAt)> _tempFiles = [];
 
     private readonly Dictionary<long, ExtractionResult> _results = [];
     private readonly List<Category> _removedCategories = [];
 
     private long _nextId;
-
-    /// <summary>Purchases the queue was asked to extract, in order.</summary>
-    public List<long> Queued { get; } = [];
 
     public int SaveCount { get; private set; }
 
@@ -87,6 +85,29 @@ internal sealed class InMemoryLedger :
         _results[purchaseId] = result;
         return result;
     }
+
+    /// <summary>Writes bytes to the permanent store directly, as if a capture had already promoted them.</summary>
+    public StoredReceiptFile GivenReceiptFile(byte[] content)
+    {
+        var hash = SHA256.HashData(content);
+        var contentType = ContentTypeOf(content);
+        var storageKey = Convert.ToHexStringLower(hash);
+
+        _files[storageKey] = content;
+
+        return new StoredReceiptFile(hash, storageKey, contentType, content.LongLength);
+    }
+
+    /// <summary>Seeds a temporary capture directly, as if a prior call to capture had produced it.</summary>
+    public Guid GivenTemporaryCapture(byte[] content, DateTimeOffset? writtenAt = null)
+    {
+        var key = Guid.NewGuid();
+        _tempFiles[key] = (content, writtenAt ?? DateTimeOffset.UtcNow);
+
+        return key;
+    }
+
+    public bool HasTemporaryCapture(Guid key) => _tempFiles.ContainsKey(key);
 
     // ---- IUnitOfWork -------------------------------------------------------
 
@@ -317,13 +338,32 @@ internal sealed class InMemoryLedger :
         return Task.CompletedTask;
     }
 
-    // ---- IExtractionQueue --------------------------------------------------
+    // ---- ITemporaryReceiptStore ---------------------------------------------
 
-    public ValueTask Enqueue(long purchaseId, CancellationToken cancellationToken = default)
+    Task<TemporaryCapture> ITemporaryReceiptStore.Save(byte[] content, CancellationToken cancellationToken)
     {
-        Queued.Add(purchaseId);
-        return ValueTask.CompletedTask;
+        var key = Guid.NewGuid();
+        _tempFiles[key] = (content, DateTimeOffset.UtcNow);
+
+        return Task.FromResult(new TemporaryCapture(key, ContentTypeOf(content)));
     }
+
+    public Task<byte[]?> Read(Guid key, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_tempFiles.TryGetValue(key, out var stored) ? stored.Content : null);
+
+    public Task Delete(Guid key, CancellationToken cancellationToken = default)
+    {
+        _tempFiles.Remove(key);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<Guid>> ListOlderThan(
+        DateTimeOffset cutoff,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Guid>>(_tempFiles
+            .Where(entry => entry.Value.WrittenAt < cutoff)
+            .Select(entry => entry.Key)
+            .ToList());
 
     /// <summary>
     /// Stands in for detection from content (7.2), which belongs to the storage adapter. The fake

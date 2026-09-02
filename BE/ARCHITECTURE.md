@@ -26,7 +26,7 @@ so a `ProjectReference` or `PackageReference` that breaks a ring fails the build
      │  Endpoints, Contracts   │        │  PurchaseTools          │
      │  ErrorHandling          │        │  ExtractionTools        │
      │                         │        │  ReferenceDataTools     │
-     │  images uploadable HERE │        │  NO image bytes         │
+     │  capture is HTTP-only   │        │  NO image bytes         │
      └────────────┬────────────┘        └────────────┬────────────┘
                   │        composition only          │
                   └────────────────┬─────────────────┘
@@ -43,8 +43,8 @@ so a `ProjectReference` or `PackageReference` that breaks a ring fails the build
      │  PORTS (Abstractions/)                                           │
      │   IPurchaseRepository   IMerchantRepository   ICategoryRepository│
      │   IUnitRepository       IUnitOfWork           IClock             │
-     │   IReceiptImageStore    IReceiptExtractor                        │
-     │   IExtractionQueue      IExtractionCandidateStore                │
+     │   IReceiptImageStore    ITemporaryReceiptStore                   │
+     │   IReceiptExtractor     IExtractionCandidateStore                │
      └───────────────────────────────┬──────────────────────────────────┘
                                      │  implemented by ▼ (inverted)
    ═════════════════════════════   INFRASTRUCTURE   ════════════════════════
@@ -53,9 +53,10 @@ so a `ProjectReference` or `PackageReference` that breaks a ring fails the build
      │                                                                  │
      │  Persistence/    ExpensesDbContext, Repositories, Configurations │
      │                  DatabaseProvisioning, DatabaseStartup, Seeds    │
-     │  Receipts/       ReceiptFileStore (files, content-addressed)     │
-     │  Extraction/     ExtractionQueue (bounded Channel)               │
-     │                  InMemoryExtractionCandidateStore (transient)   │
+     │  Receipts/       ReceiptFileStore (permanent, content-addressed) │
+     │                  TemporaryReceiptFileStore (GUID-keyed, staging) │
+     │                  OrphanCaptureSweep (daily hosted job)           │
+     │  Extraction/     InMemoryExtractionCandidateStore (transient)    │
      │                  FiscalCodeDecoder, PlaceholderReceiptExtractor  │
      │                  Stages: FiscalDecodeStage, VisionStage          │
      │  ExpensesInfrastructure.cs   ← the single DI wiring point        │
@@ -85,17 +86,15 @@ Expenses.Api             -> Application, Infrastructure (composition only)
 Expenses.Mcp             -> Application, Infrastructure (composition only)
 ```
 
-## The extraction path — the one asynchronous flow
+## The capture-and-confirm path — extraction is synchronous
 
-Extraction runs off the request path (D12) as an ordered cascade, cheapest stage first (D20):
+Capture and re-run both call the cascade directly, in the request — an ordered cascade, cheapest
+stage first (D20), with no queue and no `Pending`/`Extracting` state observable between requests:
 
 ```
-  POST image ──► ReceiptFileStore  ──► IExtractionQueue ──► 202, request ends
-   (Api only)     file + reference     bounded Channel(256)
-                                              │
-                                              ▼  background drain (in-process)
-                                       ExtractionCascade
-                                              │
+  POST /receipts/capture ──► ITemporaryReceiptStore   ──► ExtractionCascade ──► response
+   (Api only, no purchase)    GUID-keyed staging file        (synchronous, in this request)
+                                                                    │
         stage 1  FiscalDecodeStage    free    │  opportunistic — a miss is normal
         stage 2  FiscalInvoiceStage   free    │  the authoritative invoice, where it decoded
         stage 3  ArithmeticValidation free    │  ◄── decides the outcome
@@ -103,6 +102,12 @@ Extraction runs off the request path (D12) as an ordered cascade, cheapest stage
         stage 5  VisionStage expensive paid   │            or if validation failed
                                               ▼
                               Extracted │ NeedsReview │ Failed
+                                              │
+        caller confirms: date, amount, lines + the temp key
+                                              ▼
+        RecordPurchase ──► IReceiptImageStore.Save (promote) ──► Purchase.Record(..., receipt)
+                                              │
+                                    ITemporaryReceiptStore.Delete
 ```
 
 Validation runs after every producing stage, and the first result that reconciles ends the cascade.
@@ -110,17 +115,20 @@ That is what keeps a probabilistic stage from ever being asked for a value a det
 already established (D22).
 
 Stage 0 — fiscal QR decode in the browser, at capture — is the intended primary path and belongs to
-`FE/`. The backend contract is already shaped for it: fiscal identifiers are accepted alongside an
-upload, not only discovered from one.
+`FE/`. The backend contract is already shaped for it: fiscal identifiers are accepted alongside a
+capture, not only discovered from one.
 
-What the cascade produces is held in memory, keyed by purchase, and never written to a table (D12):
-a candidate exists to be confirmed into an expense or discarded, so a restart loses the suggestion
-and keeps every confirmed line and the extraction state recorded on the purchase. Reading reports
-that absence rather than an empty extraction, and never re-runs the cascade on its own.
+Capture's candidates are never held server-side at all: they travel in the capture response, and
+the caller resubmits what it needs — verbatim or edited — to confirm. `RerunExtraction`, for a
+receipt already attached to a purchase, still holds candidates in memory keyed by purchase (D12): a
+restart loses the suggestion and keeps every confirmed line and the extraction state recorded on the
+purchase. Reading reports that absence rather than an empty extraction, and never re-runs the
+cascade on its own.
 
-The queue is bounded on purpose, so restart loses queued-but-unrun work by design; a startup sweep
-re-finds anything still `Pending` or stranded `Extracting`. See [README.md](README.md) for the cascade's configuration keys
-and what the placeholder extractor does.
+The one background job left is `OrphanCaptureSweep`: once a day it deletes temporary captures nobody
+confirmed within a day. It has no queue-shaped complexity — no per-item retry, no ordering — because
+"old enough" is the only thing it ever decides. See [README.md](README.md) for the cascade's
+configuration keys and what the placeholder extractor does.
 
 ## What the shape buys
 

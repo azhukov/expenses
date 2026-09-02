@@ -1,6 +1,5 @@
 using Expenses.Application.Abstractions;
 using Expenses.Application.Extraction;
-using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
 using Expenses.Domain;
 using Expenses.Integration.Tests.Harness;
@@ -28,10 +27,6 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
     public const string UndecodableReceipt = "1000023157.jpg";
 
     public const string Ikof = "32AA324CFF5030271E16D59F7F8EF636";
-
-    private static readonly DateTime Occurred = new(2039, 10, 11, 9, 30, 0, DateTimeKind.Unspecified);
-
-    private static int _sequence;
 
     public Task InitializeAsync() => postgres.Migrate();
 
@@ -70,31 +65,21 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
         await using var services = postgres.Services();
         using var scope = services.CreateScope();
 
-        var purchase = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
-            new RecordPurchaseCommand(Next(), 8.48m, [new ExpenseCommand("Receipt", 8.48m)]));
-
-        await scope.ServiceProvider.GetRequiredService<AttachReceiptImage>()
-            .Execute(purchase.Purchase.Id, Photograph(UndecodableReceipt).Content);
-
-        var purchaseId = purchase.Purchase.Id;
-        var extracted = await scope.ServiceProvider.GetRequiredService<RunExtraction>().Execute(purchaseId);
-        var view = await scope.ServiceProvider.GetRequiredService<GetExtractionCandidates>().Execute(purchaseId);
+        var result = await scope.ServiceProvider.GetRequiredService<CaptureReceipt>()
+            .Execute(Photograph(UndecodableReceipt).Content);
 
         // Reported no differently from a receipt carrying no code at all: the stage ran, decoded
         // nothing, recorded nothing, and every later stage behaved as it always does.
-        Assert.Contains("fiscal-qr", view.Result!.StagesRun);
-        Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
-        Assert.NotEmpty(view.Result.Candidates);
-        Assert.Null(extracted.FailureReason);
-        Assert.Null(extracted.FiscalIkofExtracted);
-        Assert.Equal(Receipt.FiscalSource.None, extracted.FiscalExtractedSource);
-        Assert.Equal(Receipt.FiscalCorroboration.Absent, extracted.Corroboration);
+        Assert.Contains("fiscal-qr", result.Result!.StagesRun);
+        Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
+        Assert.NotEmpty(result.Result.Candidates);
+        Assert.Null(result.FailureReason);
+        Assert.Null(result.Extracted.Ikof);
+        Assert.Equal(Receipt.FiscalSource.None, result.FiscalSource);
     }
 
     public static ReceiptImageContent Photograph(string fixture) => new(
         1,
         "image/jpeg",
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture)));
-
-    private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
 }

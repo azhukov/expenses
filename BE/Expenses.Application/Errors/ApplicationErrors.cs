@@ -23,8 +23,8 @@ public static class ApplicationErrors
     public const string ExpenseDiscountPercentageNotAccepted = "expense.discount_percentage_not_accepted";
 
     public const string PurchaseNoExpenses = "purchase.no_expenses";
-    public const string PurchaseImageAlreadyAttached = "purchase.receipt_image_already_attached";
     public const string PurchaseReconciliationMismatch = "purchase.reconciliation_mismatch";
+    public const string PurchaseOccurrenceRequired = "purchase.occurrence_required";
 
     public const string CategoryCodeRequired = "category.code_required";
     public const string CategoryNameRequired = "category.name_required";
@@ -63,9 +63,9 @@ public static class ApplicationErrors
     public const string MerchantHasActiveChildren = "merchant.has_active_children";
 
     public const string ReceiptImageNotFound = "receipt_image.not_found";
-    public const string ReceiptImageAlreadyAttached = "receipt_image.already_attached";
     public const string ReceiptImageUnsupportedFormat = "receipt_image.unsupported_format";
     public const string ReceiptImageTooLarge = "receipt_image.too_large";
+    public const string CaptureNotFound = "capture.not_found";
 
     public const string ListingPageSizeInvalid = "listing.page_size_invalid";
     public const string ListingRangeInvalid = "listing.range_invalid";

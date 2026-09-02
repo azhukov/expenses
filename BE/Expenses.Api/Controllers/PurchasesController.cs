@@ -28,7 +28,8 @@ public sealed class PurchasesController : ControllerBase
                 request.OccurredAt,
                 request.Amount,
                 [.. request.Expenses.Select(expense => expense.ToCommand())],
-                request.Merchant?.ToCommand()),
+                request.Merchant?.ToCommand(),
+                request.Capture?.ToCommand()),
             cancellationToken);
 
         var response = RecordPurchaseResponse.Of(result);

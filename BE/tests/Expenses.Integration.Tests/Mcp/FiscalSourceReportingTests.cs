@@ -82,16 +82,18 @@ public sealed class FiscalSourceReportingTests(PostgresFixture postgres) : IAsyn
 
     private async Task<long> GivenExtracted(string fixture)
     {
+        var captured = await _mcp.Resolve<CaptureReceipt>().Execute(
+            DecoderRegressionTests.Photograph(fixture).Content);
+
         var recorded = await _mcp.Resolve<RecordPurchase>().Execute(new RecordPurchaseCommand(
             Occurred.AddMinutes(Interlocked.Increment(ref _sequence)),
             59.65m,
-            [new ExpenseCommand("Receipt", 59.65m)]));
+            [new ExpenseCommand("Receipt", 59.65m)],
+            Capture: new CapturedReceiptCommand(captured.TempKey, captured.State, captured.FailureReason)));
 
-        await _mcp.Resolve<AttachReceiptImage>().Execute(
-            recorded.Purchase.Id,
-            DecoderRegressionTests.Photograph(fixture).Content);
-
-        await _mcp.Resolve<RunExtraction>().Execute(recorded.Purchase.Id);
+        // A capture's candidates are never held server-side, so confirming it leaves none held;
+        // re-running produces them, synchronously, against the now-promoted image.
+        await _mcp.Resolve<RerunExtraction>().Execute(recorded.Purchase.Id);
 
         return recorded.Purchase.Id;
     }

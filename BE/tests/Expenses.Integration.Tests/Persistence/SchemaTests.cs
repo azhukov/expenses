@@ -197,13 +197,12 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     /// <summary>A purchase carrying a receipt reference — the file itself is not this test's concern.</summary>
-    private static Purchase WithReceipt(DateTime occurred, byte[] hash, string storageKey)
-    {
-        var purchase = Purchase.Record(occurred, 4.00m, [Expense.Record("Coffee", 4.00m)]);
-        purchase.AttachReceipt(Receipt.Of(hash, storageKey, "image/jpeg", 1024));
-
-        return purchase;
-    }
+    private static Purchase WithReceipt(DateTime occurred, byte[] hash, string storageKey) =>
+        Purchase.Record(
+            occurred,
+            4.00m,
+            [Expense.Record("Coffee", 4.00m)],
+            receipt: Receipt.Of(hash, storageKey, "image/jpeg", 1024, Receipt.ExtractionState.Extracted));
 
     private async Task<long> Store(Purchase purchase)
     {

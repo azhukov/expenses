@@ -40,18 +40,23 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task Extraction_state_is_readable_from_the_purchase()
     {
         using var scope = _services.CreateScope();
-        var recorded = await Record(scope.ServiceProvider, 6.00m);
+        var captured = await scope.ServiceProvider.GetRequiredService<CaptureReceipt>().Execute(Jpeg());
 
-        await scope.ServiceProvider.GetRequiredService<AttachReceiptImage>()
-            .Execute(recorded.Purchase.Id, Jpeg());
+        var recorded = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
+            new RecordPurchaseCommand(
+                Next(),
+                6.00m,
+                [new ExpenseCommand("Line", 6.00m)],
+                Capture: new CapturedReceiptCommand(captured.TempKey, captured.State, captured.FailureReason)));
 
         var purchase = await scope.ServiceProvider.GetRequiredService<GetPurchase>()
             .Execute(recorded.Purchase.Id);
 
         // Retrieving a purchase says where its receipt has got to, in the same read: the receipt is
-        // columns on the purchase rather than a row to join (D11).
+        // columns on the purchase rather than a row to join (D11) — and already terminal, since
+        // extraction ran synchronously at capture.
         Assert.True(purchase.HasReceipt);
-        Assert.Equal(Receipt.ExtractionState.Pending, purchase.ExtractionState);
+        Assert.Equal(captured.State, purchase.ExtractionState);
     }
 
     [Fact]
@@ -166,23 +171,15 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
         await using var api = new ExpensesApi(postgres.ConnectionString);
         using var client = api.CreateClient();
 
-        var recorded = await ExpensesApi.Read<JsonElement>(await client.PostAsJsonAsync("/purchases", new
-        {
-            occurredAt = Next(),
-            amount = 4.00m,
-            expenses = new[] { new { description = "Line", amount = 4.00m } },
-        }));
-
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent("this is text pretending to be a photograph"u8.ToArray());
         file.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
         form.Add(file, "file", "receipt.jpg");
 
-        var uploaded = await client.PostAsync(
-            $"/purchases/{recorded.GetProperty("id").GetInt64()}/receipt",
-            form);
+        var uploaded = await client.PostAsync("/receipts/capture", form);
 
-        // The declared type and the file name are claims; the bytes are not.
+        // The declared type and the file name are claims; the bytes are not. Nothing is stored, even
+        // temporarily.
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, uploaded.StatusCode);
         Assert.Equal(
             "receipt_image.unsupported_format",

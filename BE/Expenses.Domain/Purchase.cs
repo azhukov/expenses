@@ -57,38 +57,31 @@ public sealed class Purchase
         }
     }
 
+    /// <summary>
+    /// A purchase acquires its receipt, if any, at the moment it is created and never afterward:
+    /// confirming a capture is the only way a purchase ever gets one, and that happens here, in the
+    /// same call that establishes its amount and lines (D11).
+    /// </summary>
     public static Purchase Record(
         DateTime occurredAt,
         decimal amount,
         IEnumerable<Expense> expenses,
         long? merchantId = null,
-        string? merchantRaw = null) =>
-        Create(NormaliseOccurrence(occurredAt), amount, expenses, merchantId, merchantRaw);
+        string? merchantRaw = null,
+        Receipt? receipt = null) =>
+        Create(NormaliseOccurrence(occurredAt), amount, expenses, merchantId, merchantRaw, receipt);
 
     public static Purchase Record(
         DateOnly occurredOn,
         decimal amount,
         IEnumerable<Expense> expenses,
         long? merchantId = null,
-        string? merchantRaw = null) =>
-        Create(occurredOn.ToDateTime(TimeOnly.MinValue), amount, expenses, merchantId, merchantRaw);
+        string? merchantRaw = null,
+        Receipt? receipt = null) =>
+        Create(occurredOn.ToDateTime(TimeOnly.MinValue), amount, expenses, merchantId, merchantRaw, receipt);
 
     /// <summary>Matching a merchant later must not erase the verbatim text (D9, D18).</summary>
     public void MatchMerchant(long merchantId) => MerchantId = merchantId;
-
-    /// <summary>
-    /// Attaches the one receipt this purchase may have. Rejects a second and leaves the existing
-    /// one untouched.
-    /// </summary>
-    public void AttachReceipt(Receipt receipt)
-    {
-        if (Receipt is not null)
-        {
-            throw new InvalidOperationException("This purchase already has a receipt.");
-        }
-
-        Receipt = receipt;
-    }
 
     /// <summary>
     /// Removes the receipt from the purchase and reports the file it referred to, so the caller
@@ -121,7 +114,8 @@ public sealed class Purchase
         decimal amount,
         IEnumerable<Expense> expenses,
         long? merchantId,
-        string? merchantRaw)
+        string? merchantRaw,
+        Receipt? receipt)
     {
         var purchaseAmount = ValidateAmount(amount, nameof(amount));
         var lines = Validated(purchaseAmount, expenses);
@@ -132,6 +126,7 @@ public sealed class Purchase
             Amount = purchaseAmount,
             MerchantId = merchantId,
             MerchantRaw = merchantRaw,
+            Receipt = receipt,
         };
         purchase._expenses.AddRange(lines);
 

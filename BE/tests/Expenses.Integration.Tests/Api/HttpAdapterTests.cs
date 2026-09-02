@@ -175,14 +175,20 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Multipart_upload_and_image_download()
+    public async Task Capture_over_http()
     {
-        var purchaseId = await RecordedId(5.55m);
+        var captured = await Capture(Jpeg(0x91));
 
-        var uploaded = await Upload(purchaseId, Jpeg(0x91));
-        Assert.Equal(HttpStatusCode.Created, uploaded.StatusCode);
-        var image = await ExpensesApi.Read<JsonElement>(uploaded);
-        Assert.Equal("Pending", image.GetProperty("state").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(captured.GetProperty("tempKey").GetString()));
+        Assert.Contains(
+            captured.GetProperty("state").GetString(),
+            new[] { "Extracted", "NeedsReview", "Failed" });
+    }
+
+    [Fact]
+    public async Task Capture_confirm_and_image_download()
+    {
+        var purchaseId = await RecordedIdWithReceipt(5.55m, Jpeg(0x91));
 
         var download = await _client.GetAsync($"/purchases/{purchaseId}/receipt/content");
 
@@ -192,49 +198,44 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Fiscal_identifiers_are_readable_before_extraction_has_run()
+    public async Task Fiscal_identifiers_are_readable_in_the_capture_response_before_confirmation()
     {
-        var purchaseId = await RecordedId(6.66m);
+        var captured = await Capture(Jpeg(0x92), ikof: "A1B2C3", jikr: "9F8E7D");
 
-        var uploaded = await Upload(purchaseId, Jpeg(0x92), ikof: "A1B2C3", jikr: "9F8E7D");
-        
-
-        var response = await _client.GetAsync($"/purchases/{purchaseId}/extraction");
-        var extraction = await ExpensesApi.Read<JsonElement>(response);
-        var storedImage = extraction.GetProperty("receipt");
-
-        Assert.Equal("A1B2C3", storedImage.GetProperty("fiscalIkofSupplied").GetString());
-        Assert.Equal("9F8E7D", storedImage.GetProperty("fiscalJikrSupplied").GetString());
-        Assert.Equal("Unverified", storedImage.GetProperty("corroboration").GetString());
-        Assert.Equal("Pending", storedImage.GetProperty("state").GetString());
+        Assert.Equal("A1B2C3", captured.GetProperty("supplied").GetProperty("ikof").GetString());
+        Assert.Equal("9F8E7D", captured.GetProperty("supplied").GetProperty("jikr").GetString());
     }
 
     [Fact]
     public async Task Per_stage_provenance_and_each_arithmetic_check_are_reported()
     {
-        var purchaseId = await RecordedId(7.77m);
-        var uploaded = await Upload(purchaseId, Jpeg(0x93));
-        
+        var captured = await Capture(Jpeg(0x93));
 
-        var reran = await _client.PostAsync($"/purchases/{purchaseId}/extraction/rerun", null);
-        Assert.Equal(HttpStatusCode.Accepted, reran.StatusCode);
-
-        await RunExtraction(purchaseId);
-
-        var extraction = await ExpensesApi.Read<JsonElement>(
-            await _client.GetAsync($"/purchases/{purchaseId}/extraction"));
-
-        var result = extraction.GetProperty("result");
+        var result = captured.GetProperty("result");
         Assert.Equal("placeholder", result.GetProperty("engineName").GetString());
         Assert.Contains(
             "vision-cheap",
             result.GetProperty("stagesRun").EnumerateArray().Select(stage => stage.GetString()));
         Assert.Equal("vision-cheap", result.GetProperty("provenance").GetProperty("total").GetString());
 
-        var checks = extraction.GetProperty("validation").GetProperty("checks").EnumerateArray().ToList();
+        var checks = captured.GetProperty("validation").GetProperty("checks").EnumerateArray().ToList();
         Assert.Contains(checks, check => check.GetProperty("name").GetString() == "line_sum");
         Assert.All(checks, check => Assert.False(string.IsNullOrWhiteSpace(
             check.GetProperty("outcome").GetString())));
+    }
+
+    [Fact]
+    public async Task Rerun_extraction_returns_the_full_result_synchronously()
+    {
+        var purchaseId = await RecordedIdWithReceipt(7.77m, Jpeg(0x96));
+
+        var reran = await ExpensesApi.Read<JsonElement>(
+            await _client.PostAsync($"/purchases/{purchaseId}/extraction/rerun", null));
+
+        Assert.Contains(
+            reran.GetProperty("receipt").GetProperty("state").GetString(),
+            new[] { "Extracted", "NeedsReview", "Failed" });
+        Assert.NotEmpty(reran.GetProperty("result").GetProperty("candidates").EnumerateArray());
     }
 
     [Fact]
@@ -287,10 +288,10 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Candidates_are_confirmed_over_http()
     {
-        var purchaseId = await RecordedId(10.00m);
-        var uploaded = await Upload(purchaseId, Jpeg(0x94));
-        
-        await RunExtraction(purchaseId);
+        var purchaseId = await RecordedIdWithReceipt(10.00m, Jpeg(0x94));
+
+        // Re-running produces fresh candidates for the receipt already attached to the purchase.
+        await _client.PostAsync($"/purchases/{purchaseId}/extraction/rerun", null);
 
         // The placeholder's lines are its own; confirming the purchase's real amount is what a user
         // does after correcting them.
@@ -309,8 +310,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Deleting_a_receipt_over_http_leaves_the_purchase()
     {
-        var purchaseId = await RecordedId(11.11m);
-        await Upload(purchaseId, Jpeg(0x95));
+        var purchaseId = await RecordedIdWithReceipt(11.11m, Jpeg(0x95));
 
         var deleted = await _client.DeleteAsync($"/purchases/{purchaseId}/receipt");
 
@@ -324,10 +324,6 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Single(purchase.GetProperty("expenses").EnumerateArray());
     }
 
-    /// <summary>Runs the cascade the way the drain would, since the suite disables the drain.</summary>
-    private async Task RunExtraction(long purchaseId) =>
-        await _api.Resolve<Application.Receipts.RunExtraction>().Execute(purchaseId);
-
     private async Task<HttpResponseMessage> Record(object command) =>
         await _client.PostAsJsonAsync("/purchases", command, ExpensesApi.Json);
 
@@ -338,7 +334,27 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         return (await ExpensesApi.Read<JsonElement>(response)).GetProperty("id").GetInt64();
     }
 
-    private async Task<HttpResponseMessage> Upload(long purchaseId, byte[] content, string? ikof = null, string? jikr = null)
+    /// <summary>Captures an image, then confirms it into a new purchase of the given amount.</summary>
+    private async Task<long> RecordedIdWithReceipt(decimal amount, byte[] content)
+    {
+        var captured = await Capture(content);
+        var tempKey = captured.GetProperty("tempKey").GetString();
+        var state = captured.GetProperty("state").GetString();
+
+        var response = await Record(new
+        {
+            occurredAt = Next(),
+            amount,
+            expenses = new[] { Line("Line", amount) },
+            capture = new { tempKey, state },
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return (await ExpensesApi.Read<JsonElement>(response)).GetProperty("id").GetInt64();
+    }
+
+    private async Task<JsonElement> Capture(byte[] content, string? ikof = null, string? jikr = null)
     {
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(content);
@@ -355,7 +371,10 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             form.Add(new StringContent(jikr), "fiscalJikr");
         }
 
-        return await _client.PostAsync($"/purchases/{purchaseId}/receipt", form);
+        var response = await _client.PostAsync("/receipts/capture", form);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return await ExpensesApi.Read<JsonElement>(response);
     }
 
     private static object NewPurchase(decimal amount, object[] expenses, DateTime? occurredAt = null) =>

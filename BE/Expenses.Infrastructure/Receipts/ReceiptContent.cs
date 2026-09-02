@@ -1,3 +1,5 @@
+using Expenses.Application.Errors;
+
 namespace Expenses.Infrastructure.Receipts;
 
 /// <summary>
@@ -63,5 +65,28 @@ internal static class ReceiptContent
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Rejects an oversized or unrecognised file before anything is written, even temporarily,
+    /// and returns the content type sniffed from the bytes. Shared by every place a receipt image
+    /// is accepted, so the same rules apply whether it is captured or attached.
+    /// </summary>
+    public static string Validate(byte[] content)
+    {
+        if (content.LongLength > MaximumSizeInBytes)
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.ReceiptImageTooLarge,
+                $"A receipt image may be at most {MaximumSizeInBytes / (1024 * 1024)} MB.",
+                ("sizeInBytes", content.LongLength),
+                ("maximumSizeInBytes", MaximumSizeInBytes));
+        }
+
+        return Detect(content)
+            ?? throw ExpensesException.For(
+                ApplicationErrors.ReceiptImageUnsupportedFormat,
+                $"A receipt image must be one of {string.Join(", ", Accepted)}.",
+                ("acceptedContentTypes", Accepted));
     }
 }
