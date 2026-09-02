@@ -32,13 +32,13 @@ Adding a `ProjectReference` or `PackageReference` that breaks a ring fails the b
 - **`Expenses.Domain` holds entities and nothing else (D22).** Not a validator, not an exception
   type, not an error-code table, not a record. Enums that describe an entity's state are nested
   inside it. Anything else that would go there goes in `Application` instead.
-- **Tables and columns are PascalCase (D23).** They are named exactly as the entity and property they
-  map — `Purchases.OccurredAt`, `Merchants.TaxId` — so a column is named explicitly in a
-  configuration only where the mapping genuinely differs from the property. PostgreSQL folds an
-  unquoted identifier to lower case, so **every hand-written identifier must be double-quoted**: in a
-  check constraint, an index filter, raw SQL in a test, or a `psql` session —
-  `select "OccurredAt" from "Purchases"`. Index and constraint names are the exception and stay
-  snake_case behind `ix_` / `ck_`.
+- **Tables and columns are lower snake_case (D23, reversed).** `occurred_at`, `purchases`,
+  `tax_id` — the PostgreSQL house style, so nothing written by hand needs quoting: a check
+  constraint, an index filter, raw SQL in a test, a `psql` session all read naturally —
+  `select occurred_at from purchases`. Because a snake_case column never spells the same as its
+  PascalCase C# property, every property is named explicitly in its configuration with
+  `HasColumnName`; there is no "only where it differs" shortcut. Index and constraint names were
+  already snake_case behind `ix_` / `ck_` / `FK_` and are unaffected.
 - **Do not introduce a type over a single primitive (D7).** A `decimal` amount stays a `decimal`; a
   quantity stays a `decimal`. In the outer rings, shared rules over a primitive are static
   functions, not wrappers.

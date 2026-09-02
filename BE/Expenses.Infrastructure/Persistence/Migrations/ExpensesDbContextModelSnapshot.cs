@@ -28,26 +28,32 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("code");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
 
                     b.Property<bool>("IsSystem")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_system");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("name");
 
                     b.Property<long?>("ParentId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("parent_id");
 
                     b.HasKey("Id");
 
@@ -55,11 +61,12 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_categories_code");
 
-                    b.HasIndex("ParentId");
+                    b.HasIndex("ParentId")
+                        .HasDatabaseName("ix_categories_parent_id");
 
-                    b.ToTable("Categories", null, t =>
+                    b.ToTable("categories", null, t =>
                         {
-                            t.HasCheckConstraint("ck_categories_name_length", "length(\"Name\") <= 256");
+                            t.HasCheckConstraint("ck_categories_name_length", "length(name) <= 256");
                         });
                 });
 
@@ -67,47 +74,60 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(19,2)");
+                        .HasColumnType("numeric(19,2)")
+                        .HasColumnName("amount");
 
                     b.Property<long?>("CategoryId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("category_id");
 
                     b.Property<string>("CategoryRaw")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("category_raw");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("description");
 
                     b.Property<decimal?>("DiscountAmount")
-                        .HasColumnType("numeric(19,2)");
+                        .HasColumnType("numeric(19,2)")
+                        .HasColumnName("discount_amount");
 
                     b.Property<decimal?>("ListUnitPrice")
-                        .HasColumnType("numeric(19,2)");
+                        .HasColumnType("numeric(19,2)")
+                        .HasColumnName("list_unit_price");
 
                     b.Property<long?>("PurchaseId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("purchase_id");
 
                     b.Property<decimal>("Quantity")
-                        .HasColumnType("numeric(12,3)");
+                        .HasColumnType("numeric(12,3)")
+                        .HasColumnName("quantity");
 
                     b.Property<long?>("UnitId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("unit_id");
 
                     b.Property<decimal?>("UnitPrice")
-                        .HasColumnType("numeric(19,2)");
+                        .HasColumnType("numeric(19,2)")
+                        .HasColumnName("unit_price");
 
                     b.Property<string>("UnitRaw")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("unit_raw");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoryId");
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("ix_expenses_category_id");
 
                     b.HasIndex("Description")
                         .HasDatabaseName("ix_expenses_description_trgm");
@@ -115,17 +135,19 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Description"), "gin");
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Description"), new[] { "gin_trgm_ops" });
 
-                    b.HasIndex("PurchaseId");
+                    b.HasIndex("PurchaseId")
+                        .HasDatabaseName("ix_expenses_purchase_id");
 
-                    b.HasIndex("UnitId");
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_expenses_unit_id");
 
-                    b.ToTable("Expenses", null, t =>
+                    b.ToTable("expenses", null, t =>
                         {
-                            t.HasCheckConstraint("ck_expenses_category_raw_length", "\"CategoryRaw\" IS NULL OR length(\"CategoryRaw\") <= 256");
+                            t.HasCheckConstraint("ck_expenses_category_raw_length", "category_raw IS NULL OR length(category_raw) <= 256");
 
-                            t.HasCheckConstraint("ck_expenses_description_length", "length(\"Description\") <= 512");
+                            t.HasCheckConstraint("ck_expenses_description_length", "length(description) <= 512");
 
-                            t.HasCheckConstraint("ck_expenses_unit_raw_length", "\"UnitRaw\" IS NULL OR length(\"UnitRaw\") <= 128");
+                            t.HasCheckConstraint("ck_expenses_unit_raw_length", "unit_raw IS NULL OR length(unit_raw) <= 128");
                         });
                 });
 
@@ -133,22 +155,27 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("name");
 
                     b.Property<long?>("ParentId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("parent_id");
 
                     b.Property<string>("TaxId")
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("tax_id");
 
                     b.HasKey("Id");
 
@@ -158,16 +185,17 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Name"), "gin");
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Name"), new[] { "gin_trgm_ops" });
 
-                    b.HasIndex("ParentId");
+                    b.HasIndex("ParentId")
+                        .HasDatabaseName("ix_merchants_parent_id");
 
                     b.HasIndex("TaxId")
                         .IsUnique()
                         .HasDatabaseName("ix_merchants_tax_id")
-                        .HasFilter("\"TaxId\" IS NOT NULL");
+                        .HasFilter("tax_id IS NOT NULL");
 
-                    b.ToTable("Merchants", null, t =>
+                    b.ToTable("merchants", null, t =>
                         {
-                            t.HasCheckConstraint("ck_merchants_name_length", "length(\"Name\") <= 256");
+                            t.HasCheckConstraint("ck_merchants_name_length", "length(name) <= 256");
                         });
                 });
 
@@ -175,25 +203,31 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(19,2)");
+                        .HasColumnType("numeric(19,2)")
+                        .HasColumnName("amount");
 
                     b.Property<long?>("MerchantId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("merchant_id");
 
                     b.Property<string>("MerchantRaw")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("merchant_raw");
 
                     b.Property<DateTime>("OccurredAt")
-                        .HasColumnType("timestamp without time zone");
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("occurred_at");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MerchantId");
+                    b.HasIndex("MerchantId")
+                        .HasDatabaseName("ix_purchases_merchant_id");
 
                     b.HasIndex("MerchantRaw")
                         .HasDatabaseName("ix_purchases_merchant_raw_trgm");
@@ -205,15 +239,15 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_purchases_occurred_at_amount");
 
-                    b.ToTable("Purchases", null, t =>
+                    b.ToTable("purchases", null, t =>
                         {
-                            t.HasCheckConstraint("ck_purchases_merchant_raw_length", "\"MerchantRaw\" IS NULL OR length(\"MerchantRaw\") <= 512");
+                            t.HasCheckConstraint("ck_purchases_merchant_raw_length", "merchant_raw IS NULL OR length(merchant_raw) <= 512");
 
-                            t.HasCheckConstraint("ck_purchases_receipt_all_or_nothing", "(\"ReceiptContentHash\" IS NULL AND \"ReceiptStorageKey\" IS NULL AND \"ReceiptContentType\" IS NULL\n    AND \"ReceiptSizeInBytes\" IS NULL AND \"ReceiptState\" IS NULL)\nOR (\"ReceiptContentHash\" IS NOT NULL AND \"ReceiptStorageKey\" IS NOT NULL\n    AND \"ReceiptContentType\" IS NOT NULL AND \"ReceiptSizeInBytes\" IS NOT NULL\n    AND \"ReceiptState\" IS NOT NULL)");
+                            t.HasCheckConstraint("ck_purchases_receipt_all_or_nothing", "(receipt_content_hash IS NULL AND receipt_storage_key IS NULL AND receipt_content_type IS NULL\n    AND receipt_size_in_bytes IS NULL AND receipt_state IS NULL)\nOR (receipt_content_hash IS NOT NULL AND receipt_storage_key IS NOT NULL\n    AND receipt_content_type IS NOT NULL AND receipt_size_in_bytes IS NOT NULL\n    AND receipt_state IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_purchases_receipt_content_hash_length", "\"ReceiptContentHash\" IS NULL OR length(\"ReceiptContentHash\") = 32");
+                            t.HasCheckConstraint("ck_purchases_receipt_content_hash_length", "receipt_content_hash IS NULL OR length(receipt_content_hash) = 32");
 
-                            t.HasCheckConstraint("ck_purchases_receipt_storage_key_length", "\"ReceiptStorageKey\" IS NULL OR length(\"ReceiptStorageKey\") <= 256");
+                            t.HasCheckConstraint("ck_purchases_receipt_storage_key_length", "receipt_storage_key IS NULL OR length(receipt_storage_key) <= 256");
                         });
                 });
 
@@ -221,27 +255,33 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("varchar(16)");
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("code");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("name");
 
                     b.Property<string>("Symbol")
                         .IsRequired()
-                        .HasColumnType("varchar(16)");
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("symbol");
 
                     b.HasKey("Id");
 
@@ -249,9 +289,9 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_units_code");
 
-                    b.ToTable("Units", null, t =>
+                    b.ToTable("units", null, t =>
                         {
-                            t.HasCheckConstraint("ck_units_name_length", "length(\"Name\") <= 128");
+                            t.HasCheckConstraint("ck_units_name_length", "length(name) <= 128");
                         });
 
                     b.HasData(
@@ -325,7 +365,8 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     b.HasOne("Expenses.Domain.Category", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_categories_categories_parent_id");
 
                     b.Navigation("Parent");
                 });
@@ -335,17 +376,20 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     b.HasOne("Expenses.Domain.Category", null)
                         .WithMany()
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_expenses_categories_category_id");
 
                     b.HasOne("Expenses.Domain.Purchase", null)
                         .WithMany("Expenses")
                         .HasForeignKey("PurchaseId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("FK_expenses_purchases_purchase_id");
 
                     b.HasOne("Expenses.Domain.Unit", null)
                         .WithMany()
                         .HasForeignKey("UnitId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_expenses_units_unit_id");
                 });
 
             modelBuilder.Entity("Expenses.Domain.Merchant", b =>
@@ -353,7 +397,8 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     b.HasOne("Expenses.Domain.Merchant", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_merchants_merchants_parent_id");
 
                     b.Navigation("Parent");
                 });
@@ -363,7 +408,8 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     b.HasOne("Expenses.Domain.Merchant", null)
                         .WithMany()
                         .HasForeignKey("MerchantId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_purchases_merchants_merchant_id");
 
                     b.OwnsOne("Expenses.Domain.Receipt", "Receipt", b1 =>
                         {
@@ -373,56 +419,56 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                             b1.Property<byte[]>("ContentHash")
                                 .IsRequired()
                                 .HasColumnType("bytea")
-                                .HasColumnName("ReceiptContentHash");
+                                .HasColumnName("receipt_content_hash");
 
                             b1.Property<string>("ContentType")
                                 .IsRequired()
                                 .HasColumnType("varchar(128)")
-                                .HasColumnName("ReceiptContentType");
+                                .HasColumnName("receipt_content_type");
 
                             b1.Property<string>("FailureReason")
                                 .HasColumnType("text")
-                                .HasColumnName("ReceiptFailureReason");
+                                .HasColumnName("receipt_failure_reason");
 
                             b1.Property<int>("FiscalExtractedSource")
                                 .HasColumnType("integer")
-                                .HasColumnName("FiscalExtractedSource");
+                                .HasColumnName("fiscal_extracted_source");
 
                             b1.Property<string>("FiscalIkofExtracted")
                                 .HasColumnType("text")
-                                .HasColumnName("FiscalIkofExtracted");
+                                .HasColumnName("fiscal_ikof_extracted");
 
                             b1.Property<string>("FiscalIkofSupplied")
                                 .HasColumnType("text")
-                                .HasColumnName("FiscalIkofSupplied");
+                                .HasColumnName("fiscal_ikof_supplied");
 
                             b1.Property<string>("FiscalJikrExtracted")
                                 .HasColumnType("text")
-                                .HasColumnName("FiscalJikrExtracted");
+                                .HasColumnName("fiscal_jikr_extracted");
 
                             b1.Property<string>("FiscalJikrSupplied")
                                 .HasColumnType("text")
-                                .HasColumnName("FiscalJikrSupplied");
+                                .HasColumnName("fiscal_jikr_supplied");
 
                             b1.Property<long>("SizeInBytes")
                                 .HasColumnType("bigint")
-                                .HasColumnName("ReceiptSizeInBytes");
+                                .HasColumnName("receipt_size_in_bytes");
 
                             b1.Property<int>("State")
                                 .HasColumnType("integer")
-                                .HasColumnName("ReceiptState");
+                                .HasColumnName("receipt_state");
 
                             b1.Property<string>("StorageKey")
                                 .IsRequired()
                                 .HasColumnType("text")
-                                .HasColumnName("ReceiptStorageKey");
+                                .HasColumnName("receipt_storage_key");
 
                             b1.HasKey("PurchaseId");
 
                             b1.HasIndex("ContentHash")
                                 .HasDatabaseName("ix_purchases_receipt_content_hash");
 
-                            b1.ToTable("Purchases");
+                            b1.ToTable("purchases");
 
                             b1.WithOwner()
                                 .HasForeignKey("PurchaseId");

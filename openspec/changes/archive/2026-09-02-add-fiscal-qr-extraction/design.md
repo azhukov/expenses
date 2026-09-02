@@ -72,11 +72,24 @@ preprocessing.
 
 ### D22 — Fiscal decoding becomes the primary stage; vision becomes the fallback
 
-The role ordering inverts. `FiscalDecodeStage` moves from `Opportunistic` to the head of the
-cascade, a new portal stage follows it as `Primary`, and the placeholder vision stages become
-`Fallback`. Nothing about `IExtractionStage` changes: `ExtractionStageOutcome` already carries
-either a result or fiscal identifiers, and `ExtractionStageRequest.Known` already carries what an
-earlier stage decoded into a later one. The seam was built for this.
+The role ordering inverts. `FiscalDecodeStage` stays `Opportunistic` at the head of the cascade, a
+new portal stage follows it as `Primary`, and the placeholder vision stages become `Fallback`.
+`IExtractionStage` is unchanged and `ExtractionStageOutcome` already carries either a result or
+fiscal identifiers. Three things around it did have to move, and they were found by building it:
+
+- **The cascade validates after every producing stage, not after two named tiers.** With both
+  placeholders sharing the `Fallback` role, "cheap first, expensive only on demand" cannot be
+  expressed by role alone. Stages now run in role then registration order, each answering a check
+  the one before it failed, and the first result that reconciles ends the run. That is also exactly
+  what "a deterministic result ends the cascade" means, so the two requirements collapse into one
+  rule rather than two.
+- **`ExtractionStageRequest.Known` did not in fact carry what an earlier stage decoded** — it
+  carried only what the upload supplied. It now carries both, which the portal stage needs: without
+  the decoded `iic`, `tin` and `crtd` it has nothing to ask about.
+- **`ExtractionStageOutcome` gained an optional fiscal source.** A stage that asked the verification
+  service knows something neither a decode nor printed text can tell, and the receipt records that
+  distinction (see D24). Role alone cannot express it, since the portal stage is `Primary` and so
+  would otherwise be read as having read printed text.
 
 ### D23 — The QR is useful even when the portal is not
 
@@ -95,6 +108,11 @@ a timestamp. The identifier is simply unknown until the portal answers, and the 
 Note the format varies by ERP: printed hyphenated on the Aroma receipts and unhyphenated on the
 Megapromet one. D10's rule that no format is imposed on a fiscal identifier is what makes this
 survivable — comparison should be format-insensitive.
+
+Since the identifier is knowable only from the service, `Receipt.FiscalSource` gains
+`RetrievedFromService` beside `DecodedFromCode` and `ReadAsText`. Both of the first two are exact
+and neither is displaced by printed text; what separates them is that only one of them can name the
+JIKR at all.
 
 ### D25 — Round to two decimal places before comparing
 
@@ -118,8 +136,20 @@ fixtures is what stops a future decoder change from silently regressing either.
 ### D27 — A retrieved invoice is not re-derived
 
 Line amounts, quantities, units, VAT rates and the seller are taken verbatim. The `rebate` field
-maps to the existing discount concept and `unitPriceAfterVat` to the list price, so the discount
-check keeps working. Nothing recomputes what the tax authority already stated.
+maps to the existing discount concept. Nothing recomputes what the tax authority already stated.
+
+One value is derived rather than copied, and the first draft of this decision got it wrong.
+`unitPriceAfterVat` is a **unit** price while the discount check is line-level — it asks whether the
+list price less the discount equals the line amount — so the list price is `unitPriceAfterVat`
+extended by the quantity. Six of the fourteen lines on the recorded invoice are priced by weight or
+by the ten: 15.00 per kilogram over 0.548 kg is a line that lists at 8.22 and costs 8.22. Passing
+the unit price through verbatim would have failed the arithmetic on every one of them and sent an
+authoritative invoice to review, which is the opposite of what this change is for.
+
+The per-line rate needs somewhere to live, so `ExtractionCandidate` gains a nullable
+`TaxRatePercent`: an invoice may carry several rates — this one carries 21% and 7% — so the line's
+rate cannot be inferred from the result's. For the same reason the result states a rate only where
+the invoice has exactly one; the tax amount it stated stands on its own either way.
 
 ## Risks / Trade-offs
 

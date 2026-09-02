@@ -34,6 +34,14 @@ public sealed record ExtractionToolResult(
     bool CandidatesHeld,
     ExtractionResultView? Result)
 {
+    /// <summary>
+    /// The two engines whose output means something categorically different: one is the tax
+    /// authority's own record of the invoice, the other is a stand-in that never looked at the image.
+    /// </summary>
+    private const string FiscalPortal = "fiscal-portal";
+
+    private const string Placeholder = "placeholder";
+
     public static ExtractionToolResult Of(ExtractionView view)
     {
         var checks = view.Validation?.Checks.Select(ArithmeticCheckSummary.Of).ToList() ?? [];
@@ -76,6 +84,23 @@ public sealed record ExtractionToolResult(
         };
 
         var reasons = new List<string>(failures);
+
+        // Where the lines came from, in words. A retrieved invoice is the tax authority's own record
+        // and a placeholder's lines are an invention, and an assistant relaying either should not
+        // have to know which stage name means which (D12, D22).
+        var source = view.Result?.EngineName switch
+        {
+            FiscalPortal => "They are the invoice as the fiscal verification service holds it, "
+                + "taken verbatim rather than read from the image.",
+            Placeholder => "They came from the placeholder extraction engine, which performs no "
+                + "image analysis: treat every line as provisional.",
+            _ => null,
+        };
+
+        if (source is not null)
+        {
+            reasons.Add(source);
+        }
 
         // Candidates are transient (D12): saying so is what stops an assistant reading the absence
         // as a receipt with nothing on it.

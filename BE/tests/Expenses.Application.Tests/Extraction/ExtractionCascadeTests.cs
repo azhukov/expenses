@@ -125,6 +125,104 @@ public sealed class ExtractionCascadeTests
     }
 
     [Fact]
+    public async Task A_deterministic_result_ends_the_cascade()
+    {
+        var cheap = FakeStage.Producing("vision-cheap", ExtractionStageRole.Fallback, Results.Reconciling("vision-cheap"));
+        var expensive = FakeStage.Producing(
+            "vision-expensive",
+            ExtractionStageRole.Fallback,
+            Results.Reconciling("vision-expensive"));
+
+        var outcome = await new ExtractionCascade([
+            FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("d1b2c3", IssuerTaxNumber: "02365928")),
+            FakeStage.Retrieving("fiscal-portal", Results.Reconciling("fiscal-portal"), new FiscalIdentifiers(Jikr: "9f8e7d")),
+            cheap,
+            expensive,
+        ]).Run(Image);
+
+        // No probabilistic stage runs at all behind an invoice the tax authority stated and the
+        // arithmetic confirmed: asking one would be asking for a worse answer to a settled question.
+        Assert.Equal(0, cheap.Runs);
+        Assert.Equal(0, expensive.Runs);
+        Assert.Equal(Receipt.ExtractionState.Extracted, outcome.State);
+        Assert.Equal("fiscal-portal", outcome.Result?.Provenance["total"]);
+        Assert.Equal(["fiscal-qr", "fiscal-portal"], outcome.StagesRun);
+    }
+
+    [Fact]
+    public async Task The_placeholder_does_not_run_behind_a_retrieved_invoice()
+    {
+        var outcome = await new ExtractionCascade([
+            FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("d1b2c3")),
+            FakeStage.Retrieving("fiscal-portal", Results.Reconciling("fiscal-portal"), new FiscalIdentifiers(Jikr: "9f8e7d")),
+            FakeStage.Producing("vision-cheap", ExtractionStageRole.Fallback, Results.Reconciling("vision-cheap")),
+        ]).Run(Image);
+
+        Assert.All(
+            outcome.Result!.Candidates,
+            candidate => Assert.Equal("fiscal-portal", candidate.Provenance["amount"]));
+    }
+
+    [Fact]
+    public async Task The_missing_identifier_arrives_from_the_verification_service()
+    {
+        var outcome = await new ExtractionCascade([
+            FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("d1b2c3", IssuerTaxNumber: "02365928")),
+            FakeStage.Retrieving("fiscal-portal", Results.Reconciling("fiscal-portal"), new FiscalIdentifiers(Jikr: "9f8e7d")),
+        ]).Run(Image);
+
+        // The identifier the code carried and the one only the service knows, held together, and
+        // recorded as having come from the service rather than from the code (D24).
+        Assert.Equal("d1b2c3", outcome.Extracted.Ikof);
+        Assert.Equal("9f8e7d", outcome.Extracted.Jikr);
+        Assert.Equal(Receipt.FiscalSource.RetrievedFromService, outcome.FiscalSource);
+    }
+
+    [Fact]
+    public async Task A_failed_decode_falls_through_to_the_probabilistic_stages()
+    {
+        var expensive = FakeStage.Producing(
+            "vision-expensive",
+            ExtractionStageRole.Fallback,
+            Results.Reconciling("vision-expensive"));
+
+        var outcome = await new ExtractionCascade([
+            FakeStage.Silent("fiscal-qr", ExtractionStageRole.Opportunistic),
+            FakeStage.Silent("fiscal-portal", ExtractionStageRole.Primary),
+            FakeStage.Producing("vision-cheap", ExtractionStageRole.Fallback, Results.Reconciling("vision-cheap")),
+            expensive,
+        ]).Run(Image);
+
+        // Exactly as a receipt carrying no code at all: the cheap tier answers, and the expensive
+        // one is still held back for a failed check rather than run for a failed decode.
+        Assert.Equal(Receipt.ExtractionState.Extracted, outcome.State);
+        Assert.Equal("vision-cheap", outcome.Result?.Provenance["total"]);
+        Assert.Equal(0, expensive.Runs);
+        Assert.Equal(Receipt.FiscalSource.None, outcome.FiscalSource);
+    }
+
+    [Fact]
+    public async Task A_second_fallback_tier_answers_a_failed_check()
+    {
+        // Both placeholder tiers are Fallback once retrieval leads the cascade (D22), so "cheap
+        // first, expensive only on demand" has to survive the two sharing a role.
+        var expensive = FakeStage.Producing(
+            "vision-expensive",
+            ExtractionStageRole.Fallback,
+            Results.Reconciling("vision-expensive"));
+
+        var outcome = await new ExtractionCascade([
+            FakeStage.Silent("fiscal-portal", ExtractionStageRole.Primary),
+            FakeStage.Producing("vision-cheap", ExtractionStageRole.Fallback, Results.Failing("vision-cheap")),
+            expensive,
+        ]).Run(Image);
+
+        Assert.Equal(1, expensive.Runs);
+        Assert.Equal(Receipt.ExtractionState.Extracted, outcome.State);
+        Assert.Equal("vision-expensive", outcome.Result?.Provenance["total"]);
+    }
+
+    [Fact]
     public async Task A_result_that_does_not_add_up_reports_the_failing_check()
     {
         var outcome = await new ExtractionCascade([

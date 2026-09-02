@@ -91,5 +91,8 @@
       "PowerShell(dotnet nuget push*)",
       "PowerShell(dotnet nuget delete*)"
     ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
   }
 }

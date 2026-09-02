@@ -126,7 +126,7 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
         await using var context = postgres.Context();
 
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlRawAsync(
-            "INSERT INTO \"Purchases\" (\"OccurredAt\", \"Amount\", \"ReceiptStorageKey\") "
+            "INSERT INTO purchases (occurred_at, amount, receipt_storage_key) "
             + "VALUES (timestamp '2031-01-01 00:00:00', 1.00, 'ab/cd/abcd.jpg')"));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);

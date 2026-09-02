@@ -97,12 +97,17 @@ Extraction runs off the request path (D12) as an ordered cascade, cheapest stage
                                        ExtractionCascade
                                               │
         stage 1  FiscalDecodeStage    free    │  opportunistic — a miss is normal
-        stage 2  VisionStage cheap    paid    │  placeholder today
+        stage 2  FiscalInvoiceStage   free    │  the authoritative invoice, where it decoded
         stage 3  ArithmeticValidation free    │  ◄── decides the outcome
-        stage 4  VisionStage expensive paid   │  runs only if stage 3 failed
+        stage 4  VisionStage cheap    paid    │  placeholder today; runs only if 2 produced nothing
+        stage 5  VisionStage expensive paid   │            or if validation failed
                                               ▼
                               Extracted │ NeedsReview │ Failed
 ```
+
+Validation runs after every producing stage, and the first result that reconciles ends the cascade.
+That is what keeps a probabilistic stage from ever being asked for a value a deterministic one has
+already established (D22).
 
 Stage 0 — fiscal QR decode in the browser, at capture — is the intended primary path and belongs to
 `FE/`. The backend contract is already shaped for it: fiscal identifiers are accepted alongside an

@@ -17,13 +17,16 @@ the DI wiring both hosts call.
 
 ## Mapping rules that are decisions, not preferences
 
-- **Tables and columns are PascalCase and match the entity and property (D23).** `ToTable` names the
-  table; `HasColumnName` appears **only** where the column name differs from the property — the
-  owned `Receipt` value flattening onto `Purchases` is the one place it does. Anything you write as
-  SQL — a check constraint, an index filter, a hand-edited migration — must double-quote every
-  identifier, because PostgreSQL folds an unquoted one to lower case and the constraint would be
-  created against a column that does not exist. Index and constraint names stay snake_case with
-  `ix_` / `ck_` prefixes.
+- **Tables and columns are lower snake_case (D23, reversed).** `ToTable` names the table in
+  snake_case; every property gets an explicit `HasColumnName` in a configuration, because a
+  snake_case column never spells the same as its PascalCase property — there is no "only where it
+  differs" case here, unlike a same-case convention. Foreign-key shadow properties
+  (`Property<long?>("PurchaseId")`) and their auto-created indexes need the same explicit
+  `HasColumnName` / `HasDatabaseName`, or EF names them from the C# property and leaves a mixed-case
+  identifier behind. SQL written by hand — a check constraint, an index filter, a hand-edited
+  migration — needs no quoting, because PostgreSQL folds an unquoted identifier to lower case
+  anyway. Index and constraint names stay snake_case with `ix_` / `ck_` / `FK_` prefixes, as they
+  always were.
 - Money is `numeric(19,2)`, quantity `numeric(12,3)`, `OccurredAt` is `timestamp` **without** time
   zone and is never converted (D5, D10). Never `float`, never `money`.
 - Entities have private constructors and private setters — configure backing fields

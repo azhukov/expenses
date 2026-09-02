@@ -500,6 +500,13 @@ These are deferrable without changing the specs, the approach, or the task break
 
 ### D23 — Table and column names are PascalCase
 
+**Reversed 2026-09-02:** the schema was renamed back to lower snake_case. The cost this decision
+accepted turned out to bite in practice — every hand-written SQL statement outside EF, including
+ad-hoc queries at a `psql` prompt, needed quoting, and it was the kind of mistake a person makes
+routinely rather than once. The alternative rejected below was adopted instead: no quoting anywhere,
+at the cost of every configuration naming its columns explicitly (`HasColumnName`) rather than only
+the ones that differ from the property.
+
 Every table and column is named exactly as the entity and property it maps: `Purchases.OccurredAt`,
 `Expenses.ListUnitPrice`, `Merchants.TaxId`. Not `Purchases.OccurredAt`.
 

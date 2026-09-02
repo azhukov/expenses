@@ -103,15 +103,23 @@ Extraction is not one engine but an ordered sequence of stages, cheapest first (
 
 ```
   stage 0  fiscal QR decode (client, at capture)   free      out of scope here — belongs in FE/
-  stage 1  fiscal QR decode (server, on the file)  free      real in this change
-  stage 2  vision extraction — cheap tier          paid      placeholder in this change
-  stage 3  arithmetic validation                   free      real in this change
-  stage 4  vision extraction — expensive tier      paid      placeholder in this change
-                                                             runs only when stage 3 failed
+  stage 1  fiscal QR decode (server, on the file)  free      real — zxing-cpp
+  stage 2  fiscal invoice retrieval                free      real — the national verification portal
+  stage 3  arithmetic validation                   free      real; runs after every producing stage
+  stage 4  vision extraction — cheap tier          paid      placeholder in this change
+  stage 5  vision extraction — expensive tier      paid      placeholder in this change
 ```
 
-Stages 2 and 4 are two configured instances of the same placeholder today and two instances of a
-real engine later; the cascade does not change when they become real, which is why it is built now.
+Stage 2 is the deterministic extractor: where the QR decodes, the whole invoice is retrieved from
+the service that issued it and used verbatim. A result that reconciles ends the cascade, so stages 4
+and 5 run only for a receipt the deterministic path could not serve, or one whose numbers did not
+add up. They are two configured instances of the same placeholder today and two instances of a real
+engine later; the cascade does not change when they become real.
+
+Two of the three sample receipts do not decode at all, so the deterministic path is a partial
+solution by measurement rather than by hope, and a miss is reported no differently from a receipt
+carrying no code. The numbers, the QR's parameters and the portal's contract are recorded in
+[Expenses.Infrastructure/Extraction/FISCAL-QR.md](Expenses.Infrastructure/Extraction/FISCAL-QR.md).
 
 **Confidence is computed, not reported.** A fiscalised receipt is redundantly encoded — lines sum to
 the total, list price less discount equals the paid amount, the total implies the printed VAT — so
@@ -127,7 +135,8 @@ Configuration:
 | --- | --- | --- |
 | `Extraction:ConfidenceThreshold` | `0.70` | Below this, an unverifiable value marks the image for review. |
 | `Extraction:Placeholder:Outcome` | `Reconciling` | `Reconciling`, `NonReconciling`, `LowConfidence` or `Failure` — see below. |
-| `Extraction:Decoder:TimeBudgetMilliseconds` | `1500` | Hard budget for the QR preprocessing ladder. |
+| `Extraction:Portal:BaseAddress` | `https://mapr.tax.gov.me` | The fiscal verification service stage 2 asks. |
+| `Extraction:Portal:TimeoutMilliseconds` | `5000` | Past this, retrieval produced nothing and the cascade goes on. |
 | `Extraction:Queue:Capacity` | `256` | Bounded in-process queue. |
 | `Extraction:DrainInBackground` | `true` | Whether this process drains the queue. |
 

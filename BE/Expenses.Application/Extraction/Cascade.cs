@@ -21,14 +21,28 @@ public enum ExtractionStageRole
 }
 
 /// <summary>
-/// Fiscal identifiers exactly as read, with no format imposed (D10). Held per source so a
+/// What a fiscal code carries, exactly as read, with no format imposed (D10). Held per source so a
 /// disagreement can be reported rather than one value silently preferred.
+///
+/// The identifiers are only part of it: a decoded code also states the issuer, when the invoice was
+/// created and what it came to, and those three are what the verification portal is asked for. They
+/// travel here rather than in a parallel channel so that a later stage receives everything an
+/// earlier one decoded without the cascade's seam changing shape (D22, D23).
 /// </summary>
-public sealed record FiscalIdentifiers(string? Ikof = null, string? Jikr = null)
+public sealed record FiscalIdentifiers(
+    string? Ikof = null,
+    string? Jikr = null,
+    string? IssuerTaxNumber = null,
+    string? CreatedAt = null,
+    decimal? Total = null)
 {
     public static readonly FiscalIdentifiers None = new();
 
-    public bool IsEmpty => string.IsNullOrWhiteSpace(Ikof) && string.IsNullOrWhiteSpace(Jikr);
+    public bool IsEmpty =>
+        string.IsNullOrWhiteSpace(Ikof)
+        && string.IsNullOrWhiteSpace(Jikr)
+        && string.IsNullOrWhiteSpace(IssuerTaxNumber)
+        && string.IsNullOrWhiteSpace(CreatedAt);
 }
 
 public sealed record ExtractionStageRequest(ReceiptImageContent Image, FiscalIdentifiers Known);
@@ -37,7 +51,16 @@ public sealed record ExtractionStageRequest(ReceiptImageContent Image, FiscalIde
 /// What a stage contributed. Everything is optional: a stage that produces nothing is an ordinary
 /// outcome, and every later stage behaves identically whether or not it did (D20).
 /// </summary>
-public sealed record ExtractionStageOutcome(ExtractionResult? Result = null, FiscalIdentifiers? Fiscal = null)
+public sealed record ExtractionStageOutcome(
+    ExtractionResult? Result = null,
+    FiscalIdentifiers? Fiscal = null,
+
+    /// <summary>
+    /// How the stage obtained the identifiers, where its role does not already say. A stage that
+    /// asked the verification service knows something neither the code nor printed text can tell,
+    /// and the receipt records that distinction (D24).
+    /// </summary>
+    Receipt.FiscalSource? FiscalSource = null)
 {
     public static readonly ExtractionStageOutcome Nothing = new();
 
@@ -61,6 +84,28 @@ public interface IExtractionStage
 public interface IFiscalCodeDecoder
 {
     Task<FiscalIdentifiers?> Decode(ReceiptImageContent image, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// An invoice as the verification service stated it, and the identity that came back with it. The
+/// two travel together because the service answers with an identifier the fiscal code never carried
+/// — the JIKR — and losing it would leave the receipt permanently unable to name itself (D24).
+/// </summary>
+public sealed record RetrievedInvoice(ExtractionResult Result, FiscalIdentifiers Identifiers);
+
+/// <summary>
+/// Retrieving the whole invoice from the fiscal verification service the decoded code refers to.
+///
+/// A miss is null, exactly as a decode miss is: the service having no record, refusing, or never
+/// answering are all a stage that produced nothing, and none of them is a problem with the
+/// receipt (D26).
+/// </summary>
+public interface IFiscalInvoiceRetrieval
+{
+    Task<RetrievedInvoice?> Retrieve(
+        long purchaseId,
+        FiscalIdentifiers decoded,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

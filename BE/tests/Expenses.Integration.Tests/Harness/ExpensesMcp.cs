@@ -20,17 +20,24 @@ public sealed class ExpensesMcp : IAsyncDisposable
     private readonly Pipe _clientToServer = new();
     private readonly Pipe _serverToClient = new();
 
-    private ExpensesMcp(string connectionString)
+    private ExpensesMcp(string connectionString, (string Key, string Value)[] settings)
     {
         var builder = Host.CreateApplicationBuilder();
 
-        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        var configuration = new Dictionary<string, string?>
         {
             [$"ConnectionStrings:{ExpensesInfrastructure.ConnectionName}"] = connectionString,
 
             // The suite drives extraction itself, so a drain would race it for the same images.
             ["Extraction:DrainInBackground"] = "false",
-        });
+        };
+
+        foreach (var (key, value) in settings)
+        {
+            configuration[key] = value;
+        }
+
+        builder.Configuration.AddInMemoryCollection(configuration);
 
         builder.Services.AddExpensesInfrastructure(builder.Configuration);
         builder.Services
@@ -44,9 +51,11 @@ public sealed class ExpensesMcp : IAsyncDisposable
 
     public IServiceProvider Services => _host.Services;
 
-    public static async Task<ExpensesMcp> Start(string connectionString)
+    public static async Task<ExpensesMcp> Start(
+        string connectionString,
+        params (string Key, string Value)[] settings)
     {
-        var server = new ExpensesMcp(connectionString);
+        var server = new ExpensesMcp(connectionString, settings);
         await server._host.StartAsync();
 
         server.Client = await McpClient.CreateAsync(new StreamClientTransport(

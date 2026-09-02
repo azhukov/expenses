@@ -23,6 +23,35 @@ public sealed class ArithmeticValidatorTests
     }
 
     [Fact]
+    public void Line_amounts_stated_at_a_greater_precision_than_the_total()
+    {
+        // The four-decimal line amounts the fiscal portal states for the Megapromet receipt. Their
+        // raw sum is 59.6515 against a stated total of 59.65 — an authoritative invoice that a raw
+        // comparison would report as disagreeing with itself (D25).
+        var report = ArithmeticValidator.Validate(new ExtractionArithmetic(
+            [
+                new ExtractedLineAmounts(1, 9.75m),
+                new ExtractedLineAmounts(2, 2.59m),
+                new ExtractedLineAmounts(3, 7.00m),
+                new ExtractedLineAmounts(4, 8.22m),
+                new ExtractedLineAmounts(5, 1.85m),
+                new ExtractedLineAmounts(6, 2.50m),
+                new ExtractedLineAmounts(7, 1.40m),
+                new ExtractedLineAmounts(8, 3.9008m),
+                new ExtractedLineAmounts(9, 2.99m),
+                new ExtractedLineAmounts(10, 2.4196m),
+                new ExtractedLineAmounts(11, 5.7716m),
+                new ExtractedLineAmounts(12, 5.20m),
+                new ExtractedLineAmounts(13, 2.50m),
+                new ExtractedLineAmounts(14, 3.5595m),
+            ],
+            Total: 59.65m));
+
+        Assert.Equal(CheckOutcome.Passed, Check(report, ArithmeticChecks.LineSum).Outcome);
+        Assert.True(report.Passed);
+    }
+
+    [Fact]
     public void A_result_that_does_not_add_up()
     {
         var report = ArithmeticValidator.Validate(new ExtractionArithmetic(

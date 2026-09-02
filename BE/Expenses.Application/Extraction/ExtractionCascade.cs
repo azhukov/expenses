@@ -47,29 +47,35 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
             fiscal.Absorb(outcome, stage.Role);
         }
 
-        var (result, report) = await RunVision(
-            ExtractionStageRole.Primary,
-            image,
-            known,
-            stagesRun,
-            fiscal,
-            cancellationToken);
+        ExtractionResult? result = null;
+        ArithmeticValidationReport? report = null;
 
-        // The expensive tier answers a failed check rather than offering a routine second opinion:
-        // without the oracle, a cascade is only a way of getting worse answers more cheaply (D20).
-        if (result is null || report?.Passed != true)
+        // Every producing stage in turn, deterministic ones first, each one answering a check the
+        // one before it failed rather than offering a routine second opinion: without the oracle, a
+        // cascade is only a way of getting worse answers more cheaply (D20). A stage that already
+        // reconciles ends it, which is what keeps a retrieved invoice from ever being second-guessed
+        // by a probabilistic stage (D22).
+        foreach (var stage in _stages.Where(stage => stage.Role != ExtractionStageRole.Opportunistic))
         {
-            var (fallback, fallbackReport) = await RunVision(
-                ExtractionStageRole.Fallback,
-                image,
-                known,
-                stagesRun,
-                fiscal,
-                cancellationToken);
-
-            if (fallback is not null && (result is null || Better(fallbackReport, report)))
+            if (report?.Passed == true)
             {
-                (result, report) = (fallback, fallbackReport);
+                break;
+            }
+
+            // What the opportunistic stages decoded travels into the stages behind them: the
+            // retrieval stage has nothing to ask the verification service without it (D22).
+            var outcome = await Run(stage, image, fiscal.Carrying(known), stagesRun, cancellationToken);
+            fiscal.Absorb(outcome, stage.Role);
+
+            if (outcome.Result is not { } produced)
+            {
+                continue;
+            }
+
+            var producedReport = ArithmeticValidator.Validate(ExtractionArithmetic.From(produced));
+            if (result is null || Better(producedReport, report))
+            {
+                (result, report) = (produced, producedReport);
             }
         }
 
@@ -107,28 +113,6 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
             fiscal.Values,
             fiscal.Source,
             LowConfidenceValues: lowConfidence);
-    }
-
-    private async Task<(ExtractionResult? Result, ArithmeticValidationReport? Report)> RunVision(
-        ExtractionStageRole role,
-        ReceiptImageContent image,
-        FiscalIdentifiers known,
-        List<string> stagesRun,
-        FiscalTrail fiscal,
-        CancellationToken cancellationToken)
-    {
-        foreach (var stage in _stages.Where(stage => stage.Role == role))
-        {
-            var outcome = await Run(stage, image, known, stagesRun, cancellationToken);
-            fiscal.Absorb(outcome, stage.Role);
-
-            if (outcome.Result is { } produced)
-            {
-                return (produced, ArithmeticValidator.Validate(ExtractionArithmetic.From(produced)));
-            }
-        }
-
-        return (null, null);
     }
 
     private static async Task<ExtractionStageOutcome> Run(
@@ -172,11 +156,12 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
         Disagrees(supplied.Ikof, extracted.Ikof) || Disagrees(supplied.Jikr, extracted.Jikr);
 
     private static bool Disagrees(string? supplied, string? extracted) =>
-        supplied is not null && extracted is not null && !string.Equals(supplied, extracted, StringComparison.Ordinal);
+        supplied is not null && extracted is not null && !Receipt.SameFiscalIdentifier(supplied, extracted);
 
     /// <summary>
-    /// The fiscal identity the run established, and how. A value decoded from a fiscal code is
-    /// exact, so a later stage reading the same field as printed text never overwrites it (D20).
+    /// The fiscal identity the run established, and how. A value decoded from a fiscal code or
+    /// answered by the verification service is exact, so a later stage reading the same field as
+    /// printed text never overwrites it (D20).
     /// </summary>
     private sealed class FiscalTrail
     {
@@ -191,20 +176,56 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
                 return;
             }
 
-            if (role == ExtractionStageRole.Opportunistic)
+            // A stage that says how it knows is believed; one that does not is placed by its role,
+            // which is what it has always meant.
+            var source = outcome.FiscalSource
+                ?? (role == ExtractionStageRole.Opportunistic
+                    ? Receipt.FiscalSource.DecodedFromCode
+                    : Receipt.FiscalSource.ReadAsText);
+
+            // An estimate never displaces an exact value, and never quietly relabels where the
+            // identity came from.
+            if (Exactness(source) < Exactness(Source))
             {
-                Values = new FiscalIdentifiers(found.Ikof ?? Values.Ikof, found.Jikr ?? Values.Jikr);
-                Source = Receipt.FiscalSource.DecodedFromCode;
                 return;
             }
 
-            if (Source == Receipt.FiscalSource.DecodedFromCode)
-            {
-                return;
-            }
-
-            Values = new FiscalIdentifiers(found.Ikof ?? Values.Ikof, found.Jikr ?? Values.Jikr);
-            Source = Receipt.FiscalSource.ReadAsText;
+            Values = Merged(found);
+            Source = source;
         }
+
+        /// <summary>
+        /// Printed text is read; a code is decoded and a service is asked. Only the first of those
+        /// three can be wrong about what it saw, so it ranks below the other two.
+        /// </summary>
+        private static int Exactness(Receipt.FiscalSource source) => source switch
+        {
+            Receipt.FiscalSource.None => 0,
+            Receipt.FiscalSource.ReadAsText => 1,
+            _ => 2,
+        };
+
+        /// <summary>
+        /// What a later stage is told: everything established so far, over whatever the upload
+        /// supplied. A stage sees what the run knows, not only what the user sent with the image.
+        /// </summary>
+        public FiscalIdentifiers Carrying(FiscalIdentifiers supplied) => new(
+            Values.Ikof ?? supplied.Ikof,
+            Values.Jikr ?? supplied.Jikr,
+            Values.IssuerTaxNumber ?? supplied.IssuerTaxNumber,
+            Values.CreatedAt ?? supplied.CreatedAt,
+            Values.Total ?? supplied.Total);
+
+        /// <summary>
+        /// Field by field, so a stage that establishes one value never erases another stage's.
+        /// The JIKR in particular arrives from the verification service long after the code was
+        /// decoded, and must join what the code carried rather than replace it (D24).
+        /// </summary>
+        private FiscalIdentifiers Merged(FiscalIdentifiers found) => new(
+            found.Ikof ?? Values.Ikof,
+            found.Jikr ?? Values.Jikr,
+            found.IssuerTaxNumber ?? Values.IssuerTaxNumber,
+            found.CreatedAt ?? Values.CreatedAt,
+            found.Total ?? Values.Total);
     }
 }

@@ -37,6 +37,12 @@ public sealed class Receipt
 
         /// <summary>Read as printed text by a vision stage.</summary>
         ReadAsText = 3,
+
+        /// <summary>
+        /// Answered by the fiscal verification service. The JIKR is knowable no other way: it is
+        /// absent from the fiscal code and printed nowhere the server can read it (D24).
+        /// </summary>
+        RetrievedFromService = 4,
     }
 
     /// <summary>
@@ -150,11 +156,24 @@ public sealed class Receipt
 
             // A disagreement is reported rather than resolved: preferring one source without
             // saying so would hide a misread receipt.
-            return comparable.Any(pair => !string.Equals(pair.Supplied, pair.Extracted, StringComparison.Ordinal))
+            return comparable.Any(pair => !SameFiscalIdentifier(pair.Supplied, pair.Extracted))
                 ? FiscalCorroboration.Disagreed
                 : FiscalCorroboration.Corroborated;
         }
     }
+
+    /// <summary>
+    /// Whether two readings of a fiscal identifier are the same identifier. The JIKR is printed
+    /// hyphenated by one ERP and unhyphenated by another, so punctuation is not a disagreement —
+    /// while both readings are still retained exactly as they were read, no format imposed (D10,
+    /// D24). It lives on the entity because the entity is what reports corroboration, and one
+    /// implementation is what keeps the ledger and the cascade from disagreeing about it.
+    /// </summary>
+    public static bool SameFiscalIdentifier(string? left, string? right) =>
+        string.Equals(WithoutHyphens(left), WithoutHyphens(right), StringComparison.Ordinal);
+
+    private static string? WithoutHyphens(string? value) =>
+        value?.Replace("-", string.Empty, StringComparison.Ordinal);
 
     /// <summary>Identifiers a client decoded at capture, accepted without extraction having run.</summary>
     public void SupplyFiscalIdentifiers(string? ikof, string? jikr)

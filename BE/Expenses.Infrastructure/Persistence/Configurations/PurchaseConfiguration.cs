@@ -8,59 +8,54 @@ namespace Expenses.Infrastructure.Persistence.Configurations;
 /// The aggregate root and its lines in one configuration, because they are written and read as one
 /// thing: an expense has no repository and never loads on its own (D2).
 ///
-/// Table and column names are PascalCase (D23), which is what the entity and its properties are
-/// already called, so a column is named only where the mapping actually differs from the property.
-/// SQL written by hand — a check constraint, an index filter — must quote every identifier, because
-/// PostgreSQL folds an unquoted one to lower case and would not find it.
+/// Table and column names are lower snake_case (D23, reversed), the PostgreSQL house style, so
+/// nothing written by hand — a check constraint, an index filter, a `psql` session — needs
+/// quoting. Every property is named explicitly because the mapping from PascalCase C# to
+/// snake_case SQL always differs from the property, not just occasionally.
 /// </summary>
 internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
 {
     public void Configure(EntityTypeBuilder<Purchase> builder)
     {
-        builder.ToTable("Purchases", table =>
+        builder.ToTable("purchases", table =>
         {
             table.HasCheckConstraint(
                 "ck_purchases_merchant_raw_length",
-                """
-                "MerchantRaw" IS NULL OR length("MerchantRaw") <= 512
-                """);
+                "merchant_raw IS NULL OR length(merchant_raw) <= 512");
 
             // "Has a receipt" is one fact, not six independently nullable ones (D11).
             table.HasCheckConstraint(
                 "ck_purchases_receipt_all_or_nothing",
                 """
-                ("ReceiptContentHash" IS NULL AND "ReceiptStorageKey" IS NULL AND "ReceiptContentType" IS NULL
-                    AND "ReceiptSizeInBytes" IS NULL AND "ReceiptState" IS NULL)
-                OR ("ReceiptContentHash" IS NOT NULL AND "ReceiptStorageKey" IS NOT NULL
-                    AND "ReceiptContentType" IS NOT NULL AND "ReceiptSizeInBytes" IS NOT NULL
-                    AND "ReceiptState" IS NOT NULL)
+                (receipt_content_hash IS NULL AND receipt_storage_key IS NULL AND receipt_content_type IS NULL
+                    AND receipt_size_in_bytes IS NULL AND receipt_state IS NULL)
+                OR (receipt_content_hash IS NOT NULL AND receipt_storage_key IS NOT NULL
+                    AND receipt_content_type IS NOT NULL AND receipt_size_in_bytes IS NOT NULL
+                    AND receipt_state IS NOT NULL)
                 """);
 
             table.HasCheckConstraint(
                 "ck_purchases_receipt_content_hash_length",
-                $"""
-                 "ReceiptContentHash" IS NULL OR length("ReceiptContentHash") = {Receipt.ContentHashLength}
-                 """);
+                $"receipt_content_hash IS NULL OR length(receipt_content_hash) = {Receipt.ContentHashLength}");
 
             table.HasCheckConstraint(
                 "ck_purchases_receipt_storage_key_length",
-                $"""
-                 "ReceiptStorageKey" IS NULL OR length("ReceiptStorageKey") <= {Receipt.StorageKeyMaxLength}
-                 """);
+                $"receipt_storage_key IS NULL OR length(receipt_storage_key) <= {Receipt.StorageKeyMaxLength}");
         });
 
         builder.HasKey(purchase => purchase.Id);
-        builder.Property(purchase => purchase.Id).UseIdentityAlwaysColumn();
+        builder.Property(purchase => purchase.Id).HasColumnName("id").UseIdentityAlwaysColumn();
 
         // Wall-clock, no offset, no conversion in either direction (D5). Npgsql maps
         // DateTimeKind.Unspecified onto `timestamp without time zone` and back unchanged.
         builder.Property(purchase => purchase.OccurredAt)
+            .HasColumnName("occurred_at")
             .HasColumnType("timestamp without time zone");
 
-        builder.Property(purchase => purchase.Amount).HasColumnType("numeric(19,2)");
+        builder.Property(purchase => purchase.Amount).HasColumnName("amount").HasColumnType("numeric(19,2)");
 
         // Kept whether or not the merchant resolved, and never erased by a later match (D9, D18).
-        builder.Property(purchase => purchase.MerchantRaw).HasColumnType("text");
+        builder.Property(purchase => purchase.MerchantRaw).HasColumnName("merchant_raw").HasColumnType("text");
 
         ConfigureReceipt(builder);
 
@@ -76,10 +71,15 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
             .HasMethod("gin")
             .HasOperators("gin_trgm_ops");
 
+        builder.Property(purchase => purchase.MerchantId).HasColumnName("merchant_id");
+
         builder.HasOne<Merchant>()
             .WithMany()
             .HasForeignKey(purchase => purchase.MerchantId)
+            .HasConstraintName("FK_purchases_merchants_merchant_id")
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(purchase => purchase.MerchantId).HasDatabaseName("ix_purchases_merchant_id");
 
         // Reached through the backing field, so the aggregate keeps its private list and EF does
         // not need the domain loosened to suit it.
@@ -90,6 +90,7 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
         builder.HasMany(purchase => purchase.Expenses)
             .WithOne()
             .HasForeignKey("PurchaseId")
+            .HasConstraintName("FK_expenses_purchases_purchase_id")
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(purchase => purchase.Expenses).AutoInclude();
@@ -100,59 +101,58 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
     /// a table of its own (D2, D11). The bytes are not here at all: <c>ReceiptStorageKey</c> locates
     /// the file, and the ledger holds the identity of that file and nothing more.
     ///
-    /// These are the columns that are named explicitly, because they are the ones whose names differ
-    /// from the property: the owned value's <c>ContentHash</c> is the purchase's
-    /// <c>ReceiptContentHash</c>, and EF's own convention for an owned reference would produce
-    /// <c>Receipt_ContentHash</c> (D23).
+    /// Every one of these is named explicitly in snake_case: not only does EF's own convention for
+    /// an owned reference produce <c>Receipt_ContentHash</c> rather than <c>ReceiptContentHash</c>,
+    /// snake_case never matches a PascalCase property name to begin with (D23).
     /// </summary>
     private static void ConfigureReceipt(EntityTypeBuilder<Purchase> builder)
     {
         builder.OwnsOne(purchase => purchase.Receipt, receipt =>
         {
             receipt.Property(value => value.ContentHash)
-                .HasColumnName("ReceiptContentHash")
+                .HasColumnName("receipt_content_hash")
                 .HasColumnType("bytea");
 
             // Stored as written rather than recomputed from the hash, so the layout of the store
             // can change without rewriting a single existing reference (D11).
             receipt.Property(value => value.StorageKey)
-                .HasColumnName("ReceiptStorageKey")
+                .HasColumnName("receipt_storage_key")
                 .HasColumnType("text");
 
             receipt.Property(value => value.ContentType)
-                .HasColumnName("ReceiptContentType")
+                .HasColumnName("receipt_content_type")
                 .HasColumnType("varchar(128)");
 
-            receipt.Property(value => value.SizeInBytes).HasColumnName("ReceiptSizeInBytes");
+            receipt.Property(value => value.SizeInBytes).HasColumnName("receipt_size_in_bytes");
 
             receipt.Property(value => value.State)
-                .HasColumnName("ReceiptState")
+                .HasColumnName("receipt_state")
                 .HasConversion<int>();
 
             receipt.Property(value => value.FailureReason)
-                .HasColumnName("ReceiptFailureReason")
+                .HasColumnName("receipt_failure_reason")
                 .HasColumnType("text");
 
             // As read, with no format imposed (D10). Held per source so a disagreement can be
             // reported rather than one value silently preferred (D20).
             receipt.Property(value => value.FiscalIkofSupplied)
-                .HasColumnName("FiscalIkofSupplied")
+                .HasColumnName("fiscal_ikof_supplied")
                 .HasColumnType("text");
 
             receipt.Property(value => value.FiscalIkofExtracted)
-                .HasColumnName("FiscalIkofExtracted")
+                .HasColumnName("fiscal_ikof_extracted")
                 .HasColumnType("text");
 
             receipt.Property(value => value.FiscalJikrSupplied)
-                .HasColumnName("FiscalJikrSupplied")
+                .HasColumnName("fiscal_jikr_supplied")
                 .HasColumnType("text");
 
             receipt.Property(value => value.FiscalJikrExtracted)
-                .HasColumnName("FiscalJikrExtracted")
+                .HasColumnName("fiscal_jikr_extracted")
                 .HasColumnType("text");
 
             receipt.Property(value => value.FiscalExtractedSource)
-                .HasColumnName("FiscalExtractedSource")
+                .HasColumnName("fiscal_extracted_source")
                 .HasConversion<int>();
 
             // Derived from the four values above; storing it would be a second source of truth.
@@ -173,44 +173,50 @@ internal sealed class ExpenseConfiguration : IEntityTypeConfiguration<Expense>
 {
     public void Configure(EntityTypeBuilder<Expense> builder)
     {
-        builder.ToTable("Expenses", table =>
+        builder.ToTable("expenses", table =>
         {
-            table.HasCheckConstraint("ck_expenses_description_length", """length("Description") <= 512""");
+            table.HasCheckConstraint("ck_expenses_description_length", "length(description) <= 512");
             table.HasCheckConstraint(
                 "ck_expenses_category_raw_length",
-                """
-                "CategoryRaw" IS NULL OR length("CategoryRaw") <= 256
-                """);
+                "category_raw IS NULL OR length(category_raw) <= 256");
             table.HasCheckConstraint(
                 "ck_expenses_unit_raw_length",
-                """
-                "UnitRaw" IS NULL OR length("UnitRaw") <= 128
-                """);
+                "unit_raw IS NULL OR length(unit_raw) <= 128");
         });
 
         builder.HasKey(expense => expense.Id);
-        builder.Property(expense => expense.Id).UseIdentityAlwaysColumn();
+        builder.Property(expense => expense.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+
+        // The FK back to the aggregate root, a shadow property because Expense holds no reference
+        // of its own (D2).
+        builder.Property<long?>("PurchaseId").HasColumnName("purchase_id");
+        builder.HasIndex("PurchaseId").HasDatabaseName("ix_expenses_purchase_id");
 
         builder.Property(expense => expense.Description)
+            .HasColumnName("description")
             .HasColumnType("text")
             .IsRequired();
 
         // Fractional mass and volume; three decimals covers fuel volumes (D10).
-        builder.Property(expense => expense.Quantity).HasColumnType("numeric(12,3)");
+        builder.Property(expense => expense.Quantity).HasColumnName("quantity").HasColumnType("numeric(12,3)");
 
-        builder.Property(expense => expense.Amount).HasColumnType("numeric(19,2)");
+        builder.Property(expense => expense.Amount).HasColumnName("amount").HasColumnType("numeric(19,2)");
 
-        builder.Property(expense => expense.UnitPrice).HasColumnType("numeric(19,2)");
+        builder.Property(expense => expense.UnitPrice).HasColumnName("unit_price").HasColumnType("numeric(19,2)");
 
         // Descriptive, and null means the receipt printed no discount rather than a discount of
         // zero — a distinction reporting depends on (D19).
-        builder.Property(expense => expense.ListUnitPrice).HasColumnType("numeric(19,2)");
+        builder.Property(expense => expense.ListUnitPrice)
+            .HasColumnName("list_unit_price")
+            .HasColumnType("numeric(19,2)");
 
-        builder.Property(expense => expense.DiscountAmount).HasColumnType("numeric(19,2)");
+        builder.Property(expense => expense.DiscountAmount)
+            .HasColumnName("discount_amount")
+            .HasColumnType("numeric(19,2)");
 
-        builder.Property(expense => expense.CategoryRaw).HasColumnType("text");
+        builder.Property(expense => expense.CategoryRaw).HasColumnName("category_raw").HasColumnType("text");
 
-        builder.Property(expense => expense.UnitRaw).HasColumnType("text");
+        builder.Property(expense => expense.UnitRaw).HasColumnName("unit_raw").HasColumnType("text");
 
         // Derived for display and never stored, so it cannot become a second source of truth (D19).
         builder.Ignore(expense => expense.DiscountPercentage);
@@ -220,14 +226,22 @@ internal sealed class ExpenseConfiguration : IEntityTypeConfiguration<Expense>
             .HasMethod("gin")
             .HasOperators("gin_trgm_ops");
 
+        builder.Property(expense => expense.CategoryId).HasColumnName("category_id");
+        builder.Property(expense => expense.UnitId).HasColumnName("unit_id");
+
         builder.HasOne<Category>()
             .WithMany()
             .HasForeignKey(expense => expense.CategoryId)
+            .HasConstraintName("FK_expenses_categories_category_id")
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<Unit>()
             .WithMany()
             .HasForeignKey(expense => expense.UnitId)
+            .HasConstraintName("FK_expenses_units_unit_id")
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(expense => expense.CategoryId).HasDatabaseName("ix_expenses_category_id");
+        builder.HasIndex(expense => expense.UnitId).HasDatabaseName("ix_expenses_unit_id");
     }
 }

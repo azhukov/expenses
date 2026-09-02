@@ -74,28 +74,42 @@ public static class ExpensesInfrastructure
     {
         var extraction = Bind<ExtractionOptions>(configuration, "Extraction");
         var placeholder = Bind<PlaceholderOptions>(configuration, "Extraction:Placeholder");
-        var decoder = Bind<DecoderOptions>(configuration, "Extraction:Decoder");
         var queue = Bind<QueueOptions>(configuration, "Extraction:Queue");
 
         services.AddSingleton(extraction);
         services.AddSingleton(placeholder);
-        services.AddSingleton(decoder);
         services.AddSingleton(queue);
 
-        services.AddSingleton<IFiscalCodeDecoder>(provider => new FiscalCodeDecoder(
-            provider.GetRequiredService<DecoderOptions>(),
-            provider.GetRequiredService<ILogger<FiscalCodeDecoder>>()));
+        // No options of its own: the preprocessing ladder the budget bounded is gone, because the
+        // measured hit needed none of it and no amount of it rescued a measured miss (D21).
+        services.AddSingleton<IFiscalCodeDecoder>(new FiscalCodeDecoder());
+
+        // A singleton, so that an invoice already retrieved stays retrieved: the answer is cached on
+        // the client, and a request that leaves the building is worth more care than a local one.
+        services.AddSingleton(Bind<PortalOptions>(configuration, "Extraction:Portal"));
+        services.AddHttpClient(FiscalPortalClient.ClientName);
+        services.AddSingleton<IFiscalInvoiceRetrieval>(provider => new FiscalPortalClient(
+            provider.GetRequiredService<IHttpClientFactory>(),
+            provider.GetRequiredService<PortalOptions>(),
+            provider.GetRequiredService<ILogger<FiscalPortalClient>>()));
 
         services.AddSingleton<IExtractionStage>(provider => new FiscalDecodeStage(
             provider.GetRequiredService<IFiscalCodeDecoder>(),
             provider.GetRequiredService<ILogger<FiscalDecodeStage>>()));
 
+        services.AddSingleton<IExtractionStage>(provider => new FiscalInvoiceStage(
+            provider.GetRequiredService<IFiscalInvoiceRetrieval>(),
+            provider.GetRequiredService<ILogger<FiscalInvoiceStage>>()));
+
+        // Both vision tiers are the fallback now: they answer for the receipts the deterministic
+        // path cannot serve, in registration order, and neither runs behind an invoice the tax
+        // authority stated and the arithmetic confirmed (D22).
         services.AddSingleton<IExtractionStage>(provider => new VisionStage(
             new PlaceholderReceiptExtractor(
                 provider.GetRequiredService<PlaceholderOptions>(),
                 VisionStage.CheapTier),
             VisionStage.CheapTier,
-            ExtractionStageRole.Primary));
+            ExtractionStageRole.Fallback));
 
         services.AddSingleton<IExtractionStage>(provider => new VisionStage(
             new PlaceholderReceiptExtractor(

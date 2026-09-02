@@ -1,4 +1,5 @@
 using Expenses.Application.Extraction;
+using Expenses.Domain;
 using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Tests.Fakes;
@@ -23,6 +24,16 @@ internal sealed class FakeStage(
 
     public static FakeStage Silent(string name, ExtractionStageRole role) =>
         new(name, role, _ => ExtractionStageOutcome.Nothing);
+
+    /// <summary>
+    /// The deterministic stage that answers with a whole invoice and the identifier only the
+    /// verification service knows, recorded as having come from there (D24).
+    /// </summary>
+    public static FakeStage Retrieving(string name, ExtractionResult result, FiscalIdentifiers identifiers) =>
+        new(name, ExtractionStageRole.Primary, _ => new ExtractionStageOutcome(
+            result,
+            identifiers,
+            Receipt.FiscalSource.RetrievedFromService));
 
     public static FakeStage Decoding(string name, FiscalIdentifiers identifiers) =>
         new(name, ExtractionStageRole.Opportunistic, _ => new ExtractionStageOutcome(Fiscal: identifiers));

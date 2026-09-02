@@ -81,7 +81,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         var view = await Extracted(services, Jpeg(0x75));
 
         // Which stages ran, and which stage produced each value (D20).
-        Assert.Equal(["fiscal-qr", "vision-cheap"], view.Result!.StagesRun);
+        Assert.Equal(["fiscal-qr", "fiscal-portal", "vision-cheap"], view.Result!.StagesRun);
         Assert.Equal("vision-cheap", view.Result.Provenance["total"]);
         Assert.All(view.Result.Candidates, candidate =>
             Assert.Equal("vision-cheap", candidate.Provenance["amount"]));
@@ -109,7 +109,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         // point is that a real arithmetic failure drove it, not a simulated score (D20).
         Assert.Equal(Receipt.ExtractionState.NeedsReview, view.Receipt.State);
         Assert.False(view.Validation!.Passed);
-        Assert.Equal(["fiscal-qr", "vision-cheap", "vision-expensive"], view.Result!.StagesRun);
+        Assert.Equal(["fiscal-qr", "fiscal-portal", "vision-cheap", "vision-expensive"], view.Result!.StagesRun);
     }
 
     [Fact]

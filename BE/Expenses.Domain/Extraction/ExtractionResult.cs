@@ -32,6 +32,12 @@ public sealed class ExtractionCandidate
 
     public decimal? DiscountAmount { get; private set; }
 
+    /// <summary>
+    /// The rate this line was taxed at, where the source stated one per line. An invoice may carry
+    /// several, so it cannot be inferred from the result's own rate.
+    /// </summary>
+    public decimal? TaxRatePercent { get; private set; }
+
     public string? CategoryRaw { get; private set; }
 
     public string? UnitRaw { get; private set; }
@@ -57,6 +63,7 @@ public sealed class ExtractionCandidate
         decimal? unitPrice = null,
         decimal? listUnitPrice = null,
         decimal? discountAmount = null,
+        decimal? taxRatePercent = null,
         string? categoryRaw = null,
         string? unitRaw = null,
         long? categoryId = null,
@@ -78,6 +85,7 @@ public sealed class ExtractionCandidate
             UnitPrice = unitPrice,
             ListUnitPrice = listUnitPrice,
             DiscountAmount = discountAmount,
+            TaxRatePercent = taxRatePercent,
             CategoryRaw = categoryRaw,
             UnitRaw = unitRaw,
             CategoryId = categoryId,

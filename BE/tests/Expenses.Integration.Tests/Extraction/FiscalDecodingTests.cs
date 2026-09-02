@@ -36,8 +36,13 @@ public sealed class FiscalDecodingTests(PostgresFixture postgres)
 
         // The identifiers a fiscal code carries, marked by the caller as decoded rather than read
         // as text, because a decode is exact where reading printed text is not.
+        //
+        // This test used to assert that the JIKR was the `crtd` parameter. It is not: `crtd` is the
+        // invoice creation timestamp and the JIKR is absent from the code entirely, so the
+        // assertion was asserting the defect D24 records rather than the behaviour.
         Assert.Equal("A1B2C3D4E5F6", decoded?.Ikof);
-        Assert.Equal("2026-08-24T12:50:08+02:00", decoded?.Jikr);
+        Assert.Null(decoded?.Jikr);
+        Assert.Equal("2026-08-24T12:50:08+02:00", decoded?.CreatedAt);
     }
 
     [Fact]

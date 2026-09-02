@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Expenses.Application.Abstractions;
 using Expenses.Application.Extraction;
 using Expenses.Application.Purchases;
@@ -10,18 +9,26 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Expenses.Integration.Tests.Extraction;
 
 /// <summary>
-/// The decoder against a real photographed thermal receipt — the input the spike measured at zero
-/// hits over roughly three hundred preprocessing combinations (D20).
+/// The decoder against three real photographed thermal receipts, committed as fixtures with the
+/// outcome each one is known to produce (D26). Two of the three miss, and that is not a defect to
+/// be tolerated quietly: the hit and the misses are asserted alike, because a decoder change that
+/// silently lost the hit and one that silently rescued a miss are both things this suite must say
+/// out loud.
 ///
-/// What is asserted is the documented behaviour, not a successful decode: whatever the decoder
-/// makes of this image, the pipeline result is the same. Asserting a hit would encode a hope, and
-/// asserting a miss would freeze a limitation that a better decoder should be free to lift. Both
-/// outcomes pass here; neither may change the state of the image, the candidates, or what a later
-/// stage does.
+/// Scenarios from receipt-ingestion: "A decodable symbol is decoded from an unmodified
+/// photograph", "Decoding fails", "A miss does not degrade the receipt".
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLifetime
 {
+    /// <summary>The Megapromet till's symbol, and the only one of the three within reach.</summary>
+    public const string DecodableReceipt = "1000023219.jpg";
+
+    /// <summary>The Aroma till's symbols: too dense for the print quality they were printed at.</summary>
+    public const string UndecodableReceipt = "1000023157.jpg";
+
+    public const string Ikof = "32AA324CFF5030271E16D59F7F8EF636";
+
     private static readonly DateTime Occurred = new(2039, 10, 11, 9, 30, 0, DateTimeKind.Unspecified);
 
     private static int _sequence;
@@ -31,29 +38,34 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Decoding_a_photographed_receipt_costs_little_and_never_throws()
+    public async Task A_decodable_symbol_is_decoded_from_an_unmodified_photograph()
     {
         await using var services = postgres.Services();
         var decoder = services.GetRequiredService<IFiscalCodeDecoder>();
 
-        var elapsed = Stopwatch.StartNew();
-        var decoded = await decoder.Decode(new ReceiptImageContent(1, "image/jpeg", Photograph()));
-        elapsed.Stop();
+        // The 4000x3000 photograph exactly as the camera wrote it: no crop, no rectification, no
+        // rescale. Cropping to a perfectly framed symbol was measured and bought nothing, so
+        // nothing here may come to depend on it (D21).
+        var decoded = await decoder.Decode(Photograph(DecodableReceipt));
 
-        // A miss is the expected outcome and a hit is welcome; neither is an error, and the budget
-        // is what keeps an unbounded ladder from costing an unbounded amount.
-        Assert.True(
-            elapsed.ElapsedMilliseconds < 10_000,
-            $"Decoding took {elapsed.ElapsedMilliseconds} ms, well beyond its time budget.");
+        Assert.Equal(Ikof, decoded?.Ikof);
+    }
 
-        if (decoded is not null)
-        {
-            Assert.False(decoded.IsEmpty);
-        }
+    [Theory]
+    [InlineData(UndecodableReceipt)]
+    [InlineData("1000023218.jpg")]
+    public async Task Decoding_fails(string fixture)
+    {
+        await using var services = postgres.Services();
+        var decoder = services.GetRequiredService<IFiscalCodeDecoder>();
+
+        // A miss, and never an exception: the two are the same outcome to every caller, and the
+        // honest expectation is that some tills produce symbols no decoder reads (D21).
+        Assert.Null(await decoder.Decode(Photograph(fixture)));
     }
 
     [Fact]
-    public async Task The_pipeline_result_is_the_same_whatever_the_decoder_makes_of_the_photograph()
+    public async Task A_miss_does_not_degrade_the_receipt()
     {
         await using var services = postgres.Services();
         using var scope = services.CreateScope();
@@ -62,30 +74,27 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
             new RecordPurchaseCommand(Next(), 8.48m, [new ExpenseCommand("Receipt", 8.48m)]));
 
         await scope.ServiceProvider.GetRequiredService<AttachReceiptImage>()
-            .Execute(purchase.Purchase.Id, Photograph());
+            .Execute(purchase.Purchase.Id, Photograph(UndecodableReceipt).Content);
 
         var purchaseId = purchase.Purchase.Id;
         var extracted = await scope.ServiceProvider.GetRequiredService<RunExtraction>().Execute(purchaseId);
         var view = await scope.ServiceProvider.GetRequiredService<GetExtractionCandidates>().Execute(purchaseId);
 
-        // The stage ran, and whether it decoded anything or not, the extraction reached its normal
-        // outcome with candidates to review.
+        // Reported no differently from a receipt carrying no code at all: the stage ran, decoded
+        // nothing, recorded nothing, and every later stage behaved as it always does.
         Assert.Contains("fiscal-qr", view.Result!.StagesRun);
         Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
         Assert.NotEmpty(view.Result.Candidates);
         Assert.Null(extracted.FailureReason);
-
-        // If it missed — the measured outcome — nothing is recorded and nothing is reported as
-        // wrong with the receipt.
-        if (extracted.FiscalIkofExtracted is null)
-        {
-            Assert.Equal(Receipt.FiscalSource.None, extracted.FiscalExtractedSource);
-            Assert.Equal(Receipt.FiscalCorroboration.Absent, extracted.Corroboration);
-        }
+        Assert.Null(extracted.FiscalIkofExtracted);
+        Assert.Equal(Receipt.FiscalSource.None, extracted.FiscalExtractedSource);
+        Assert.Equal(Receipt.FiscalCorroboration.Absent, extracted.Corroboration);
     }
 
-    private static byte[] Photograph() =>
-        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "photographed-receipt.jpg"));
+    public static ReceiptImageContent Photograph(string fixture) => new(
+        1,
+        "image/jpeg",
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture)));
 
     private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
 }

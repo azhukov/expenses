@@ -92,6 +92,26 @@ public sealed class RunExtractionTests
     }
 
     [Fact]
+    public async Task Sources_agree_across_a_difference_of_hyphenation()
+    {
+        var purchase = await GivenPendingReceipt(
+            new FiscalIdentifiers(Jikr: "d2857c6a-a363-4173-bf9c-dff37f77741a"));
+
+        var extracted = await Subject(
+            FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers(Jikr: "d2857c6aa3634173bf9cdff37f77741a")),
+            FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
+            .Execute(purchase.Id);
+
+        // The same identifier, printed hyphenated by one ERP and unhyphenated by another. Both are
+        // retained exactly as read (D10), but a difference of punctuation is not a disagreement and
+        // must not put a sound receipt in front of a human (D24).
+        Assert.Equal(Receipt.FiscalCorroboration.Corroborated, extracted.Corroboration);
+        Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
+        Assert.Equal("d2857c6a-a363-4173-bf9c-dff37f77741a", extracted.FiscalJikrSupplied);
+        Assert.Equal("d2857c6aa3634173bf9cdff37f77741a", extracted.FiscalJikrExtracted);
+    }
+
+    [Fact]
     public async Task Sources_disagree()
     {
         var purchase = await GivenPendingReceipt(new FiscalIdentifiers("d1b2c3"));

@@ -1,49 +1,28 @@
-using System.Diagnostics;
-using System.Web;
+using System.Globalization;
 using Expenses.Application.Abstractions;
 using Expenses.Application.Extraction;
 using Expenses.Infrastructure.Receipts;
-using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using ZXing;
-using ZXing.Common;
+using ZXingCpp;
+using Image = SixLabors.ImageSharp.Image;
 
 namespace Expenses.Infrastructure.Extraction;
 
-internal sealed class DecoderOptions
-{
-    /// <summary>
-    /// A hard budget, because the preprocessing ladder is unbounded work on an outcome nothing
-    /// depends on. When it runs out, the decode is a miss like any other (D20).
-    /// </summary>
-    public int TimeBudgetMilliseconds { get; set; } = 1500;
-}
-
 /// <summary>
-/// Decodes a fiscal QR from stored image bytes over a bounded preprocessing ladder (D20).
+/// Decodes a fiscal QR from stored image bytes with zxing-cpp (D21).
 ///
-/// Measured before it was specified: a spike ran ZXing over a real photographed thermal receipt
-/// across roughly three hundred combinations — full resolution, a downscale ladder, three crop
-/// boxes, global and adaptive thresholding, morphological correction — and hit zero times. The
-/// symbol is dense, printed on thermal paper where black modules bleed, photographed at about nine
-/// pixels per module. That is a signal-quality wall, not a tuning problem, so the ladder here is
-/// deliberately short: more combinations buy nothing on that input and cost time on every image.
+/// Measured on three photographed thermal receipts, at four rotations and five scales, on the full
+/// photograph and on a hand-cropped perfectly framed symbol: ZXing.Net read none of them, while
+/// zxing-cpp reads the Megapromet symbol straight off the unmodified 4000x3000 photograph and
+/// still reads neither Aroma one. So the wall D20 recorded is real but per-till, not universal —
+/// and the preprocessing ladder that used to be here is gone, because the measured hit needed none
+/// of it and no amount of it rescued a measured miss.
 ///
-/// It is built anyway because it costs little and yields an exactly-correct fiscal identity when it
-/// does hit — usually on a flat, well-lit scan rather than a photograph. Nothing may depend on it
-/// hitting, and decoding at capture in the browser is the intended primary path once `FE/` exists.
+/// A miss is therefore an ordinary, expected outcome on some tills, and nothing may depend on a hit.
 /// </summary>
-internal sealed class FiscalCodeDecoder(DecoderOptions options, ILogger<FiscalCodeDecoder> logger)
-    : IFiscalCodeDecoder
+internal sealed class FiscalCodeDecoder : IFiscalCodeDecoder
 {
-    /// <summary>
-    /// Full resolution first, then two downscales. A dense symbol photographed close up sometimes
-    /// decodes smaller, because downscaling averages away the ink bleed between modules.
-    /// </summary>
-    private static readonly double[] Scales = [1.0, 0.5, 0.35];
-
     public Task<FiscalIdentifiers?> Decode(
         ReceiptImageContent image,
         CancellationToken cancellationToken = default)
@@ -55,66 +34,33 @@ internal sealed class FiscalCodeDecoder(DecoderOptions options, ILogger<FiscalCo
             return Task.FromResult<FiscalIdentifiers?>(null);
         }
 
-        var budget = Stopwatch.StartNew();
-        var reader = new BarcodeReaderGeneric
+        // zxing-cpp reads luminance. Decoding straight to L8 is both what it wants and less
+        // memory than a colour frame of a 12-megapixel photograph.
+        using var luminance = Image.Load<L8>(image.Content);
+        var pixels = new byte[luminance.Width * luminance.Height];
+        luminance.CopyPixelDataTo(pixels);
+
+        var reader = new BarcodeReader
         {
-            Options = new DecodingOptions
-            {
-                PossibleFormats = [BarcodeFormat.QR_CODE],
-                TryHarder = true,
-                TryInverted = true,
-            },
+            Formats = BarcodeFormat.QRCode,
+            TryHarder = true,
+            TryRotate = true,
+            TryInvert = true,
+            TryDownscale = true,
         };
 
-        using var original = Image.Load<Rgba32>(image.Content);
+        var decoded = reader
+            .From(new ImageView(pixels, luminance.Width, luminance.Height, ImageFormat.Lum, 0, 0))
+            .FirstOrDefault(barcode => barcode.IsValid && barcode.Text.Length > 0);
 
-        foreach (var scale in Scales)
-        {
-            if (cancellationToken.IsCancellationRequested
-                || budget.ElapsedMilliseconds > options.TimeBudgetMilliseconds)
-            {
-                logger.LogDebug(
-                    "Fiscal decoding gave up on the receipt of purchase {PurchaseId} after {Elapsed} ms.",
-                    image.PurchaseId,
-                    budget.ElapsedMilliseconds);
-
-                break;
-            }
-
-            using var candidate = Rescaled(original, scale);
-            if (reader.Decode(Luminance(candidate)) is { Text.Length: > 0 } decoded)
-            {
-                return Task.FromResult<FiscalIdentifiers?>(FiscalIdentity.From(decoded.Text));
-            }
-        }
-
-        return Task.FromResult<FiscalIdentifiers?>(null);
-    }
-
-    private static Image<Rgba32> Rescaled(Image<Rgba32> original, double scale) =>
-        scale >= 1.0
-            ? original.Clone()
-            : original.Clone(context => context.Resize(
-                Math.Max(1, (int)(original.Width * scale)),
-                Math.Max(1, (int)(original.Height * scale))));
-
-    /// <summary>
-    /// ZXing reads luminance, not pixels. Copying the frame into the shape it expects is cheaper
-    /// than taking a dependency on a binding pinned to an older ImageSharp.
-    /// </summary>
-    private static RGBLuminanceSource Luminance(Image<Rgba32> image)
-    {
-        var pixels = new byte[image.Width * image.Height * 4];
-        image.CopyPixelDataTo(pixels);
-
-        return new RGBLuminanceSource(pixels, image.Width, image.Height, RGBLuminanceSource.BitmapFormat.RGBA32);
+        return Task.FromResult(decoded is null ? null : FiscalIdentity.From(decoded.Text));
     }
 }
 
 /// <summary>
 /// Reads the identifiers out of what a fiscal QR carries. The payload is a verification URL whose
-/// query names them; anything else is kept as it stands, because no format is imposed on a fiscal
-/// identifier anywhere in this design (D10).
+/// parameters name them; anything else is kept as it stands, because no format is
+/// imposed on a fiscal identifier anywhere in this design (D10).
 /// </summary>
 internal static class FiscalIdentity
 {
@@ -125,19 +71,68 @@ internal static class FiscalIdentity
             return new FiscalIdentifiers(payload.Trim());
         }
 
-        // The identifiers live in the query of the verification URL. A fragment-routed URL — which
-        // is what Montenegro's portal issues — keeps them after the '#', so both are searched.
-        var query = HttpUtility.ParseQueryString(url.Query);
-        var fragment = HttpUtility.ParseQueryString(
+        // Montenegro's portal is fragment-routed, so its parameters live after the '#' rather than
+        // in the query. Both are searched, because nothing else guarantees which one an ERP prints.
+        var query = Parameters(url.Query);
+        var fragment = Parameters(
             url.Fragment.Contains('?', StringComparison.Ordinal)
                 ? url.Fragment[(url.Fragment.IndexOf('?', StringComparison.Ordinal) + 1)..]
                 : string.Empty);
 
-        var ikof = query["iic"] ?? query["ikof"] ?? fragment["iic"] ?? fragment["ikof"];
-        var jikr = query["crtd"] ?? query["jikr"] ?? fragment["crtd"] ?? fragment["jikr"];
+        var ikof = Parameter(query, fragment, "iic", "ikof");
+        var issuerTaxNumber = Parameter(query, fragment, "tin");
+        var createdAt = Parameter(query, fragment, "crtd");
 
-        return ikof is null && jikr is null
+        // No JIKR. An earlier version of this read `crtd` — the creation timestamp — into the JIKR
+        // slot, so every JIKR the shipped code recorded was a timestamp. The JIKR appears nowhere in
+        // the code at all; it is simply not yet known until the portal answers with it (D24).
+        var jikr = Parameter(query, fragment, "jikr");
+
+        return ikof is null && jikr is null && issuerTaxNumber is null && createdAt is null
             ? new FiscalIdentifiers(payload.Trim())
-            : new FiscalIdentifiers(ikof, jikr);
+            : new FiscalIdentifiers(
+                ikof,
+                jikr,
+                issuerTaxNumber,
+                createdAt,
+                Total(Parameter(query, fragment, "prc")));
     }
+
+    /// <summary>
+    /// The invoice total the code states. Read at the invariant culture, because the portal prints
+    /// a decimal point wherever the receipt was issued and wherever this happens to run.
+    /// </summary>
+    private static decimal? Total(string? value) =>
+        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var total)
+            ? total
+            : null;
+
+    private static string? Parameter(
+        IReadOnlyDictionary<string, string> query,
+        IReadOnlyDictionary<string, string> fragment,
+        params string[] names) =>
+        names
+            .SelectMany(name => new[]
+            {
+                query.GetValueOrDefault(name),
+                fragment.GetValueOrDefault(name),
+            })
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    /// <summary>
+    /// Split by hand rather than with a form decoder, because a form decoder reads '+' as a space
+    /// and the creation timestamp is printed with a '+' in its UTC offset — `2026-08-29T14:59:22+02:00`
+    /// would arrive as a space and the portal would be asked about an invoice created at no time at
+    /// all. Percent-escapes are still decoded; '+' is left as the character it is.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> Parameters(string text) =>
+        text.TrimStart('?', '#')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2))
+            .Where(pair => pair.Length == 2)
+            .GroupBy(pair => Uri.UnescapeDataString(pair[0]), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => Uri.UnescapeDataString(group.First()[1]),
+                StringComparer.OrdinalIgnoreCase);
 }

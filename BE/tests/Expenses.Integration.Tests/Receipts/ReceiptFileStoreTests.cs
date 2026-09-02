@@ -167,13 +167,13 @@ public sealed class ReceiptFileStoreTests(PostgresFixture postgres) : IAsyncLife
 
         // Every type mapped onto the row, because the receipt is an owned value on it (D2, D11).
         var columns = context.Model.GetEntityTypes()
-            .Where(entity => entity.GetTableName() == "Purchases")
+            .Where(entity => entity.GetTableName() == "purchases")
             .SelectMany(entity => entity.GetProperties())
             .Select(property => property.GetColumnName())
             .ToList();
 
         // The reference is stored; the content never is (D11).
-        Assert.Contains("ReceiptStorageKey", columns);
+        Assert.Contains("receipt_storage_key", columns);
         Assert.DoesNotContain("Content", columns);
     }
 
