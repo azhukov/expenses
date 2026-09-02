@@ -21,6 +21,12 @@ public sealed class ExpensesApi(string connectionString, params (string Key, str
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// Left unset (the factory's default, the source directory) unless a test needs an isolated
+    /// place to look for what the host wrote to disk, e.g. log files under logs/.
+    /// </summary>
+    public string? ContentRoot { get; init; }
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         var configuration = new Dictionary<string, string?>
@@ -38,6 +44,11 @@ public sealed class ExpensesApi(string connectionString, params (string Key, str
         }
 
         builder.ConfigureHostConfiguration(host => host.AddInMemoryCollection(configuration));
+
+        if (ContentRoot is not null)
+        {
+            builder.UseContentRoot(ContentRoot);
+        }
 
         return base.CreateHost(builder);
     }

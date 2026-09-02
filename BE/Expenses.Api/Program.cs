@@ -3,10 +3,16 @@ using Expenses.Api;
 using Expenses.Api.Controllers;
 using Expenses.Application.Errors;
 using Expenses.Infrastructure;
+using Expenses.Infrastructure.Logging;
 using Expenses.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog first, so every log line from here on — including infrastructure wiring below — goes
+// through it (D28).
+builder.AddExpensesLogging(useStandardError: false);
 
 // One call into Infrastructure and nothing else from it (D1): the composition root lives there so
 // that this host and the MCP host cannot drift apart in how they are wired.
@@ -68,4 +74,20 @@ else
 
 app.MapControllers();
 
-app.Run();
+app.Logger.LogInformation("Expenses.Api starting.");
+
+try
+{
+    app.Run();
+}
+catch (Exception ex)
+{
+    // Caught here rather than left to crash silently: whatever the console shows, the file sink
+    // keeps a durable copy after the process is gone (D32).
+    Log.Fatal(ex, "Expenses.Api terminated unexpectedly.");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}
