@@ -1,0 +1,19 @@
+.list {
+  display: block;
+}
+
+.note {
+  padding: var(--space-5) var(--space-4);
+  color: var(--colour-ink-muted);
+  text-align: center;
+}
+
+.retry {
+  min-height: 44px;
+  min-width: 44px;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+  background: var(--colour-surface);
+}

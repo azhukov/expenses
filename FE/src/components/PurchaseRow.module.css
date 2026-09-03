@@ -1,0 +1,39 @@
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--colour-line);
+  background: var(--colour-surface);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* Without this a long merchant name widens the row and the page scrolls sideways. */
+  min-width: 0;
+}
+
+.merchant {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail {
+  color: var(--colour-ink-muted);
+  font-size: 0.875rem;
+}
+
+.receipt {
+  color: var(--colour-accent);
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}

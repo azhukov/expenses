@@ -28,7 +28,14 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 # empty named volume from the image directory it is mounted over — including its ownership. Without
 # this the volume arrives root-owned and the host refuses to start, which is the check doing its job
 # but for a reason nobody wants to debug twice.
-RUN mkdir -p /var/lib/expenses/receipts && chown -R $APP_UID:$APP_UID /var/lib/expenses
+#
+# `receipts-temp` is where captures wait to be confirmed, and is deliberately a sibling rather than
+# a child of the permanent store, so a naive walk over either one never mistakes an unconfirmed
+# capture for a confirmed receipt. It gets no volume: what lands there is swept within a day. It
+# does have to exist and be writable, because both hosts verify it at startup and refuse to run
+# without it — the default under `/app` is root-owned and this image runs as $APP_UID.
+RUN mkdir -p /var/lib/expenses/receipts /var/lib/expenses/receipts-temp \
+    && chown -R $APP_UID:$APP_UID /var/lib/expenses
 
 WORKDIR /app
 COPY --from=build /app ./

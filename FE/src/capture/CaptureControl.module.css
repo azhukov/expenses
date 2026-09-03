@@ -1,0 +1,42 @@
+.control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  min-width: 44px;
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--colour-accent);
+  color: var(--colour-accent-ink);
+  font-size: 1.125rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.control:active {
+  filter: brightness(0.92);
+}
+
+/*
+ * Hidden from sight, not from the browser. The input must be the thing the user's finger activates
+ * — a `<label>` does that natively, within the same user-gesture task iOS grants camera access to
+ * (D3). `display: none` would take it out of the accessibility tree and out of that path.
+ */
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.input:focus-visible + .caption {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}

@@ -1,0 +1,24 @@
+.header {
+  flex: 0 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  /* The notch and the rounded corners; zero on a device that has neither (D11). */
+  padding-top: calc(var(--space-5) + env(safe-area-inset-top, 0px));
+  padding-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+  background: var(--colour-surface);
+  border-bottom: 1px solid var(--colour-line);
+}
+
+.caption {
+  display: block;
+  color: var(--colour-ink-muted);
+  font-size: 0.875rem;
+}
+
+.total {
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}

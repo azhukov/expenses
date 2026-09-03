@@ -1,0 +1,9 @@
+.banner {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4);
+  padding-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+  background: var(--colour-attention-surface);
+  color: var(--colour-attention);
+  font-size: 0.9375rem;
+}
