@@ -1,5 +1,5 @@
 import { read } from './client'
-import type { CategoryView, MerchantView, PurchaseView } from './types'
+import type { CategoryView, MerchantView, PurchaseView, UnitView } from './types'
 
 /** A range of occurrence dates, as the API's `DateOnly` query parameters: `yyyy-MM-dd`. */
 export interface DateRange {
@@ -22,4 +22,9 @@ export function listMerchants(): Promise<MerchantView[]> {
 /** The category dictionary. */
 export function listCategories(): Promise<CategoryView[]> {
   return read<CategoryView[]>('/categories')
+}
+
+/** The unit dictionary, addressed by code the way categories are (D8 in the API). */
+export function listUnits(): Promise<UnitView[]> {
+  return read<UnitView[]>('/units')
 }

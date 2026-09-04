@@ -78,3 +78,109 @@ export interface ErrorResponse {
   fields: Record<string, unknown>
   correlationId: string | null
 }
+
+/** Where a fiscal identifier came from. `None` is the absence of any (D20 in the API). */
+export type FiscalSource =
+  | 'None'
+  | 'SuppliedAtUpload'
+  | 'DecodedFromCode'
+  | 'ReadAsText'
+  | 'RetrievedFromService'
+
+/** How one arithmetic check came out. */
+export type CheckOutcome = 'Passed' | 'Failed' | 'NotApplicable'
+
+/**
+ * One arithmetic check, carrying the values that disagreed so the reason survives to the user
+ * rather than being reduced to a boolean.
+ */
+export interface ArithmeticCheck {
+  name: string
+  outcome: CheckOutcome
+  description: string
+  values: Record<string, number | null>
+}
+
+export interface ArithmeticValidationReport {
+  checks: ArithmeticCheck[]
+}
+
+/**
+ * The fiscal identifiers known from one source. A decoded QR also states the issuer, when the
+ * invoice was created and what it came to; the creation timestamp is what lets a purchase be
+ * recorded without the user entering a date.
+ */
+export interface FiscalIdentifiers {
+  ikof: string | null
+  jikr: string | null
+  issuerTaxNumber: string | null
+  createdAt: string | null
+  total: number | null
+}
+
+/**
+ * One proposed line. It carries raw numbers the domain would reject — which is why candidates are
+ * held apart from a purchase — beside the stage that produced each value and the confidence that
+ * stage reported about it.
+ */
+export interface ExtractionCandidateView {
+  lineNumber: number
+  description: string
+  amount: number
+  quantity: number | null
+  unitPrice: number | null
+  listUnitPrice: number | null
+  discountAmount: number | null
+  taxRatePercent: number | null
+  categoryRaw: string | null
+  unitRaw: string | null
+  categoryId: number | null
+  unitId: number | null
+  provenance: Record<string, string>
+  reportedConfidence: Record<string, number>
+}
+
+/** What one run of the extraction cascade produced, with the engine that produced it. */
+export interface ExtractionResultView {
+  engineName: string
+  engineVersion: string
+  stagesRun: string[]
+  candidates: ExtractionCandidateView[]
+  total: number | null
+  taxRatePercent: number | null
+  taxAmount: number | null
+  merchantName: string | null
+  merchantTaxId: string | null
+  provenance: Record<string, string>
+  reportedConfidence: Record<string, number>
+}
+
+/**
+ * What capturing an image produced. Nothing here is held server-side: the client carries this
+ * forward and resubmits the parts confirmation needs, which is why the review screen keeps it
+ * untouched beside the user's edits.
+ */
+export interface CaptureResult {
+  tempKey: string
+  state: ExtractionState
+  failureReason: string | null
+  /** Null where extraction failed. */
+  result: ExtractionResultView | null
+  validation: ArithmeticValidationReport | null
+  supplied: FiscalIdentifiers
+  extracted: FiscalIdentifiers
+  fiscalSource: FiscalSource
+}
+
+/** What a unit is measured in. Like a category, it is addressed by code rather than by name. */
+export type UnitKind = 'Count' | 'Mass' | 'Volume'
+
+/** A unit in the seeded dictionary. */
+export interface UnitView {
+  id: number
+  code: string
+  name: string
+  symbol: string
+  kind: UnitKind
+  isActive: boolean
+}

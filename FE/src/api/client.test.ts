@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { LedgerError, read } from './client'
+import { LedgerError, read, send } from './client'
 
 const fetchMock = vi.fn()
 
@@ -87,6 +87,52 @@ describe('A failure with no error response', () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
 
     const failure = await read('/purchases').catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(LedgerError)
+    expect((failure as LedgerError).code).toBeNull()
+    expect((failure as LedgerError).message).toMatch(/could not be reached/i)
+  })
+})
+
+describe('Writing to the ledger', () => {
+  it('posts the body as JSON and decodes the response the way a read does', async () => {
+    respondWith({ id: 7, amount: 12.5 }, { ok: true, status: 201 })
+
+    await expect(send('/purchases', { amount: 12.5 })).resolves.toEqual({ id: 7, amount: 12.5 })
+
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(path).toBe('/api/purchases')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe(JSON.stringify({ amount: 12.5 }))
+    expect(new Headers(init.headers).get('content-type')).toBe('application/json')
+  })
+
+  it('surfaces the message and code a rejected write carries', async () => {
+    respondWith(
+      {
+        code: 'purchase.reconciliation_mismatch',
+        message: 'The lines do not sum to the amount.',
+        fields: {},
+        correlationId: 'abc',
+      },
+      { ok: false, status: 400 },
+    )
+
+    const failure = await send('/purchases', {}).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(LedgerError)
+    expect(failure).toMatchObject({
+      message: 'The lines do not sum to the amount.',
+      code: 'purchase.reconciliation_mismatch',
+      status: 400,
+      correlationId: 'abc',
+    })
+  })
+
+  it('invents no error code when a write never reaches the ledger', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+
+    const failure = await send('/purchases', {}).catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(LedgerError)
     expect((failure as LedgerError).code).toBeNull()

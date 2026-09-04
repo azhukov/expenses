@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { listCategories, listMerchants, listPurchases, type DateRange } from './reads'
+import { listCategories, listMerchants, listPurchases, listUnits, type DateRange } from './reads'
 
 const HOUR = 60 * 60 * 1000
 
@@ -8,6 +8,7 @@ export const queryKeys = {
   purchases: (range: DateRange) => ['purchases', range.from, range.to] as const,
   merchants: ['merchants'] as const,
   categories: ['categories'] as const,
+  units: ['units'] as const,
 }
 
 /**
@@ -38,6 +39,14 @@ export function useCategories() {
   return useQuery({
     queryKey: queryKeys.categories,
     queryFn: listCategories,
+    staleTime: HOUR,
+  })
+}
+
+export function useUnits() {
+  return useQuery({
+    queryKey: queryKeys.units,
+    queryFn: listUnits,
     staleTime: HOUR,
   })
 }

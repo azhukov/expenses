@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { listCategories, listMerchants, listPurchases } from './reads'
+import { listCategories, listMerchants, listPurchases, listUnits } from './reads'
 
 const fetchMock = vi.fn()
 
@@ -35,5 +35,11 @@ describe('The read functions address the API', () => {
     await listCategories()
 
     expect(requestedPath()).toBe('/api/categories')
+  })
+
+  it('asks for the unit dictionary', async () => {
+    await expect(listUnits()).resolves.toEqual([])
+
+    expect(requestedPath()).toBe('/api/units')
   })
 })

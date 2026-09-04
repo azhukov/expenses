@@ -52,17 +52,50 @@ export async function read<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => null)
+    throw await failureOf(response)
+  }
 
-    if (isErrorResponse(body)) {
-      throw new LedgerError(body.message, {
-        code: body.code,
-        status: response.status,
-        correlationId: body.correlationId ?? null,
-      })
-    }
+  return (await response.json()) as T
+}
 
-    throw new LedgerError('The ledger could not be read.', { status: response.status })
+/**
+ * The failure side of a response, in the ledger's own words where it gave any. Shared by every
+ * call that talks to the API, so that a write never grows an error vocabulary a read does not have.
+ */
+export async function failureOf(response: Response): Promise<LedgerError> {
+  const body = await response.json().catch(() => null)
+
+  if (isErrorResponse(body)) {
+    return new LedgerError(body.message, {
+      code: body.code,
+      status: response.status,
+      correlationId: body.correlationId ?? null,
+    })
+  }
+
+  return new LedgerError('The ledger could not be read.', { status: response.status })
+}
+
+/**
+ * One typed JSON POST, the write counterpart of {@link read}. Multipart uploads do not come
+ * through here: a body that is not JSON is a different call, not a parameter of this one.
+ */
+export async function send<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
+  let response: Response
+
+  try {
+    response = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      ...init,
+    })
+  } catch {
+    throw new LedgerError('The ledger could not be reached.')
+  }
+
+  if (!response.ok) {
+    throw await failureOf(response)
   }
 
   return (await response.json()) as T
