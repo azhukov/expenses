@@ -1,4 +1,4 @@
-namespace Expenses.Application.Abstractions;
+﻿namespace Expenses.Application.Abstractions;
 
 /// <summary>
 /// Wall-clock time, never converted (D5). Every value it yields has

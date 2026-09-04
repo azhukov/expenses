@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
 using Expenses.Integration.Tests.Extraction;

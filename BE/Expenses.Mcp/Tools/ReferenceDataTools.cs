@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using Expenses.Application.Merchants;
 using Expenses.Application.ReferenceData;
 using ModelContextProtocol.Server;

@@ -1,4 +1,4 @@
-using Expenses.Application.Abstractions;
+﻿using Expenses.Application.Abstractions;
 
 namespace Expenses.Infrastructure.Receipts;
 

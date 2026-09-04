@@ -1,4 +1,4 @@
-namespace Expenses.Application.Extraction;
+﻿namespace Expenses.Application.Extraction;
 
 /// <summary>
 /// Names of the values a stage can produce, used as provenance and confidence keys.

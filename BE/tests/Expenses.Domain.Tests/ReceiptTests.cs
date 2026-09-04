@@ -1,4 +1,4 @@
-using ExtractionState = Expenses.Domain.Receipt.ExtractionState;
+﻿using ExtractionState = Expenses.Domain.Receipt.ExtractionState;
 
 namespace Expenses.Domain.Tests;
 

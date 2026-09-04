@@ -1,4 +1,4 @@
-using Expenses.Application.Errors;
+﻿using Expenses.Application.Errors;
 using Expenses.Application.Merchants;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain;

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using Expenses.Application.Abstractions;
 
 namespace Expenses.Infrastructure.Receipts;

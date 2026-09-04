@@ -1,4 +1,4 @@
-using Expenses.Domain;
+﻿using Expenses.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

@@ -1,4 +1,4 @@
-using Expenses.Domain.Extraction;
+﻿using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Extraction;
 

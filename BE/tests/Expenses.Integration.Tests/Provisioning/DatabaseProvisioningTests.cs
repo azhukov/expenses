@@ -1,4 +1,4 @@
-using Expenses.Infrastructure.Persistence;
+﻿using Expenses.Infrastructure.Persistence;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;

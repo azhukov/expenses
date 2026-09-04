@@ -1,4 +1,4 @@
-namespace Expenses.Application.Abstractions;
+﻿namespace Expenses.Application.Abstractions;
 
 /// <summary>
 /// Raised when the unique index on <c>(occurred_at, amount)</c> rejects an insert (D4). The

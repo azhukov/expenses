@@ -1,4 +1,4 @@
-namespace Expenses.Application.Errors;
+﻿namespace Expenses.Application.Errors;
 
 /// <summary>
 /// The single error model both adapters map from (D1 — no rule may live in an adapter).

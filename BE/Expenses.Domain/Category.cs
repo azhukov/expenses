@@ -1,4 +1,4 @@
-namespace Expenses.Domain;
+﻿namespace Expenses.Domain;
 
 /// <summary>
 /// A dictionary entry keyed by an immutable <see cref="Code"/> (D8). Seeded and user-extensible;

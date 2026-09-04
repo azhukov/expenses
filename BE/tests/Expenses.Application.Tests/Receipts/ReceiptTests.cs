@@ -1,4 +1,4 @@
-using Expenses.Application.Abstractions;
+﻿using Expenses.Application.Abstractions;
 using Expenses.Application.Receipts;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain;

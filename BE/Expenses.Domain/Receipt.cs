@@ -1,4 +1,4 @@
-namespace Expenses.Domain;
+﻿namespace Expenses.Domain;
 
 /// <summary>
 /// The receipt a purchase carries: the reference to its stored file, and what extraction has made

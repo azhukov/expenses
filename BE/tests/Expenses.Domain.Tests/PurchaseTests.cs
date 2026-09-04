@@ -1,4 +1,4 @@
-namespace Expenses.Domain.Tests;
+﻿namespace Expenses.Domain.Tests;
 
 /// <summary>
 /// Scenarios from purchase-recording: "Purchase is a container of expenses",

@@ -1,4 +1,4 @@
-using Expenses.Infrastructure.Receipts;
+﻿using Expenses.Infrastructure.Receipts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 

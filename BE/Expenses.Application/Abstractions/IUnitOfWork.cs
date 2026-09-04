@@ -1,4 +1,4 @@
-namespace Expenses.Application.Abstractions;
+﻿namespace Expenses.Application.Abstractions;
 
 /// <summary>
 /// One transaction per use case; the aggregate is saved whole (D16).

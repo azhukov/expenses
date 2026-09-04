@@ -1,4 +1,4 @@
-namespace Expenses.Domain;
+﻿namespace Expenses.Domain;
 
 /// <summary>
 /// A dictionary learned during ingestion rather than seeded (D18). Deliberately unlike

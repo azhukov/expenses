@@ -1,4 +1,4 @@
-using Expenses.Application.Errors;
+﻿using Expenses.Application.Errors;
 using Expenses.Application.Extraction;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;

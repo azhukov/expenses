@@ -1,4 +1,4 @@
-namespace Expenses.Application.Abstractions;
+﻿namespace Expenses.Application.Abstractions;
 
 /// <summary>
 /// Where a captured image waits until it is confirmed into a purchase or swept away unconfirmed.

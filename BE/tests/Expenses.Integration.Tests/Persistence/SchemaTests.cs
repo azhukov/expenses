@@ -1,4 +1,4 @@
-using Expenses.Domain;
+﻿using Expenses.Domain;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;

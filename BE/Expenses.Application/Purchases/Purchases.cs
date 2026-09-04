@@ -1,4 +1,4 @@
-using Expenses.Application.Merchants;
+﻿using Expenses.Application.Merchants;
 using Expenses.Domain;
 
 namespace Expenses.Application.Purchases;

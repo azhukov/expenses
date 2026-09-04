@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using Expenses.Application.Abstractions;
 using Expenses.Domain;
 using Expenses.Domain.Extraction;

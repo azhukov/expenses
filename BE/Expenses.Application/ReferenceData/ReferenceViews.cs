@@ -1,4 +1,4 @@
-using Expenses.Domain;
+﻿using Expenses.Domain;
 
 namespace Expenses.Application.ReferenceData;
 

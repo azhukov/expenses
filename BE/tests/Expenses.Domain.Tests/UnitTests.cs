@@ -1,4 +1,4 @@
-namespace Expenses.Domain.Tests;
+﻿namespace Expenses.Domain.Tests;
 
 /// <summary>Scenarios from reference-data: "Units describe what a quantity counts".</summary>
 public sealed class UnitTests

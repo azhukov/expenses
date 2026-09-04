@@ -1,4 +1,4 @@
-using Expenses.Application.Receipts;
+﻿using Expenses.Application.Receipts;
 using Expenses.Domain;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;

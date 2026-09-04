@@ -1,4 +1,4 @@
-using Expenses.Application.Abstractions;
+﻿using Expenses.Application.Abstractions;
 using Expenses.Application.Extraction;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;

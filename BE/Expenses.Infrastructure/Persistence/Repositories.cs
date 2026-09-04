@@ -1,4 +1,4 @@
-using Expenses.Application.Abstractions;
+﻿using Expenses.Application.Abstractions;
 using Expenses.Domain;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -212,10 +212,10 @@ internal sealed class ExpensesUnitOfWork(ExpensesDbContext context) : IUnitOfWor
         }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException
-                {
-                    SqlState: PostgresErrorCodes.UniqueViolation,
-                    ConstraintName: DuplicatePurchaseIndex,
-                })
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: DuplicatePurchaseIndex,
+            })
         {
             var losing = exception.Entries
                 .Select(entry => entry.Entity)

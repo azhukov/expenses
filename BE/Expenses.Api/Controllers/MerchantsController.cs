@@ -1,4 +1,4 @@
-using Expenses.Application.Merchants;
+﻿using Expenses.Application.Merchants;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Expenses.Api.Controllers;

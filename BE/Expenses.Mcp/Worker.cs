@@ -1,4 +1,4 @@
-namespace Expenses.Mcp;
+﻿namespace Expenses.Mcp;
 
 public class Worker(ILogger<Worker> logger) : BackgroundService
 {

@@ -1,4 +1,4 @@
-using Expenses.Application.Errors;
+﻿using Expenses.Application.Errors;
 using Expenses.Mcp.Tools;
 using ModelContextProtocol;
 using Microsoft.Extensions.DependencyInjection;

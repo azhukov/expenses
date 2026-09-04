@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Expenses.Application.Abstractions;
 using Expenses.Application.Extraction;
 using Expenses.Infrastructure.Receipts;
