@@ -16,7 +16,7 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
     /// The values no arithmetic can decide, and therefore the only ones a reported confidence is
     /// consulted for (D20). Everything numeric is proved instead.
     /// </summary>
-    private static readonly string[] Unverifiable =
+    private static readonly string[] s_unverifiable =
     [
         ExtractedValues.Description,
         ExtractedValues.MerchantName,
@@ -140,7 +140,7 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
             .Concat(result.Candidates.SelectMany(candidate => candidate.ReportedConfidence));
 
         return [.. reported
-            .Where(value => Unverifiable.Contains(value.Key) && value.Value < _options.ConfidenceThreshold)
+            .Where(value => s_unverifiable.Contains(value.Key) && value.Value < _options.ConfidenceThreshold)
             .Select(value => value.Key)
             .Distinct()];
     }

@@ -24,7 +24,7 @@ internal sealed class ReceiptStoreOptions
 /// </summary>
 internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptImageStore
 {
-    private static readonly Dictionary<string, string> Extensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> s_extensions = new(StringComparer.OrdinalIgnoreCase)
     {
         [ReceiptContent.Jpeg] = ".jpg",
         [ReceiptContent.Png] = ".png",
@@ -134,7 +134,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
     {
         string hex = Convert.ToHexStringLower(hash);
 
-        return $"{hex[..2]}/{hex[2..4]}/{hex}{Extensions.GetValueOrDefault(contentType, ".bin")}";
+        return $"{hex[..2]}/{hex[2..4]}/{hex}{s_extensions.GetValueOrDefault(contentType, ".bin")}";
     }
 
     private string Resolve(string storageKey)

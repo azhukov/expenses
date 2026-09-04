@@ -20,9 +20,9 @@ namespace Expenses.Integration.Tests.Ledger;
 [Collection(PostgresCollection.Name)]
 public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private static readonly DateTime Occurred = new(2040, 1, 2, 7, 45, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2040, 1, 2, 7, 45, 0, DateTimeKind.Unspecified);
 
-    private static int _sequence;
+    private static int s_sequence;
 
     private ServiceProvider _services = null!;
 
@@ -100,8 +100,8 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task A_category_with_children_is_assignable_in_its_own_right()
     {
-        string parentCode = $"GAP_PARENT_{Interlocked.Increment(ref _sequence)}";
-        string childCode = $"GAP_CHILD_{_sequence}";
+        string parentCode = $"GAP_PARENT_{Interlocked.Increment(ref s_sequence)}";
+        string childCode = $"GAP_CHILD_{s_sequence}";
 
         using var scope = _services.CreateScope();
         var create = scope.ServiceProvider.GetRequiredService<CreateCategory>();
@@ -189,7 +189,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
             new RecordPurchaseCommand(Next(), amount, [new ExpenseCommand("Line", amount)]));
 
     private static byte[] Jpeg()
-        => [0xFF, 0xD8, 0xFF, 0xE0, (byte)_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x06, (byte)(_sequence >> 8)];
+        => [0xFF, 0xD8, 0xFF, 0xE0, (byte)s_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x06, (byte)(s_sequence >> 8)];
 
-    private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
+    private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 }

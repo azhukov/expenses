@@ -18,7 +18,7 @@ public sealed class RepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     /// Far from every other class's data, because the unique index on
     /// <c>(occurred_at, amount)</c> is shared by the whole suite.
     /// </summary>
-    private static readonly DateTime Occurred = new(2031, 3, 14, 9, 0, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2031, 3, 14, 9, 0, 0, DateTimeKind.Unspecified);
 
     private ServiceProvider _services = null!;
 
@@ -214,5 +214,5 @@ public sealed class RepositoryTests(PostgresFixture postgres) : IAsyncLifetime
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChanges();
     }
 
-    private static DateTime At(int minute) => Occurred.AddMinutes(minute);
+    private static DateTime At(int minute) => s_occurred.AddMinutes(minute);
 }

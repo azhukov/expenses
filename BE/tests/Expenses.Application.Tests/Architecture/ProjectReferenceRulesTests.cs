@@ -75,7 +75,7 @@ public sealed class ProjectReferenceRulesTests
 
     private static IEnumerable<string> ReferencesOf(string project, string element)
     {
-        string path = Path.Combine(SolutionRoot.Value, project, project + ".csproj");
+        string path = Path.Combine(s_solutionRoot.Value, project, project + ".csproj");
         Assert.True(File.Exists(path), $"Expected project file at {path}");
 
         return XDocument.Load(path)
@@ -85,7 +85,7 @@ public sealed class ProjectReferenceRulesTests
             .Select(include => include!.Replace('\\', Path.DirectorySeparatorChar));
     }
 
-    private static readonly Lazy<string> SolutionRoot = new(() =>
+    private static readonly Lazy<string> s_solutionRoot = new(() =>
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Expenses.sln")))

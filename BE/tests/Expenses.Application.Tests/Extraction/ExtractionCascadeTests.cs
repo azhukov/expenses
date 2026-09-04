@@ -12,7 +12,7 @@ namespace Expenses.Application.Tests.Extraction;
 /// </summary>
 public sealed class ExtractionCascadeTests
 {
-    private static readonly ReceiptImageContent Image = new(1, "image/jpeg", [0xFF, 0xD8, 0xFF, 0x01]);
+    private static readonly ReceiptImageContent s_image = new(1, "image/jpeg", [0xFF, 0xD8, 0xFF, 0x01]);
 
     [Fact]
     public async Task Stage_provenance_is_recorded()
@@ -20,7 +20,7 @@ public sealed class ExtractionCascadeTests
         var cheap = FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap"));
         var cascade = new ExtractionCascade([FakeStage.Silent("fiscal-qr", ExtractionStageRole.Opportunistic), cheap]);
 
-        var outcome = await cascade.Run(Image);
+        var outcome = await cascade.Run(s_image);
 
         Assert.Equal(["fiscal-qr", "vision-cheap"], outcome.StagesRun);
         Assert.Equal(["fiscal-qr", "vision-cheap"], outcome.Result?.StagesRun);
@@ -34,11 +34,11 @@ public sealed class ExtractionCascadeTests
         var withStage = await new ExtractionCascade([
             FakeStage.Silent("fiscal-qr", ExtractionStageRole.Opportunistic),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         var withoutStage = await new ExtractionCascade([
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(withoutStage.State, withStage.State);
         Assert.Equal(Receipt.ExtractionState.Extracted, withStage.State);
@@ -59,7 +59,7 @@ public sealed class ExtractionCascadeTests
         var outcome = await new ExtractionCascade([
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")),
             expensive,
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(0, expensive.Runs);
         Assert.Equal(Receipt.ExtractionState.Extracted, outcome.State);
@@ -78,7 +78,7 @@ public sealed class ExtractionCascadeTests
         var outcome = await new ExtractionCascade([
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Failing("vision-cheap")),
             expensive,
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(1, expensive.Runs);
         Assert.Equal(Receipt.ExtractionState.Extracted, outcome.State);
@@ -101,7 +101,7 @@ public sealed class ExtractionCascadeTests
                 "vision-expensive",
                 ExtractionStageRole.Fallback,
                 Results.Failing("vision-expensive")),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(Receipt.ExtractionState.NeedsReview, outcome.State);
         Assert.Equal("vision-expensive", outcome.Result?.Provenance["total"]);
@@ -118,7 +118,7 @@ public sealed class ExtractionCascadeTests
                 "vision-expensive",
                 ExtractionStageRole.Fallback,
                 Results.Failing("vision-expensive", alsoBreakDiscount: true)),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(Receipt.ExtractionState.NeedsReview, outcome.State);
         Assert.Equal("vision-cheap", outcome.Result?.Provenance["total"]);
@@ -138,7 +138,7 @@ public sealed class ExtractionCascadeTests
             FakeStage.Retrieving("fiscal-portal", Results.Reconciling("fiscal-portal"), new FiscalIdentifiers(Jikr: "9f8e7d")),
             cheap,
             expensive,
-        ]).Run(Image);
+        ]).Run(s_image);
 
         // No probabilistic stage runs at all behind an invoice the tax authority stated and the
         // arithmetic confirmed: asking one would be asking for a worse answer to a settled question.
@@ -156,7 +156,7 @@ public sealed class ExtractionCascadeTests
             FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("d1b2c3")),
             FakeStage.Retrieving("fiscal-portal", Results.Reconciling("fiscal-portal"), new FiscalIdentifiers(Jikr: "9f8e7d")),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Fallback, Results.Reconciling("vision-cheap")),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.All(
             outcome.Result!.Candidates,
@@ -169,7 +169,7 @@ public sealed class ExtractionCascadeTests
         var outcome = await new ExtractionCascade([
             FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("d1b2c3", IssuerTaxNumber: "02365928")),
             FakeStage.Retrieving("fiscal-portal", Results.Reconciling("fiscal-portal"), new FiscalIdentifiers(Jikr: "9f8e7d")),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         // The identifier the code carried and the one only the service knows, held together, and
         // recorded as having come from the service rather than from the code (D24).
@@ -191,7 +191,7 @@ public sealed class ExtractionCascadeTests
             FakeStage.Silent("fiscal-portal", ExtractionStageRole.Primary),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Fallback, Results.Reconciling("vision-cheap")),
             expensive,
-        ]).Run(Image);
+        ]).Run(s_image);
 
         // Exactly as a receipt carrying no code at all: the cheap tier answers, and the expensive
         // one is still held back for a failed check rather than run for a failed decode.
@@ -215,7 +215,7 @@ public sealed class ExtractionCascadeTests
             FakeStage.Silent("fiscal-portal", ExtractionStageRole.Primary),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Fallback, Results.Failing("vision-cheap")),
             expensive,
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(1, expensive.Runs);
         Assert.Equal(Receipt.ExtractionState.Extracted, outcome.State);
@@ -227,7 +227,7 @@ public sealed class ExtractionCascadeTests
     {
         var outcome = await new ExtractionCascade([
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Failing("vision-cheap")),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(Receipt.ExtractionState.NeedsReview, outcome.State);
         var failure = Assert.Single(outcome.Validation!.Failures);
@@ -250,7 +250,7 @@ public sealed class ExtractionCascadeTests
                         [ExtractedValues.MerchantName] = 0.41m,
                         [ExtractedValues.Total] = 0.20m,
                     })),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         // The arithmetic passed, so only the unverifiable value moves it to review — and a
         // reported score about a number arithmetic already decided is ignored (D20).
@@ -265,7 +265,7 @@ public sealed class ExtractionCascadeTests
         var outcome = await new ExtractionCascade([
             FakeStage.Silent("vision-cheap", ExtractionStageRole.Primary),
             FakeStage.Silent("vision-expensive", ExtractionStageRole.Fallback),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(Receipt.ExtractionState.Failed, outcome.State);
         Assert.Null(outcome.Result);
@@ -278,7 +278,7 @@ public sealed class ExtractionCascadeTests
         var outcome = await new ExtractionCascade([
             FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("d1b2c3", "9f8e7d")),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal("d1b2c3", outcome.Extracted.Ikof);
         Assert.Equal(Receipt.FiscalSource.DecodedFromCode, outcome.FiscalSource);
@@ -291,7 +291,7 @@ public sealed class ExtractionCascadeTests
         var decoded = await new ExtractionCascade([
             FakeStage.Silent("fiscal-qr", ExtractionStageRole.Opportunistic),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")),
-        ]).Run(Image);
+        ]).Run(s_image);
 
         Assert.Equal(Receipt.ExtractionState.Extracted, decoded.State);
         Assert.True(decoded.Extracted.IsEmpty);
@@ -305,7 +305,7 @@ public sealed class ExtractionCascadeTests
         var outcome = await new ExtractionCascade([
             FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("ffffff")),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")),
-        ]).Run(Image, new FiscalIdentifiers("d1b2c3"));
+        ]).Run(s_image, new FiscalIdentifiers("d1b2c3"));
 
         // The arithmetic passed; the disagreement alone is what moves it to review, and both
         // values survive for the reviewer to judge.
@@ -320,7 +320,7 @@ public sealed class ExtractionCascadeTests
         var outcome = await new ExtractionCascade([
             FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("d1b2c3")),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")),
-        ]).Run(Image, new FiscalIdentifiers("d1b2c3"));
+        ]).Run(s_image, new FiscalIdentifiers("d1b2c3"));
 
         Assert.Equal(Receipt.ExtractionState.Extracted, outcome.State);
         Assert.Equal("d1b2c3", outcome.Extracted.Ikof);
@@ -346,7 +346,7 @@ public sealed class ExtractionCascadeTests
             return ExtractionStageOutcome.Nothing;
         });
 
-        await new ExtractionCascade([expensive, cheap, qr]).Run(Image);
+        await new ExtractionCascade([expensive, cheap, qr]).Run(s_image);
 
         Assert.Equal(["fiscal-qr", "vision-cheap", "vision-expensive"], order);
     }

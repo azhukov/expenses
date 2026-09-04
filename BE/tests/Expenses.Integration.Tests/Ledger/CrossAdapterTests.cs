@@ -13,9 +13,9 @@ namespace Expenses.Integration.Tests.Ledger;
 [Collection(PostgresCollection.Name)]
 public sealed class CrossAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private static readonly DateTime Occurred = new(2037, 6, 7, 13, 20, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2037, 6, 7, 13, 20, 0, DateTimeKind.Unspecified);
 
-    private static int _sequence;
+    private static int s_sequence;
 
     private ExpensesApi _api = null!;
     private HttpClient _http = null!;
@@ -165,5 +165,5 @@ public sealed class CrossAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         return JsonDocument.Parse(content.Text).RootElement.Clone();
     }
 
-    private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
+    private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 }

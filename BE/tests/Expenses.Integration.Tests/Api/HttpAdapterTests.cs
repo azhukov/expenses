@@ -15,14 +15,14 @@ namespace Expenses.Integration.Tests.Api;
 [Collection(PostgresCollection.Name)]
 public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private static readonly DateTime Occurred = new(2034, 9, 10, 15, 45, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2034, 9, 10, 15, 45, 0, DateTimeKind.Unspecified);
 
     private static readonly string[] s_terminalStates = ["Extracted", "NeedsReview", "Failed"];
 
-    private static int _sequence;
+    private static int s_sequence;
 
     private ExpensesApi _api = null!;
-    private HttpClient _client = null!;
+    private HttpClient _client = null!;
 
     public async Task InitializeAsync()
     {
@@ -246,7 +246,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         var units = await ExpensesApi.Read<JsonElement>(await _client.GetAsync("/units"));
         Assert.Contains(units.EnumerateArray(), unit => unit.GetProperty("code").GetString() == "KG");
 
-        string code = $"HTTP_TEST_{Interlocked.Increment(ref _sequence)}";
+        string code = $"HTTP_TEST_{Interlocked.Increment(ref s_sequence)}";
         var created = await _client.PostAsJsonAsync("/categories", new { code, name = "Created over HTTP" });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
@@ -377,7 +377,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 
     private static object Line(string description, decimal amount) => new { description, amount };
 
-    private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
+    private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 
     private static byte[] Jpeg(byte seed)
         => [0xFF, 0xD8, 0xFF, 0xE0, seed, 0x4A, 0x46, 0x49, 0x46, 0x00, seed, 0x03];

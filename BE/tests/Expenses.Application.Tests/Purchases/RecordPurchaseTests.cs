@@ -14,7 +14,7 @@ namespace Expenses.Application.Tests.Purchases;
 /// </summary>
 public sealed class RecordPurchaseTests
 {
-    private static readonly DateTime Occurred = new(2026, 8, 19, 14, 3, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2026, 8, 19, 14, 3, 0, DateTimeKind.Unspecified);
 
     private readonly InMemoryLedger _ledger = new();
 
@@ -41,7 +41,7 @@ public sealed class RecordPurchaseTests
     public async Task Purchase_with_no_expenses_is_rejected()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            Subject.Execute(new RecordPurchaseCommand(Occurred, 80.00m, [])));
+            Subject.Execute(new RecordPurchaseCommand(s_occurred, 80.00m, [])));
 
         Assert.Equal(ApplicationErrors.PurchaseNoExpenses, error.Error.Code);
         Assert.Empty(_ledger.Purchases);
@@ -51,7 +51,7 @@ public sealed class RecordPurchaseTests
     public async Task Amounts_do_not_reconcile()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             80.00m,
             [new ExpenseCommand("Shoes", 60.00m), new ExpenseCommand("Socks", 18.50m)])));
 
@@ -65,7 +65,7 @@ public sealed class RecordPurchaseTests
     public async Task Reconciliation_is_exact_not_approximate()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             10.00m,
             [
                 new ExpenseCommand("Third", 3.33m),
@@ -81,7 +81,7 @@ public sealed class RecordPurchaseTests
     public async Task Amounts_cannot_be_negative()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             -12.40m,
             [new ExpenseCommand("Refund", -12.40m)])));
 
@@ -91,7 +91,7 @@ public sealed class RecordPurchaseTests
     [Fact]
     public async Task Same_purchase_submitted_twice()
     {
-        var command = new RecordPurchaseCommand(Occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]);
+        var command = new RecordPurchaseCommand(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]);
 
         var first = await Subject.Execute(command);
         var second = await Subject.Execute(command);
@@ -107,10 +107,10 @@ public sealed class RecordPurchaseTests
     {
         // The guard queried, found nothing, and another writer committed first — the case the
         // unique index exists for (D4). The insert must lose and the winner must be returned.
-        _ledger.ConcurrentWinner = Purchase.Record(Occurred, 12.40m, [Expense.Record("Lunch", 12.40m)]);
+        _ledger.ConcurrentWinner = Purchase.Record(s_occurred, 12.40m, [Expense.Record("Lunch", 12.40m)]);
 
         var result = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             12.40m,
             [new ExpenseCommand("Lunch", 12.40m)]));
 
@@ -122,10 +122,10 @@ public sealed class RecordPurchaseTests
     [Fact]
     public async Task Expenses_of_a_duplicate_submission_are_ignored()
     {
-        await Subject.Execute(new RecordPurchaseCommand(Occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]));
+        await Subject.Execute(new RecordPurchaseCommand(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]));
 
         var second = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             12.40m,
             [new ExpenseCommand("Soup", 5.40m), new ExpenseCommand("Bread", 7.00m)]));
 
@@ -137,9 +137,9 @@ public sealed class RecordPurchaseTests
     [Fact]
     public async Task Differing_amount_is_not_a_duplicate()
     {
-        await Subject.Execute(new RecordPurchaseCommand(Occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]));
+        await Subject.Execute(new RecordPurchaseCommand(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]));
         var second = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             12.50m,
             [new ExpenseCommand("Lunch", 12.50m)]));
 
@@ -150,7 +150,7 @@ public sealed class RecordPurchaseTests
     [Fact]
     public async Task Differing_occurrence_is_not_a_duplicate()
     {
-        await Subject.Execute(new RecordPurchaseCommand(Occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]));
+        await Subject.Execute(new RecordPurchaseCommand(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]));
         var second = await Subject.Execute(new RecordPurchaseCommand(
             new DateTime(2026, 8, 19, 15, 20, 0, DateTimeKind.Unspecified),
             12.40m,
@@ -216,7 +216,7 @@ public sealed class RecordPurchaseTests
     public async Task First_purchase_from_a_new_merchant()
     {
         var result = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m)],
             new MerchantCommand("AROMA", "02440261")));
@@ -232,13 +232,13 @@ public sealed class RecordPurchaseTests
     public async Task Second_purchase_from_a_known_merchant()
     {
         await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m)],
             new MerchantCommand("AROMA", "02440261")));
 
         var second = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred.AddDays(1),
+            s_occurred.AddDays(1),
             3.20m,
             [new ExpenseCommand("Coffee", 3.20m)],
             new MerchantCommand("AROMA", "02440261")));
@@ -252,13 +252,13 @@ public sealed class RecordPurchaseTests
     public async Task Same_tax_number_under_a_different_spelling_is_the_same_merchant()
     {
         await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m)],
             new MerchantCommand("AROMA", "02440261")));
 
         var second = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred.AddDays(1),
+            s_occurred.AddDays(1),
             3.20m,
             [new ExpenseCommand("Coffee", 3.20m)],
             new MerchantCommand("AR0MA d.o.o.", "02440261")));
@@ -274,7 +274,7 @@ public sealed class RecordPurchaseTests
     public async Task Matching_later_does_not_erase_merchant_text()
     {
         var result = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m)],
             new MerchantCommand("Aroma 034")));
@@ -287,7 +287,7 @@ public sealed class RecordPurchaseTests
     public async Task Purchase_with_no_merchant()
     {
         var result = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m)]));
 
@@ -303,7 +303,7 @@ public sealed class RecordPurchaseTests
         commuting.Deactivate();
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             2.00m,
             [new ExpenseCommand("Bus fare", 2.00m, CategoryCode: "COMMUTING")])));
 
@@ -318,7 +318,7 @@ public sealed class RecordPurchaseTests
         bunch.Deactivate();
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             2.00m,
             [new ExpenseCommand("Radishes", 2.00m, UnitCode: "BUNCH")])));
 
@@ -329,7 +329,7 @@ public sealed class RecordPurchaseTests
     public async Task Unknown_category_code_is_rejected()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             2.00m,
             [new ExpenseCommand("Bus fare", 2.00m, CategoryCode: "NOPE")])));
 
@@ -342,7 +342,7 @@ public sealed class RecordPurchaseTests
         var kilogram = _ledger.Given(Unit.Create("KG", "Kilogram", "kg", Unit.UnitKind.Mass));
 
         var result = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             1.06m,
             [new ExpenseCommand(
                 "Bananas",
@@ -363,7 +363,7 @@ public sealed class RecordPurchaseTests
     public async Task Savings_are_reported_for_a_purchase()
     {
         var result = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [
                 new ExpenseCommand("Sladoled", 4.49m, ListUnitPrice: 8.50m, DiscountAmount: 4.01m),
@@ -378,7 +378,7 @@ public sealed class RecordPurchaseTests
     public async Task Negative_discount_is_rejected()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             4.49m,
             [new ExpenseCommand("Sladoled", 4.49m, ListUnitPrice: 8.50m, DiscountAmount: -4.01m)])));
 
@@ -389,7 +389,7 @@ public sealed class RecordPurchaseTests
     public async Task List_price_and_discount_are_recorded_together_or_not_at_all()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             4.49m,
             [new ExpenseCommand("Sladoled", 4.49m, ListUnitPrice: 8.50m)])));
 
@@ -404,7 +404,7 @@ public sealed class RecordPurchaseTests
         var tempKey = _ledger.GivenTemporaryCapture(Jpeg(1));
 
         var result = await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m)],
             Capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted)));
@@ -420,7 +420,7 @@ public sealed class RecordPurchaseTests
         var tempKey = _ledger.GivenTemporaryCapture(Jpeg(2));
 
         await Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m)],
             Capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted)));
@@ -435,7 +435,7 @@ public sealed class RecordPurchaseTests
         var tempKey = _ledger.GivenTemporaryCapture(Jpeg(3));
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 5.00m)],
             Capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted))));
@@ -452,7 +452,7 @@ public sealed class RecordPurchaseTests
     public async Task Confirming_an_unknown_or_expired_key()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Execute(new RecordPurchaseCommand(
-            Occurred,
+            s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m)],
             Capture: new CapturedReceiptCommand(Guid.NewGuid(), Receipt.ExtractionState.Extracted))));

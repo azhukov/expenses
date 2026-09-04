@@ -21,9 +21,9 @@ namespace Expenses.Integration.Tests.Ledger;
 [Collection(PostgresCollection.Name)]
 public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private static readonly DateTime Occurred = new(2036, 4, 5, 10, 0, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2036, 4, 5, 10, 0, 0, DateTimeKind.Unspecified);
 
-    private static int _sequence;
+    private static int s_sequence;
 
     private ServiceProvider _services = null!;
 
@@ -204,7 +204,7 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     [Fact]
     public async Task A_purchase_with_a_deactivated_category_is_refused_but_history_keeps_it()
     {
-        string code = $"RETIRE_{Interlocked.Increment(ref _sequence)}";
+        string code = $"RETIRE_{Interlocked.Increment(ref s_sequence)}";
 
         using var scope = _services.CreateScope();
         var categories = scope.ServiceProvider.GetRequiredService<ICategoryRepository>();
@@ -241,5 +241,5 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     /// <summary>A PNG carrying a QR code, so the decode stage has something real to read.</summary>
     private static byte[] QrReceipt(string payload) => QrImage.Png(payload);
 
-    private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
+    private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 }

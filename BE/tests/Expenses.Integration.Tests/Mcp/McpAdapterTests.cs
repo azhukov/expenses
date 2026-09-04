@@ -13,13 +13,13 @@ namespace Expenses.Integration.Tests.Mcp;
 [Collection(PostgresCollection.Name)]
 public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private static readonly DateTime Occurred = new(2035, 2, 3, 8, 15, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2035, 2, 3, 8, 15, 0, DateTimeKind.Unspecified);
 
     private static readonly string[] s_terminalStates = ["Extracted", "NeedsReview", "Failed"];
 
-    private static int _sequence;
+    private static int s_sequence;
 
-    private ExpensesMcp _mcp = null!;
+    private ExpensesMcp _mcp = null!;
 
     public async Task InitializeAsync()
     {
@@ -229,7 +229,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     private async Task<long> GivenExtractedReceipt()
     {
         var captured = await _mcp.Resolve<CaptureReceipt>().Execute(
-            [0xFF, 0xD8, 0xFF, 0xE0, (byte)_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x04],
+            [0xFF, 0xD8, 0xFF, 0xE0, (byte)s_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x04],
             new Application.Extraction.FiscalIdentifiers("MCP-IKOF-1"));
 
         // A receipt is addressed by its purchase; there is no image identifier anywhere (D11).
@@ -286,5 +286,5 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         return JsonDocument.Parse(content.Text).RootElement.Clone();
     }
 
-    private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
+    private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 }

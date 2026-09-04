@@ -15,7 +15,7 @@ namespace Expenses.Infrastructure.Persistence.Configurations;
 /// </summary>
 internal static class CategorySeed
 {
-    private static readonly (string Code, string Name, string? ParentCode)[] Rows =
+    private static readonly (string Code, string Name, string? ParentCode)[] s_rows =
     [
         ("GROCERIES", "Groceries", null),
         ("PRODUCE", "Fruit and vegetables", "GROCERIES"),
@@ -92,7 +92,7 @@ internal static class CategorySeed
     {
         bool added = false;
 
-        foreach (var (code, name, parentCode) in Rows.Where(row => (row.ParentCode is not null) == parented))
+        foreach (var (code, name, parentCode) in s_rows.Where(row => (row.ParentCode is not null) == parented))
         {
             // A code that is already there is left exactly as it is: its name may be the user's,
             // and this run has nothing to say about it.

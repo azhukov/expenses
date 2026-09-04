@@ -13,7 +13,7 @@ namespace Expenses.Application.Tests.Receipts;
 /// </summary>
 public sealed class CandidateTests
 {
-    private static readonly DateTime Occurred = new(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified);
 
     private readonly InMemoryLedger _ledger = new();
 
@@ -190,7 +190,7 @@ public sealed class CandidateTests
         var stored = _ledger.GivenReceiptFile(Jpeg(1));
 
         return _ledger.Given(Purchase.Record(
-            Occurred,
+            s_occurred,
             amount,
             [Expense.Record("Groceries", amount)],
             receipt: stored.AsReceipt(Receipt.ExtractionState.Extracted)));

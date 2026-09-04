@@ -19,7 +19,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
     public const string Stage = "fiscal-portal";
 
     /// <summary>What the Megapromet receipt's own QR carries, and all the portal is given.</summary>
-    private static readonly FiscalIdentifiers Decoded = new(
+    private static readonly FiscalIdentifiers s_decoded = new(
         DecoderRegressionTests.Ikof,
         Jikr: null,
         IssuerTaxNumber: "02365928",
@@ -32,7 +32,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.Answering();
         await using var services = Services(portal);
 
-        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Decoded);
+        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
 
         Assert.NotNull(invoice);
         Assert.Equal(7, invoice.Result.PurchaseId);
@@ -74,7 +74,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.Answering();
         await using var services = Services(portal);
 
-        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Decoded);
+        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
 
         // `unitPriceAfterVat` is a unit price and the check it feeds is a line-level one, so it
         // arrives extended by the quantity: 15.00 per kilogram over 0.548 kg is a list price of
@@ -94,7 +94,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.Answering();
         await using var services = Services(portal);
 
-        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Decoded);
+        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
 
         // The JIKR the fiscal code does not carry. It is the portal's `fic`, and this is the only
         // place it is ever known from (D24).
@@ -108,7 +108,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.WithNoRecord();
         await using var services = Services(portal);
 
-        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Decoded));
+        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded));
     }
 
     [Theory]
@@ -121,7 +121,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
 
         // Nothing rather than an exception: a stage that produced nothing is an ordinary outcome,
         // and a government portal having a bad day is not a problem with the receipt (D26).
-        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Decoded));
+        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded));
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.Hanging();
         await using var services = Services(portal, ("Extraction:Portal:TimeoutMilliseconds", "250"));
 
-        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Decoded));
+        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded));
     }
 
     [Fact]
@@ -138,11 +138,11 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
     {
         await using var portal = await FiscalPortalStub.Answering();
         await using var services = Services(portal);
-        await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Decoded);
+        await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
 
         // Resolved afresh, as a second extraction run would: the answer outlives the call that
         // obtained it, not merely the object that made it.
-        var again = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Decoded);
+        var again = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
 
         // Re-running extraction asks the portal nothing it has already answered.
         Assert.NotNull(again);

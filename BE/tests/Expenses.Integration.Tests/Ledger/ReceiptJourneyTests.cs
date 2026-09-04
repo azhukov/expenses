@@ -14,9 +14,9 @@ namespace Expenses.Integration.Tests.Ledger;
 [Collection(PostgresCollection.Name)]
 public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private static readonly DateTime Occurred = new(2038, 8, 9, 17, 5, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2038, 8, 9, 17, 5, 0, DateTimeKind.Unspecified);
 
-    private static int _sequence;
+    private static int s_sequence;
 
     public Task InitializeAsync() => postgres.Migrate();
 
@@ -138,7 +138,7 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
 
     /// <summary>Distinct bytes per call, so each journey owns its stored image.</summary>
     private static byte[] Jpeg()
-        => [0xFF, 0xD8, 0xFF, 0xE0, (byte)_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x05, (byte)(_sequence >> 8)];
+        => [0xFF, 0xD8, 0xFF, 0xE0, (byte)s_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x05, (byte)(s_sequence >> 8)];
 
-    private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
+    private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 }

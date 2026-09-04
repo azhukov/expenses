@@ -10,7 +10,7 @@ namespace Expenses.Application.Tests.Receipts;
 /// <summary>Scenarios from receipt-ingestion: "Extraction can be re-run".</summary>
 public sealed class RerunExtractionTests
 {
-    private static readonly DateTime Occurred = new(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified);
 
     private readonly InMemoryLedger _ledger = new();
 
@@ -61,7 +61,7 @@ public sealed class RerunExtractionTests
     [Fact]
     public async Task Re_running_a_purchase_without_a_receipt_is_reported()
     {
-        var purchase = _ledger.Given(Purchase.Record(Occurred, 8.48m, [Expense.Record("Groceries", 8.48m)]));
+        var purchase = _ledger.Given(Purchase.Record(s_occurred, 8.48m, [Expense.Record("Groceries", 8.48m)]));
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
             Subject().Execute(purchase.Id));
@@ -85,7 +85,7 @@ public sealed class RerunExtractionTests
         var stored = _ledger.GivenReceiptFile(Jpeg(1));
 
         return _ledger.Given(Purchase.Record(
-            Occurred,
+            s_occurred,
             8.48m,
             [Expense.Record("Groceries", 8.48m)],
             receipt: stored.AsReceipt(state, failureReason)));

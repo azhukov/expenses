@@ -10,11 +10,11 @@ public sealed record ApplicationError(
     string Message,
     IReadOnlyDictionary<string, object?> Fields)
 {
-    private static readonly IReadOnlyDictionary<string, object?> NoFields = new Dictionary<string, object?>();
+    private static readonly IReadOnlyDictionary<string, object?> s_noFields = new Dictionary<string, object?>();
 
     public static ApplicationError From(string code, string message, params (string Name, object? Value)[] fields)
         => new(code, message, fields.Length == 0
-            ? NoFields
+            ? s_noFields
             : fields.ToDictionary(field => field.Name, field => field.Value));
 
     /// <summary>

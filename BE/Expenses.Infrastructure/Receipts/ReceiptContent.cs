@@ -20,46 +20,46 @@ internal static class ReceiptContent
     /// <summary>The formats a receipt may arrive in, for the message a rejection has to carry.</summary>
     public static readonly string[] Accepted = [Jpeg, Png, WebP, Heic, Pdf];
 
-    private static readonly byte[] JpegMagic = [0xFF, 0xD8, 0xFF];
-    private static readonly byte[] PngMagic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-    private static readonly byte[] Riff = "RIFF"u8.ToArray();
-    private static readonly byte[] WebP4Cc = "WEBP"u8.ToArray();
-    private static readonly byte[] FileTypeBox = "ftyp"u8.ToArray();
-    private static readonly byte[] PdfMagic = "%PDF-"u8.ToArray();
+    private static readonly byte[] s_jpegMagic = [0xFF, 0xD8, 0xFF];
+    private static readonly byte[] s_pngMagic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    private static readonly byte[] s_riff = "RIFF"u8.ToArray();
+    private static readonly byte[] s_webP4Cc = "WEBP"u8.ToArray();
+    private static readonly byte[] s_fileTypeBox = "ftyp"u8.ToArray();
+    private static readonly byte[] s_pdfMagic = "%PDF-"u8.ToArray();
 
     /// <summary>
     /// HEIC declares itself in the brand of its file-type box. The variants are all the same
     /// container as far as storage is concerned, so they are reported as one type.
     /// </summary>
-    private static readonly string[] HeicBrands = ["heic", "heix", "hevc", "heim", "heis", "mif1", "msf1"];
+    private static readonly string[] s_heicBrands = ["heic", "heix", "hevc", "heim", "heis", "mif1", "msf1"];
 
     /// <summary>Null when the content is not one of the accepted formats.</summary>
     public static string? Detect(ReadOnlySpan<byte> content)
     {
-        if (content.StartsWith(JpegMagic))
+        if (content.StartsWith(s_jpegMagic))
         {
             return Jpeg;
         }
 
-        if (content.StartsWith(PngMagic))
+        if (content.StartsWith(s_pngMagic))
         {
             return Png;
         }
 
-        if (content.StartsWith(PdfMagic))
+        if (content.StartsWith(s_pdfMagic))
         {
             return Pdf;
         }
 
         // RIFF....WEBP — the four bytes between the container tag and the format tag are a length.
-        if (content.Length >= 12 && content.StartsWith(Riff) && content[8..12].SequenceEqual(WebP4Cc))
+        if (content.Length >= 12 && content.StartsWith(s_riff) && content[8..12].SequenceEqual(s_webP4Cc))
         {
             return WebP;
         }
 
         if (content.Length >= 12
-            && content[4..8].SequenceEqual(FileTypeBox)
-            && HeicBrands.Contains(System.Text.Encoding.ASCII.GetString(content[8..12])))
+            && content[4..8].SequenceEqual(s_fileTypeBox)
+            && s_heicBrands.Contains(System.Text.Encoding.ASCII.GetString(content[8..12])))
         {
             return Heic;
         }

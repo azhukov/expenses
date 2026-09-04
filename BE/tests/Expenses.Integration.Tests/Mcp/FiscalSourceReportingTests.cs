@@ -17,9 +17,9 @@ namespace Expenses.Integration.Tests.Mcp;
 [Collection(PostgresCollection.Name)]
 public sealed class FiscalSourceReportingTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private static readonly DateTime Occurred = new(2042, 6, 7, 11, 45, 0, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2042, 6, 7, 11, 45, 0, DateTimeKind.Unspecified);
 
-    private static int _sequence;
+    private static int s_sequence;
 
     private FiscalPortalStub _portal = null!;
 
@@ -86,7 +86,7 @@ public sealed class FiscalSourceReportingTests(PostgresFixture postgres) : IAsyn
             DecoderRegressionTests.Photograph(fixture).Content);
 
         var recorded = await _mcp.Resolve<RecordPurchase>().Execute(new RecordPurchaseCommand(
-            Occurred.AddMinutes(Interlocked.Increment(ref _sequence)),
+            s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence)),
             59.65m,
             [new ExpenseCommand("Receipt", 59.65m)],
             Capture: new CapturedReceiptCommand(captured.TempKey, captured.State, captured.FailureReason)));

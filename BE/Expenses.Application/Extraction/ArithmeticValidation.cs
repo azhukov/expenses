@@ -61,11 +61,11 @@ public sealed record ArithmeticCheck(
     string Description,
     IReadOnlyDictionary<string, decimal?> Values)
 {
-    private static readonly IReadOnlyDictionary<string, decimal?> NoValues =
+    private static readonly IReadOnlyDictionary<string, decimal?> s_noValues =
         new Dictionary<string, decimal?>();
 
     public static ArithmeticCheck NotApplicable(string name, string description)
-        => new(name, CheckOutcome.NotApplicable, description, NoValues);
+        => new(name, CheckOutcome.NotApplicable, description, s_noValues);
 
     // Records compare a dictionary field by reference, which would make two identically
     // computed reports unequal. The values are part of the check, so they are compared as such.

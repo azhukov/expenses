@@ -17,7 +17,7 @@ namespace Expenses.Integration.Tests.Persistence;
 [Collection(PostgresCollection.Name)]
 public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private static readonly DateTime Occurred = new(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified);
+    private static readonly DateTime s_occurred = new(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified);
 
     public Task InitializeAsync() => postgres.Migrate();
 
@@ -217,7 +217,7 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
     /// A distinct occurrence per test, because the unique index on <c>(occurred_at, amount)</c> is
     /// shared by every test in the class and a collision would be someone else's failure.
     /// </summary>
-    private static DateTime At(int minute) => Occurred.AddMinutes(minute);
+    private static DateTime At(int minute) => s_occurred.AddMinutes(minute);
 
     private static byte[] Hash(byte seed) => [.. Enumerable.Repeat(seed, Receipt.ContentHashLength)];
 }

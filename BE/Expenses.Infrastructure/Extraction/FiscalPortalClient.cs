@@ -41,7 +41,7 @@ internal sealed class FiscalPortalClient(
 
     public const string Stage = "fiscal-portal";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web);
 
     /// <summary>
     /// Answers already given, by the invoice code they were given for. Re-running extraction on a
@@ -118,7 +118,7 @@ internal sealed class FiscalPortalClient(
             // An empty body is the service saying it has no record, not a malformed answer.
             return string.IsNullOrWhiteSpace(body)
                 ? null
-                : JsonSerializer.Deserialize<VerifiedInvoice>(body, Json);
+                : JsonSerializer.Deserialize<VerifiedInvoice>(body, s_json);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException
             or OperationCanceledException or JsonException)
