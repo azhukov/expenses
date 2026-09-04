@@ -120,7 +120,7 @@ public sealed class ReferenceDataTests
             new DeactivateCategory(_ledger, _ledger).Execute("GROCERIES"));
 
         Assert.Equal(ApplicationErrors.CategoryHasActiveChildren, error.Error.Code);
-        Assert.Equal("PRODUCE", Assert.IsAssignableFrom<IEnumerable<string>>(error.Error.Fields["children"]).Single());
+        Assert.Equal("PRODUCE", Assert.IsType<IEnumerable<string>>(error.Error.Fields["children"], exactMatch: false).Single());
         Assert.True(_ledger.Categories.Single(category => category.Code == "GROCERIES").IsActive);
     }
 

@@ -126,7 +126,7 @@ public sealed class MerchantUseCaseTests
             new DeactivateMerchant(_ledger, _ledger).Execute(chain.Id));
 
         Assert.Equal(ApplicationErrors.MerchantHasActiveChildren, error.Error.Code);
-        Assert.Equal("Aroma 034", Assert.IsAssignableFrom<IEnumerable<string>>(error.Error.Fields["children"]).Single());
+        Assert.Equal("Aroma 034", Assert.IsType<IEnumerable<string>>(error.Error.Fields["children"], exactMatch: false).Single());
         Assert.True(chain.IsActive);
     }
 

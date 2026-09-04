@@ -19,20 +19,20 @@ public sealed class ProjectReferenceRulesTests
     [Fact]
     public void Application_depends_only_on_Domain()
     {
-        Assert.Equal(new[] { "Expenses.Domain" }, ProjectReferencesOf("Expenses.Application"));
+        Assert.Equal(["Expenses.Domain"], ProjectReferencesOf("Expenses.Application"));
     }
 
     [Fact]
     public void Infrastructure_depends_only_on_Application()
     {
-        Assert.Equal(new[] { "Expenses.Application" }, ProjectReferencesOf("Expenses.Infrastructure"));
+        Assert.Equal(["Expenses.Application"], ProjectReferencesOf("Expenses.Infrastructure"));
     }
 
     [Fact]
     public void Api_references_Application_and_Infrastructure_only()
     {
         Assert.Equal(
-            new[] { "Expenses.Application", "Expenses.Infrastructure" },
+            ["Expenses.Application", "Expenses.Infrastructure"],
             ProjectReferencesOf("Expenses.Api"));
     }
 
@@ -40,7 +40,7 @@ public sealed class ProjectReferenceRulesTests
     public void Mcp_references_Application_and_Infrastructure_only()
     {
         Assert.Equal(
-            new[] { "Expenses.Application", "Expenses.Infrastructure" },
+            ["Expenses.Application", "Expenses.Infrastructure"],
             ProjectReferencesOf("Expenses.Mcp"));
     }
 

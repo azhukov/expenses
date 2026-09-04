@@ -60,7 +60,7 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     [Fact]
     public async Task Icu_collation_orders_mixed_language_content()
     {
-        string[] codes = new[] { "COLL_ZEBRA", "COLL_ÄPFEL", "COLL_APPLE", "COLL_ČAJ", "COLL_CAKE" };
+        string[] codes = ["COLL_ZEBRA", "COLL_ÄPFEL", "COLL_APPLE", "COLL_ČAJ", "COLL_CAKE"];
 
         using (var scope = _services.CreateScope())
         {

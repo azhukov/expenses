@@ -15,9 +15,11 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private static readonly DateTime Occurred = new(2035, 2, 3, 8, 15, 0, DateTimeKind.Unspecified);
 
+    private static readonly string[] s_terminalStates = ["Extracted", "NeedsReview", "Failed"];
+
     private static int _sequence;
 
-    private ExpensesMcp _mcp = null!;
+    private ExpensesMcp _mcp = null!;
 
     public async Task InitializeAsync()
     {
@@ -221,7 +223,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         });
 
         // Synchronous now: the new terminal state and candidates are back in this same response.
-        Assert.Contains(reran.GetProperty("state").GetString(), new[] { "Extracted", "NeedsReview", "Failed" });
+        Assert.Contains(reran.GetProperty("state").GetString(), s_terminalStates);
     }
 
     private async Task<long> GivenExtractedReceipt()

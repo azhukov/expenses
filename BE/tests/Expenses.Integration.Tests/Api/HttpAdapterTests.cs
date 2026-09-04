@@ -17,10 +17,12 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private static readonly DateTime Occurred = new(2034, 9, 10, 15, 45, 0, DateTimeKind.Unspecified);
 
+    private static readonly string[] s_terminalStates = ["Extracted", "NeedsReview", "Failed"];
+
     private static int _sequence;
 
     private ExpensesApi _api = null!;
-    private HttpClient _client = null!;
+    private HttpClient _client = null!;
 
     public async Task InitializeAsync()
     {
@@ -182,7 +184,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.False(string.IsNullOrWhiteSpace(captured.GetProperty("tempKey").GetString()));
         Assert.Contains(
             captured.GetProperty("state").GetString(),
-            new[] { "Extracted", "NeedsReview", "Failed" });
+            s_terminalStates);
     }
 
     [Fact]
@@ -234,7 +236,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 
         Assert.Contains(
             reran.GetProperty("receipt").GetProperty("state").GetString(),
-            new[] { "Extracted", "NeedsReview", "Failed" });
+            s_terminalStates);
         Assert.NotEmpty(reran.GetProperty("result").GetProperty("candidates").EnumerateArray());
     }
 
