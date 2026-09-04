@@ -45,7 +45,7 @@ public sealed record ExtractionArithmetic(
 {
     /// <summary>Reduces an extraction result to the numbers the oracle can decide (D20).</summary>
     public static ExtractionArithmetic From(ExtractionResult result) => new(
-        result.Candidates.Select(ExtractedLineAmounts.From).ToList(),
+        [.. result.Candidates.Select(ExtractedLineAmounts.From)],
         result.Total,
         result.TaxRatePercent,
         result.TaxAmount);
@@ -64,18 +64,18 @@ public sealed record ArithmeticCheck(
     private static readonly IReadOnlyDictionary<string, decimal?> NoValues =
         new Dictionary<string, decimal?>();
 
-    public static ArithmeticCheck NotApplicable(string name, string description) =>
-        new(name, CheckOutcome.NotApplicable, description, NoValues);
+    public static ArithmeticCheck NotApplicable(string name, string description)
+        => new(name, CheckOutcome.NotApplicable, description, NoValues);
 
     // Records compare a dictionary field by reference, which would make two identically
     // computed reports unequal. The values are part of the check, so they are compared as such.
-    public bool Equals(ArithmeticCheck? other) =>
-        other is not null
+    public bool Equals(ArithmeticCheck? other)
+        => other is not null
         && Name == other.Name
         && Outcome == other.Outcome
         && Description == other.Description
         && Values.Count == other.Values.Count
-        && Values.All(entry => other.Values.TryGetValue(entry.Key, out var value) && value == entry.Value);
+        && Values.All(entry => other.Values.TryGetValue(entry.Key, out decimal? value) && value == entry.Value);
 
     public override int GetHashCode() => HashCode.Combine(Name, Outcome, Description, Values.Count);
 }
@@ -88,8 +88,8 @@ public sealed record ArithmeticValidationReport(IReadOnlyList<ArithmeticCheck> C
 
     public int FailedCount => Checks.Count(check => check.Outcome == CheckOutcome.Failed);
 
-    public IEnumerable<ArithmeticCheck> Failures =>
-        Checks.Where(check => check.Outcome == CheckOutcome.Failed);
+    public IEnumerable<ArithmeticCheck> Failures
+        => Checks.Where(check => check.Outcome == CheckOutcome.Failed);
 }
 
 /// <summary>
@@ -103,8 +103,8 @@ public static class ArithmeticValidator
     /// <summary>Money is compared at the precision a receipt prints it.</summary>
     private const int ComparisonScale = 2;
 
-    public static ArithmeticValidationReport Validate(ExtractionArithmetic result) =>
-        new([
+    public static ArithmeticValidationReport Validate(ExtractionArithmetic result)
+        => new([
             CheckLineSum(result),
             CheckLineDiscounts(result),
             CheckTotalTax(result),
@@ -119,8 +119,8 @@ public static class ArithmeticValidator
                 "No total, or no lines, to sum against.");
         }
 
-        var sum = result.Lines.Sum(line => line.Amount);
-        var agrees = Round(sum) == Round(total);
+        decimal sum = result.Lines.Sum(line => line.Amount);
+        bool agrees = Round(sum) == Round(total);
 
         return new ArithmeticCheck(
             ArithmeticChecks.LineSum,
@@ -150,7 +150,7 @@ public static class ArithmeticValidator
 
         foreach (var line in checkable)
         {
-            var computed = line.ListPrice!.Value - line.Discount!.Value;
+            decimal computed = line.ListPrice!.Value - line.Discount!.Value;
             if (Round(computed) == Round(line.Amount))
             {
                 continue;
@@ -189,9 +189,9 @@ public static class ArithmeticValidator
                 "No total, tax rate and tax amount to check against one another.");
         }
 
-        var rate = ratePercent / 100m;
-        var computed = Round(total / (1m + rate) * rate);
-        var agrees = computed == Round(taxAmount);
+        decimal rate = ratePercent / 100m;
+        decimal computed = Round(total / (1m + rate) * rate);
+        bool agrees = computed == Round(taxAmount);
 
         return new ArithmeticCheck(
             ArithmeticChecks.TotalTax,
@@ -208,6 +208,6 @@ public static class ArithmeticValidator
             });
     }
 
-    private static decimal Round(decimal value) =>
-        Math.Round(value, ComparisonScale, MidpointRounding.AwayFromZero);
+    private static decimal Round(decimal value)
+        => Math.Round(value, ComparisonScale, MidpointRounding.AwayFromZero);
 }

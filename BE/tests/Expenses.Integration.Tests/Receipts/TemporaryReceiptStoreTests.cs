@@ -40,7 +40,7 @@ public sealed class TemporaryReceiptStoreTests(PostgresFixture postgres) : IAsyn
     [Fact]
     public async Task Save_returns_a_fresh_key_on_every_call()
     {
-        var bytes = Jpeg(0x11);
+        byte[] bytes = Jpeg(0x11);
 
         var first = await Store.Save(bytes);
         var second = await Store.Save(bytes);
@@ -51,7 +51,7 @@ public sealed class TemporaryReceiptStoreTests(PostgresFixture postgres) : IAsyn
     [Fact]
     public async Task Saved_bytes_are_read_back()
     {
-        var bytes = Jpeg(0x01);
+        byte[] bytes = Jpeg(0x01);
 
         var capture = await Store.Save(bytes);
 
@@ -96,8 +96,8 @@ public sealed class TemporaryReceiptStoreTests(PostgresFixture postgres) : IAsyn
 
     private ITemporaryReceiptStore Store => _services.GetRequiredService<ITemporaryReceiptStore>();
 
-    private string PathOf(Guid key) =>
-        Directory.GetFiles(_root, $"{key:n}*", SearchOption.AllDirectories).Single();
+    private string PathOf(Guid key)
+        => Directory.GetFiles(_root, $"{key:n}*", SearchOption.AllDirectories).Single();
 
     private static byte[] Jpeg(byte seed) => [0xFF, 0xD8, 0xFF, 0xE0, seed, 0x4A, 0x46, 0x49, 0x46];
 }

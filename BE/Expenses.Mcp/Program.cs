@@ -2,11 +2,9 @@
 using Expenses.Infrastructure.Logging;
 using Expenses.Infrastructure.Persistence;
 using Expenses.Mcp;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Serilog;
 
-var transport = Environment.GetEnvironmentVariable("EXPENSES_MCP_TRANSPORT")?.Trim().ToLowerInvariant();
+string? transport = Environment.GetEnvironmentVariable("EXPENSES_MCP_TRANSPORT")?.Trim().ToLowerInvariant();
 
 if (transport == "http")
 {

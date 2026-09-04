@@ -9,8 +9,8 @@ namespace Expenses.Api;
 /// </summary>
 public static class ErrorHandling
 {
-    public static IApplicationBuilder UseExpensesErrors(this WebApplication app) =>
-        app.UseExceptionHandler(handler => handler.Run(async context =>
+    public static IApplicationBuilder UseExpensesErrors(this WebApplication app)
+        => app.UseExceptionHandler(handler => handler.Run(async context =>
         {
             var feature = context.Features.Get<IExceptionHandlerFeature>();
             var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
@@ -18,7 +18,7 @@ public static class ErrorHandling
 
             if (feature?.Error is ExpensesException expected)
             {
-                var status = StatusFor(expected.Error.Code);
+                int status = StatusFor(expected.Error.Code);
                 logger.LogInformation(
                     "Rejected {Method} {Path}: {Code}",
                     context.Request.Method,
@@ -35,7 +35,7 @@ public static class ErrorHandling
 
             // Anything else is ours, not the caller's. The correlation identifier is what ties the
             // response to the log entry; the response itself carries no detail at all.
-            var correlationId = context.TraceIdentifier;
+            string correlationId = context.TraceIdentifier;
             logger.LogError(
                 feature?.Error,
                 "Unhandled failure on {Method} {Path}. Correlation {CorrelationId}.",

@@ -77,8 +77,8 @@ public sealed class RerunExtractionTests
         Assert.Equal(ApplicationErrors.PurchaseNotFound, error.Error.Code);
     }
 
-    private RerunExtraction Subject(params IExtractionStage[] stages) =>
-        new(_ledger, _ledger, _ledger, new ExtractionCascade(stages), _ledger);
+    private RerunExtraction Subject(params IExtractionStage[] stages)
+        => new(_ledger, _ledger, _ledger, new ExtractionCascade(stages), _ledger);
 
     private Purchase GivenPurchaseWithReceipt(Receipt.ExtractionState state, string? failureReason = null)
     {

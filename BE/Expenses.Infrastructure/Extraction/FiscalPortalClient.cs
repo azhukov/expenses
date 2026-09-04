@@ -113,7 +113,7 @@ internal sealed class FiscalPortalClient(
                 return null;
             }
 
-            var body = await response.Content.ReadAsStringAsync(timeout.Token);
+            string body = await response.Content.ReadAsStringAsync(timeout.Token);
 
             // An empty body is the service saying it has no record, not a malformed answer.
             return string.IsNullOrWhiteSpace(body)
@@ -191,8 +191,8 @@ internal sealed class FiscalPortalClient(
         return new RetrievedInvoice(result, decoded with { Jikr = invoice.Fic });
     }
 
-    private static IReadOnlyDictionary<string, string> Provenance(params string[] values) =>
-        values.ToDictionary(value => value, _ => Stage);
+    private static IReadOnlyDictionary<string, string> Provenance(params string[] values)
+        => values.ToDictionary(value => value, _ => Stage);
 
     /// <summary>
     /// The response shape, as observed on one invoice. Anything the portal returns that is not named

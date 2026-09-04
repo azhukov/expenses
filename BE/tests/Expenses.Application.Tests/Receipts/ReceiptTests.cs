@@ -66,14 +66,14 @@ public sealed class ReceiptTests
         Assert.Equal(8.48m, purchase.Amount);
     }
 
-    private Purchase GivenPurchase(decimal amount = 8.48m) =>
-        _ledger.Given(Purchase.Record(
+    private Purchase GivenPurchase(decimal amount = 8.48m)
+        => _ledger.Given(Purchase.Record(
             Occurred.AddSeconds(amount == 8.48m ? 0 : 1),
             amount,
             [Expense.Record("Groceries", amount)]));
 
-    private Purchase GivenPurchaseWithReceipt(StoredReceiptFile stored, decimal amount = 8.48m) =>
-        _ledger.Given(Purchase.Record(
+    private Purchase GivenPurchaseWithReceipt(StoredReceiptFile stored, decimal amount = 8.48m)
+        => _ledger.Given(Purchase.Record(
             Occurred.AddSeconds(amount == 8.48m ? 0 : 1),
             amount,
             [Expense.Record("Groceries", amount)],

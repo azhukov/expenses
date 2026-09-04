@@ -113,8 +113,8 @@ public sealed class CaptureReceiptTests
         Assert.Equal("ffffff", result.Extracted.Ikof);
     }
 
-    private CaptureReceipt Subject(params IExtractionStage[] stages) =>
-        new(_ledger, new ExtractionCascade(stages));
+    private CaptureReceipt Subject(params IExtractionStage[] stages)
+        => new(_ledger, new ExtractionCascade(stages));
 
     private static byte[] Jpeg(byte seed) => [0xFF, 0xD8, 0xFF, seed, 0x01, 0x02];
 }

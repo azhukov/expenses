@@ -143,8 +143,8 @@ public sealed record ExtractionResponse(
     ArithmeticValidationReport? Validation,
     bool CandidatesHeld)
 {
-    public static ExtractionResponse Of(ExtractionView view) =>
-        new(view.Receipt, view.Result, view.Validation, view.CandidatesHeld);
+    public static ExtractionResponse Of(ExtractionView view)
+        => new(view.Receipt, view.Result, view.Validation, view.CandidatesHeld);
 }
 
 /// <summary>

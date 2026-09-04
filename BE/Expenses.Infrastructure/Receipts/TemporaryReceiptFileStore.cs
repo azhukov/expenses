@@ -22,13 +22,13 @@ internal sealed class TemporaryReceiptFileStore(TemporaryReceiptStoreOptions opt
     /// <summary>Fails loudly at startup rather than at the first capture, mirroring the permanent store.</summary>
     public static void Verify(TemporaryReceiptStoreOptions options)
     {
-        var root = options.RootPath;
+        string root = options.RootPath;
 
         try
         {
             Directory.CreateDirectory(root);
 
-            var probe = Path.Combine(root, $".write-probe-{Environment.ProcessId}");
+            string probe = Path.Combine(root, $".write-probe-{Environment.ProcessId}");
             File.WriteAllBytes(probe, []);
             File.Delete(probe);
         }
@@ -43,7 +43,7 @@ internal sealed class TemporaryReceiptFileStore(TemporaryReceiptStoreOptions opt
 
     public async Task<TemporaryCapture> Save(byte[] content, CancellationToken cancellationToken = default)
     {
-        var contentType = ReceiptContent.Validate(content);
+        string contentType = ReceiptContent.Validate(content);
 
         var key = Guid.NewGuid();
         Directory.CreateDirectory(options.RootPath);
@@ -54,14 +54,14 @@ internal sealed class TemporaryReceiptFileStore(TemporaryReceiptStoreOptions opt
 
     public async Task<byte[]?> Read(Guid key, CancellationToken cancellationToken = default)
     {
-        var path = PathFor(key);
+        string? path = PathFor(key);
 
         return path is null ? null : await File.ReadAllBytesAsync(path, cancellationToken);
     }
 
     public Task Delete(Guid key, CancellationToken cancellationToken = default)
     {
-        var path = PathFor(key);
+        string? path = PathFor(key);
         if (path is not null)
         {
             File.Delete(path);
@@ -89,8 +89,8 @@ internal sealed class TemporaryReceiptFileStore(TemporaryReceiptStoreOptions opt
         return Task.FromResult<IReadOnlyList<Guid>>(stale);
     }
 
-    private string Resolve(Guid key, string contentType) =>
-        Path.Combine(options.RootPath, $"{key:n}{Extension(contentType)}");
+    private string Resolve(Guid key, string contentType)
+        => Path.Combine(options.RootPath, $"{key:n}{Extension(contentType)}");
 
     /// <summary>The extension carries no meaning beyond a human glancing at the directory.</summary>
     private static string Extension(string contentType) => contentType switch
@@ -107,6 +107,6 @@ internal sealed class TemporaryReceiptFileStore(TemporaryReceiptStoreOptions opt
         ? Directory.EnumerateFiles(options.RootPath, $"{key:n}.*").FirstOrDefault()
         : null;
 
-    private static Guid? KeyOf(string fileNameWithoutExtension) =>
-        Guid.TryParse(fileNameWithoutExtension, out var key) ? key : null;
+    private static Guid? KeyOf(string fileNameWithoutExtension)
+        => Guid.TryParse(fileNameWithoutExtension, out var key) ? key : null;
 }

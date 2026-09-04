@@ -90,7 +90,7 @@ internal static class CategorySeed
         bool parented,
         CancellationToken cancellationToken)
     {
-        var added = false;
+        bool added = false;
 
         foreach (var (code, name, parentCode) in Rows.Where(row => (row.ParentCode is not null) == parented))
         {

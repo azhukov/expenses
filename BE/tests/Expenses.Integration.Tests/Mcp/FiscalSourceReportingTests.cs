@@ -43,7 +43,7 @@ public sealed class FiscalSourceReportingTests(PostgresFixture postgres) : IAsyn
     [Fact]
     public async Task A_retrieved_invoice_is_reported_as_having_come_from_the_verification_service()
     {
-        var purchaseId = await GivenExtracted(DecoderRegressionTests.DecodableReceipt);
+        long purchaseId = await GivenExtracted(DecoderRegressionTests.DecodableReceipt);
 
         var extraction = await Call(purchaseId);
 
@@ -69,7 +69,7 @@ public sealed class FiscalSourceReportingTests(PostgresFixture postgres) : IAsyn
     [Fact]
     public async Task A_placeholder_result_is_still_reported_as_a_placeholder()
     {
-        var purchaseId = await GivenExtracted(DecoderRegressionTests.UndecodableReceipt);
+        long purchaseId = await GivenExtracted(DecoderRegressionTests.UndecodableReceipt);
 
         var extraction = await Call(purchaseId);
 

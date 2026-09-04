@@ -38,8 +38,8 @@ public sealed record FiscalIdentifiers(
 {
     public static readonly FiscalIdentifiers None = new();
 
-    public bool IsEmpty =>
-        string.IsNullOrWhiteSpace(Ikof)
+    public bool IsEmpty
+        => string.IsNullOrWhiteSpace(Ikof)
         && string.IsNullOrWhiteSpace(Jikr)
         && string.IsNullOrWhiteSpace(IssuerTaxNumber)
         && string.IsNullOrWhiteSpace(CreatedAt);

@@ -18,7 +18,7 @@ public sealed class ExpensesDbContextFactory : IDesignTimeDbContextFactory<Expen
 
     public ExpensesDbContext CreateDbContext(string[] args)
     {
-        var connection = Environment.GetEnvironmentVariable("EXPENSES_CONNECTION") ?? DevelopmentConnection;
+        string connection = Environment.GetEnvironmentVariable("EXPENSES_CONNECTION") ?? DevelopmentConnection;
 
         return new ExpensesDbContext(new DbContextOptionsBuilder<ExpensesDbContext>()
             .UseNpgsql(connection)

@@ -8,8 +8,8 @@ namespace Expenses.Application.Tests.Extraction;
 /// </summary>
 public sealed class ArithmeticValidatorTests
 {
-    private static ArithmeticCheck Check(ArithmeticValidationReport report, string name) =>
-        Assert.Single(report.Checks, check => check.Name == name);
+    private static ArithmeticCheck Check(ArithmeticValidationReport report, string name)
+        => Assert.Single(report.Checks, check => check.Name == name);
 
     [Fact]
     public void A_result_that_adds_up()

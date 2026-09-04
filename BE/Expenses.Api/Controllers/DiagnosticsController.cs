@@ -12,6 +12,6 @@ namespace Expenses.Api.Controllers;
 public sealed class DiagnosticsController : ControllerBase
 {
     [HttpGet("failure")]
-    public ActionResult Failure() =>
-        throw new InvalidOperationException("A deliberate failure, for the generic error path.");
+    public ActionResult Failure()
+        => throw new InvalidOperationException("A deliberate failure, for the generic error path.");
 }

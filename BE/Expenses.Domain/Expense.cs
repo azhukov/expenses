@@ -154,7 +154,7 @@ public sealed class Expense
             return value;
         }
 
-        var rounded = Math.Round(value, AmountMaxScale);
+        decimal rounded = Math.Round(value, AmountMaxScale);
         if (rounded != value)
         {
             throw new ArgumentOutOfRangeException(
@@ -167,8 +167,8 @@ public sealed class Expense
     }
 
     /// <summary>Validates an optional amount, leaving absence alone.</summary>
-    private static decimal? ValidateAmount(decimal? value, string field) =>
-        value is { } supplied ? ValidateAmount(supplied, field) : null;
+    private static decimal? ValidateAmount(decimal? value, string field)
+        => value is { } supplied ? ValidateAmount(supplied, field) : null;
 
     /// <summary>
     /// Trailing zeros beyond three places are dropped; a significant digit beyond them is an
@@ -181,7 +181,7 @@ public sealed class Expense
             return quantity;
         }
 
-        var rounded = Math.Round(quantity, QuantityMaxScale);
+        decimal rounded = Math.Round(quantity, QuantityMaxScale);
         if (rounded != quantity)
         {
             throw new ArgumentOutOfRangeException(

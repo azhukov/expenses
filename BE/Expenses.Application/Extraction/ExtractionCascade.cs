@@ -26,9 +26,7 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
 
     private readonly ExtractionOptions _options = options ?? new ExtractionOptions();
 
-    private readonly IReadOnlyList<IExtractionStage> _stages = stages
-        .OrderBy(stage => stage.Role)
-        .ToList();
+    private readonly IReadOnlyList<IExtractionStage> _stages = [.. stages.OrderBy(stage => stage.Role)];
 
     public async Task<CascadeOutcome> Run(
         ReceiptImageContent image,
@@ -91,13 +89,13 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
                 "No extraction stage produced a result for this image.");
         }
 
-        foreach (var stage in stagesRun)
+        foreach (string stage in stagesRun)
         {
             result.RecordStageRun(stage);
         }
 
         var lowConfidence = LowConfidenceValues(result);
-        var disagrees = Disagrees(known, fiscal.Values);
+        bool disagrees = Disagrees(known, fiscal.Values);
 
         // Three independent reasons to put a result in front of a human, each recorded as itself
         // rather than collapsed into one number (D20).
@@ -133,30 +131,29 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStage> stages, Extr
     /// Two failed results are compared by how many checks each failed, which is the only ordering
     /// the oracle supports: fewer contradictions is closer to the receipt (D20).
     /// </summary>
-    private static bool Better(ArithmeticValidationReport? candidate, ArithmeticValidationReport? incumbent) =>
-        candidate is not null && (incumbent is null || candidate.FailedCount < incumbent.FailedCount);
+    private static bool Better(ArithmeticValidationReport? candidate, ArithmeticValidationReport? incumbent)
+        => candidate is not null && (incumbent is null || candidate.FailedCount < incumbent.FailedCount);
 
     private IReadOnlyList<string> LowConfidenceValues(ExtractionResult result)
     {
         var reported = result.ReportedConfidence
             .Concat(result.Candidates.SelectMany(candidate => candidate.ReportedConfidence));
 
-        return reported
+        return [.. reported
             .Where(value => Unverifiable.Contains(value.Key) && value.Value < _options.ConfidenceThreshold)
             .Select(value => value.Key)
-            .Distinct()
-            .ToList();
+            .Distinct()];
     }
 
     /// <summary>
     /// Both values are retained and the disagreement is reported; preferring one source without
     /// saying so would hide a misread receipt (D20).
     /// </summary>
-    private static bool Disagrees(FiscalIdentifiers supplied, FiscalIdentifiers extracted) =>
-        Disagrees(supplied.Ikof, extracted.Ikof) || Disagrees(supplied.Jikr, extracted.Jikr);
+    private static bool Disagrees(FiscalIdentifiers supplied, FiscalIdentifiers extracted)
+        => Disagrees(supplied.Ikof, extracted.Ikof) || Disagrees(supplied.Jikr, extracted.Jikr);
 
-    private static bool Disagrees(string? supplied, string? extracted) =>
-        supplied is not null && extracted is not null && !Receipt.SameFiscalIdentifier(supplied, extracted);
+    private static bool Disagrees(string? supplied, string? extracted)
+        => supplied is not null && extracted is not null && !Receipt.SameFiscalIdentifier(supplied, extracted);
 
     /// <summary>
     /// The fiscal identity the run established, and how. A value decoded from a fiscal code or

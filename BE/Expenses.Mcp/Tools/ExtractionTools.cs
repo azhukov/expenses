@@ -12,8 +12,8 @@ namespace Expenses.Mcp.Tools;
 /// </summary>
 public sealed record ArithmeticCheckSummary(string Check, string Outcome, string Explanation)
 {
-    public static ArithmeticCheckSummary Of(ArithmeticCheck check) =>
-        new(check.Name, check.Outcome.ToString(), check.Description);
+    public static ArithmeticCheckSummary Of(ArithmeticCheck check)
+        => new(check.Name, check.Outcome.ToString(), check.Description);
 }
 
 /// <summary>
@@ -70,7 +70,7 @@ public sealed record ExtractionToolResult(
             .Select(check => check.Explanation)
             .ToList();
 
-        var state = view.Receipt.State switch
+        string state = view.Receipt.State switch
         {
             Domain.Receipt.ExtractionState.Extracted =>
                 $"Extraction read {view.Result?.Candidates.Count ?? 0} lines and the numbers add up.",
@@ -86,7 +86,7 @@ public sealed record ExtractionToolResult(
         // Where the lines came from, in words. A retrieved invoice is the tax authority's own record
         // and a placeholder's lines are an invention, and an assistant relaying either should not
         // have to know which stage name means which (D12, D22).
-        var source = view.Result?.EngineName switch
+        string? source = view.Result?.EngineName switch
         {
             FiscalPortal => "They are the invoice as the fiscal verification service holds it, "
                 + "taken verbatim rather than read from the image.",
@@ -141,8 +141,8 @@ public sealed class ExtractionTools(
         """)]
     public async Task<ExtractionToolResult> GetExtraction(
         [Description("The purchase whose receipt to read.")] long purchaseId,
-        CancellationToken cancellationToken = default) =>
-        ExtractionToolResult.Of(await getCandidates.Execute(purchaseId, cancellationToken));
+        CancellationToken cancellationToken = default)
+        => ExtractionToolResult.Of(await getCandidates.Execute(purchaseId, cancellationToken));
 
     [McpServerTool(Name = "rerun_extraction")]
     [Description("""
@@ -173,8 +173,8 @@ public sealed class ExtractionTools(
         [Description("The purchase whose candidate lines to confirm.")] long purchaseId,
         [Description("Corrected lines to confirm. Omit to confirm the candidates as extracted.")]
         IReadOnlyList<ExpenseArgument>? expenses = null,
-        CancellationToken cancellationToken = default) =>
-        await confirmCandidates.Execute(
+        CancellationToken cancellationToken = default)
+        => await confirmCandidates.Execute(
             purchaseId,
             expenses?.Select(expense => expense.ToCommand()).ToList(),
             cancellationToken);

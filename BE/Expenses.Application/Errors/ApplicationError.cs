@@ -12,8 +12,8 @@ public sealed record ApplicationError(
 {
     private static readonly IReadOnlyDictionary<string, object?> NoFields = new Dictionary<string, object?>();
 
-    public static ApplicationError From(string code, string message, params (string Name, object? Value)[] fields) =>
-        new(code, message, fields.Length == 0
+    public static ApplicationError From(string code, string message, params (string Name, object? Value)[] fields)
+        => new(code, message, fields.Length == 0
             ? NoFields
             : fields.ToDictionary(field => field.Name, field => field.Value));
 
@@ -46,6 +46,6 @@ public sealed class ExpensesException : Exception
 
     public ApplicationError Error { get; }
 
-    public static ExpensesException For(string code, string message, params (string Name, object? Value)[] fields) =>
-        new(ApplicationError.From(code, message, fields));
+    public static ExpensesException For(string code, string message, params (string Name, object? Value)[] fields)
+        => new(ApplicationError.From(code, message, fields));
 }

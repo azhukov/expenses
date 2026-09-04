@@ -54,7 +54,7 @@ public sealed class ProjectReferenceRulesTests
     [Fact]
     public void No_production_project_references_a_test_project()
     {
-        foreach (var project in new[]
+        foreach (string? project in new[]
                  {
                      "Expenses.Domain", "Expenses.Application", "Expenses.Infrastructure",
                      "Expenses.Api", "Expenses.Mcp",
@@ -64,21 +64,18 @@ public sealed class ProjectReferenceRulesTests
         }
     }
 
-    private static IReadOnlyList<string> ProjectReferencesOf(string project) =>
-        ReferencesOf(project, "ProjectReference")
+    private static IReadOnlyList<string> ProjectReferencesOf(string project)
+        => [.. ReferencesOf(project, "ProjectReference")
             .Select(Path.GetFileNameWithoutExtension)
             .Select(name => name!)
-            .OrderBy(name => name, StringComparer.Ordinal)
-            .ToArray();
+            .OrderBy(name => name, StringComparer.Ordinal)];
 
-    private static IReadOnlyList<string> PackageReferencesOf(string project) =>
-        ReferencesOf(project, "PackageReference")
-            .OrderBy(name => name, StringComparer.Ordinal)
-            .ToArray();
+    private static IReadOnlyList<string> PackageReferencesOf(string project)
+        => [.. ReferencesOf(project, "PackageReference").OrderBy(name => name, StringComparer.Ordinal)];
 
     private static IEnumerable<string> ReferencesOf(string project, string element)
     {
-        var path = Path.Combine(SolutionRoot.Value, project, project + ".csproj");
+        string path = Path.Combine(SolutionRoot.Value, project, project + ".csproj");
         Assert.True(File.Exists(path), $"Expected project file at {path}");
 
         return XDocument.Load(path)

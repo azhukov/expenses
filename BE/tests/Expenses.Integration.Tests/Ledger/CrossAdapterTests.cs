@@ -103,7 +103,7 @@ public sealed class CrossAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             ["expenses"] = lines,
         });
 
-        var mcpMessage = string.Join(
+        string mcpMessage = string.Join(
             " ",
             overMcp.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Select(block => block.Text));
 

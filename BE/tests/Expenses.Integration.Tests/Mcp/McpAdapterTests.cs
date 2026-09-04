@@ -2,8 +2,6 @@
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
 using Expenses.Integration.Tests.Harness;
-using ModelContextProtocol;
-using ModelContextProtocol.Client;
 
 namespace Expenses.Integration.Tests.Mcp;
 
@@ -111,7 +109,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Genuine_failures_are_still_errors()
     {
-        var error = await Failing("record_purchase", new Dictionary<string, object?>
+        string error = await Failing("record_purchase", new Dictionary<string, object?>
         {
             ["occurredAt"] = Next(),
             ["amount"] = 80.00m,
@@ -142,7 +140,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             byCode.GetProperty("purchase").GetProperty("expenses")[0].GetProperty("amount").GetDecimal());
 
         // A display name is not a code, and the ledger says so rather than guessing.
-        var error = await Failing("record_purchase", new Dictionary<string, object?>
+        string error = await Failing("record_purchase", new Dictionary<string, object?>
         {
             ["occurredAt"] = Next(),
             ["amount"] = 5.00m,
@@ -187,7 +185,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Arithmetic_checks_and_corroboration_are_readable_through_the_extraction_tools()
     {
-        var purchaseId = await GivenExtractedReceipt();
+        long purchaseId = await GivenExtractedReceipt();
 
         // A capture's candidates are never held server-side, so confirming it leaves none held;
         // re-running produces them, synchronously, against the now-promoted image.
@@ -215,7 +213,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task An_assistant_can_re_run_extraction_for_a_stored_image()
     {
-        var purchaseId = await GivenExtractedReceipt();
+        long purchaseId = await GivenExtractedReceipt();
 
         var reran = await Call("rerun_extraction", new Dictionary<string, object?>
         {
@@ -254,8 +252,8 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         DateTime occurredAt,
         decimal amount,
         string description,
-        string? categoryCode = null) =>
-        Call("record_purchase", new Dictionary<string, object?>
+        string? categoryCode = null)
+        => Call("record_purchase", new Dictionary<string, object?>
         {
             ["occurredAt"] = occurredAt,
             ["amount"] = amount,

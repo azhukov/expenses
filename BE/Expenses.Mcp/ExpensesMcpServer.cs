@@ -1,7 +1,6 @@
 ﻿using Expenses.Application.Errors;
 using Expenses.Mcp.Tools;
 using ModelContextProtocol;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Expenses.Mcp;
 
@@ -12,8 +11,8 @@ namespace Expenses.Mcp;
 /// </summary>
 public static class ExpensesMcpServer
 {
-    public static IMcpServerBuilder AddExpensesMcpServer(this IServiceCollection services) =>
-        services
+    public static IMcpServerBuilder AddExpensesMcpServer(this IServiceCollection services)
+        => services
             .AddMcpServer(options =>
             {
                 options.ServerInfo = new ModelContextProtocol.Protocol.Implementation
@@ -62,6 +61,6 @@ public static class ExpensesMcpServer
 /// </summary>
 internal static class ToolFailure
 {
-    public static McpException From(ExpensesException exception) =>
-        new($"{exception.Error.Message} [{exception.Error.Code}]");
+    public static McpException From(ExpensesException exception)
+        => new($"{exception.Error.Message} [{exception.Error.Code}]");
 }

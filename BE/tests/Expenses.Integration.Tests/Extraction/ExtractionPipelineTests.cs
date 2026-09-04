@@ -22,7 +22,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     public async Task Placeholder_produces_deterministic_candidates()
     {
         await using var services = postgres.Services();
-        var content = Jpeg(0x71);
+        byte[] content = Jpeg(0x71);
 
         var first = await Captured(services, content);
         var second = await Captured(services, content);
@@ -156,6 +156,6 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         return await scope.ServiceProvider.GetRequiredService<CaptureReceipt>().Execute(content);
     }
 
-    private static byte[] Jpeg(byte seed) =>
-        [0xFF, 0xD8, 0xFF, 0xE0, seed, 0x4A, 0x46, 0x49, 0x46, 0x00, seed, 0x01];
+    private static byte[] Jpeg(byte seed)
+        => [0xFF, 0xD8, 0xFF, 0xE0, seed, 0x4A, 0x46, 0x49, 0x46, 0x00, seed, 0x01];
 }

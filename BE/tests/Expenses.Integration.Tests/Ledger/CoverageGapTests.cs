@@ -2,12 +2,10 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Expenses.Application.Abstractions;
 using Expenses.Application.Merchants;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
 using Expenses.Application.ReferenceData;
-using Expenses.Domain;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -102,8 +100,8 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task A_category_with_children_is_assignable_in_its_own_right()
     {
-        var parentCode = $"GAP_PARENT_{Interlocked.Increment(ref _sequence)}";
-        var childCode = $"GAP_CHILD_{_sequence}";
+        string parentCode = $"GAP_PARENT_{Interlocked.Increment(ref _sequence)}";
+        string childCode = $"GAP_CHILD_{_sequence}";
 
         using var scope = _services.CreateScope();
         var create = scope.ServiceProvider.GetRequiredService<CreateCategory>();
@@ -186,12 +184,12 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
             (await ExpensesApi.Read<JsonElement>(uploaded)).GetProperty("code").GetString());
     }
 
-    private static async Task<RecordPurchaseResult> Record(IServiceProvider services, decimal amount) =>
-        await services.GetRequiredService<RecordPurchase>().Execute(
+    private static async Task<RecordPurchaseResult> Record(IServiceProvider services, decimal amount)
+        => await services.GetRequiredService<RecordPurchase>().Execute(
             new RecordPurchaseCommand(Next(), amount, [new ExpenseCommand("Line", amount)]));
 
-    private static byte[] Jpeg() =>
-        [0xFF, 0xD8, 0xFF, 0xE0, (byte)_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x06, (byte)(_sequence >> 8)];
+    private static byte[] Jpeg()
+        => [0xFF, 0xD8, 0xFF, 0xE0, (byte)_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x06, (byte)(_sequence >> 8)];
 
     private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
 }

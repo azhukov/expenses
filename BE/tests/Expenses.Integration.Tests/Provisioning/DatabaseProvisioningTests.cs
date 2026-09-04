@@ -24,7 +24,7 @@ public sealed class DatabaseProvisioningTests(PostgresFixture postgres)
     [Fact]
     public async Task A_database_with_the_wrong_locale_provider_fails_loudly_at_startup()
     {
-        var connection = await GivenDatabase(
+        string connection = await GivenDatabase(
             "wrongly_provisioned_locale",
             "ENCODING 'UTF8' LOCALE_PROVIDER libc LOCALE 'C' TEMPLATE template0");
 
@@ -41,7 +41,7 @@ public sealed class DatabaseProvisioningTests(PostgresFixture postgres)
     [Fact]
     public async Task A_database_with_the_wrong_encoding_fails_loudly_at_startup()
     {
-        var connection = await GivenDatabase(
+        string connection = await GivenDatabase(
             "wrongly_provisioned_encoding",
             "ENCODING 'SQL_ASCII' LOCALE_PROVIDER libc LOCALE 'C' TEMPLATE template0");
 
@@ -56,7 +56,7 @@ public sealed class DatabaseProvisioningTests(PostgresFixture postgres)
 
     private async Task<string> GivenDatabase(string name, string clause)
     {
-        var maintenance = new NpgsqlConnectionStringBuilder(postgres.ConnectionString)
+        string maintenance = new NpgsqlConnectionStringBuilder(postgres.ConnectionString)
         {
             Database = "postgres",
         }.ConnectionString;
@@ -73,6 +73,6 @@ public sealed class DatabaseProvisioningTests(PostgresFixture postgres)
         return new NpgsqlConnectionStringBuilder(postgres.ConnectionString) { Database = name }.ConnectionString;
     }
 
-    private static ExpensesDbContext Context(string connectionString) =>
-        new(new DbContextOptionsBuilder<ExpensesDbContext>().UseNpgsql(connectionString).Options);
+    private static ExpensesDbContext Context(string connectionString)
+        => new(new DbContextOptionsBuilder<ExpensesDbContext>().UseNpgsql(connectionString).Options);
 }

@@ -43,7 +43,7 @@ public sealed class ReceiptFileStoreTests(PostgresFixture postgres) : IAsyncLife
     [Fact]
     public async Task Stored_bytes_are_outside_the_ledger()
     {
-        var bytes = Jpeg(0x11);
+        byte[] bytes = Jpeg(0x11);
 
         var stored = await Store(bytes);
 
@@ -58,14 +58,14 @@ public sealed class ReceiptFileStoreTests(PostgresFixture postgres) : IAsyncLife
     {
         var stored = await Store(Jpeg(0x12));
 
-        var hex = Convert.ToHexStringLower(stored.ContentHash);
+        string hex = Convert.ToHexStringLower(stored.ContentHash);
         Assert.Equal($"{hex[..2]}/{hex[2..4]}/{hex}.jpg", stored.StorageKey);
     }
 
     [Fact]
     public async Task Identical_bytes_uploaded_again()
     {
-        var bytes = Jpeg(0x21);
+        byte[] bytes = Jpeg(0x21);
 
         var first = await Store(bytes);
         var second = await Store(bytes);
@@ -114,7 +114,7 @@ public sealed class ReceiptFileStoreTests(PostgresFixture postgres) : IAsyncLife
     [Fact]
     public async Task Oversized_file()
     {
-        var oversized = new byte[(15 * 1024 * 1024) + 1];
+        byte[] oversized = new byte[(15 * 1024 * 1024) + 1];
         Jpeg(0x41).CopyTo(oversized, 0);
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Store(oversized));
@@ -127,7 +127,7 @@ public sealed class ReceiptFileStoreTests(PostgresFixture postgres) : IAsyncLife
     [Fact]
     public async Task Retrieve_an_image()
     {
-        var bytes = Jpeg(0x51);
+        byte[] bytes = Jpeg(0x51);
         var stored = await Store(bytes);
 
         Assert.Equal(bytes, await Images.Read(stored.StorageKey));

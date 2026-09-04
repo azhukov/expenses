@@ -150,11 +150,11 @@ public sealed class Receipt
     /// D24). It lives on the entity because the entity is what reports corroboration, and one
     /// implementation is what keeps the ledger and the cascade from disagreeing about it.
     /// </summary>
-    public static bool SameFiscalIdentifier(string? left, string? right) =>
-        string.Equals(WithoutHyphens(left), WithoutHyphens(right), StringComparison.Ordinal);
+    public static bool SameFiscalIdentifier(string? left, string? right)
+        => string.Equals(WithoutHyphens(left), WithoutHyphens(right), StringComparison.Ordinal);
 
-    private static string? WithoutHyphens(string? value) =>
-        value?.Replace("-", string.Empty, StringComparison.Ordinal);
+    private static string? WithoutHyphens(string? value)
+        => value?.Replace("-", string.Empty, StringComparison.Ordinal);
 
     /// <summary>Identifiers a client decoded at capture, accepted without extraction having run.</summary>
     public void SupplyFiscalIdentifiers(string? ikof, string? jikr)
@@ -166,8 +166,8 @@ public sealed class Receipt
     /// <summary>Identifiers obtained from the stored image, by decode or by reading text.</summary>
     public void RecordExtractedFiscalIdentifiers(string? ikof, string? jikr, FiscalSource source)
     {
-        var normalisedIkof = Normalise(ikof);
-        var normalisedJikr = Normalise(jikr);
+        string? normalisedIkof = Normalise(ikof);
+        string? normalisedJikr = Normalise(jikr);
 
         // A run that read nothing leaves the previous run's values and source alone: a miss is an
         // ordinary outcome and must not erase what an earlier stage established (D20).
@@ -181,8 +181,8 @@ public sealed class Receipt
         FiscalExtractedSource = source;
     }
 
-    private static string? Normalise(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? Normalise(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
     /// The reference to a file already written to the store. Constructed only after the bytes are

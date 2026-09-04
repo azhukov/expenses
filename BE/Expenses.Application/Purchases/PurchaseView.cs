@@ -63,7 +63,7 @@ public sealed record PurchaseView(
         purchase.MerchantId,
         purchase.MerchantRaw,
         purchase.Receipt is not null,
-        purchase.Expenses.Select(ExpenseView.Of).ToList(),
+        [.. purchase.Expenses.Select(ExpenseView.Of)],
         purchase.TotalSaving,
         purchase.SavingPercentage)
     {

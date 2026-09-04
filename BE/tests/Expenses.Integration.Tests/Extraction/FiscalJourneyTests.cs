@@ -77,7 +77,7 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
         Assert.Equal(Receipt.FiscalSource.None, result.FiscalSource);
     }
 
-    private static async Task<CaptureResult> Extract(IServiceScope scope, string fixture) =>
-        await scope.ServiceProvider.GetRequiredService<CaptureReceipt>()
+    private static async Task<CaptureResult> Extract(IServiceScope scope, string fixture)
+        => await scope.ServiceProvider.GetRequiredService<CaptureReceipt>()
             .Execute(DecoderRegressionTests.Photograph(fixture).Content);
 }

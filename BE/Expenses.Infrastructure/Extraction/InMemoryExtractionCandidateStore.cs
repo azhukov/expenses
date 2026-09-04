@@ -20,8 +20,8 @@ internal sealed class InMemoryExtractionCandidateStore : IExtractionCandidateSto
 {
     private readonly ConcurrentDictionary<long, ExtractionResult> _held = new();
 
-    public Task<ExtractionResult?> FindLatest(long purchaseId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_held.GetValueOrDefault(purchaseId));
+    public Task<ExtractionResult?> FindLatest(long purchaseId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_held.GetValueOrDefault(purchaseId));
 
     /// <summary>
     /// A re-run supersedes its predecessor rather than accumulating beside it, and touches no

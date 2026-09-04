@@ -31,7 +31,7 @@ public sealed class ResolveMerchant(IMerchantRepository merchants, IUnitOfWork u
         string? taxId = null,
         CancellationToken cancellationToken = default)
     {
-        var trimmedTaxId = string.IsNullOrWhiteSpace(taxId) ? null : taxId.Trim();
+        string? trimmedTaxId = string.IsNullOrWhiteSpace(taxId) ? null : taxId.Trim();
 
         if (trimmedTaxId is not null)
         {
@@ -77,10 +77,9 @@ public sealed class ListMerchants(IMerchantRepository merchants)
     {
         var listed = await merchants.List(includeInactive, cancellationToken);
 
-        return listed
+        return [.. listed
             .OrderBy(merchant => merchant.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(MerchantView.Of)
-            .ToList();
+            .Select(MerchantView.Of)];
     }
 }
 
@@ -104,7 +103,7 @@ public sealed class SearchMerchants(IMerchantRepository merchants)
 
         var matches = await merchants.Search(term.Trim(), cancellationToken);
 
-        return matches.Select(MerchantMatchView.Of).ToList();
+        return [.. matches.Select(MerchantMatchView.Of)];
     }
 }
 
@@ -186,8 +185,8 @@ internal static class MerchantLookup
     public static async Task<Merchant> Require(
         this IMerchantRepository merchants,
         long id,
-        CancellationToken cancellationToken) =>
-        await merchants.FindById(id, cancellationToken)
+        CancellationToken cancellationToken)
+        => await merchants.FindById(id, cancellationToken)
         ?? throw ExpensesException.For(
             ApplicationErrors.MerchantNotFound,
             $"There is no merchant with identifier {id}.",

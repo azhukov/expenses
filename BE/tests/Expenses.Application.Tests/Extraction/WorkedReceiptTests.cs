@@ -25,8 +25,8 @@ public sealed class WorkedReceiptTests
         decimal line2Discount = 3.51m,
         decimal total = 8.48m,
         decimal taxRatePercent = 21m,
-        decimal taxAmount = 1.47m) =>
-        new(
+        decimal taxAmount = 1.47m)
+        => new(
             [
                 new ExtractedLineAmounts(1, line1Amount, line1ListPrice, line1Discount),
                 new ExtractedLineAmounts(2, line2Amount, line2ListPrice, line2Discount),
@@ -35,8 +35,8 @@ public sealed class WorkedReceiptTests
             taxRatePercent,
             taxAmount);
 
-    private static ArithmeticCheck Check(ArithmeticValidationReport report, string name) =>
-        Assert.Single(report.Checks, check => check.Name == name);
+    private static ArithmeticCheck Check(ArithmeticValidationReport report, string name)
+        => Assert.Single(report.Checks, check => check.Name == name);
 
     [Fact]
     public void The_worked_example_passes_every_check()

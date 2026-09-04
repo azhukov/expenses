@@ -100,7 +100,7 @@ public sealed class SeedingTests(PostgresFixture postgres)
 
     private async Task<ServiceProvider> Seeded(string database)
     {
-        var connectionString = await postgres.ProvisionAnother(database);
+        string connectionString = await postgres.ProvisionAnother(database);
 
         var services = new ServiceCollection()
             .AddExpensesInfrastructure(new ConfigurationBuilder()
@@ -117,8 +117,8 @@ public sealed class SeedingTests(PostgresFixture postgres)
     }
 
     /// <summary>Migrating is what runs seeding, in development and in the suite alike (D15).</summary>
-    private static Task Migrate(IServiceProvider services) =>
-        services.PrepareExpensesDatabase(applyMigrations: true);
+    private static Task Migrate(IServiceProvider services)
+        => services.PrepareExpensesDatabase(applyMigrations: true);
 
     private static async Task<List<string>> Codes(IServiceProvider services)
     {

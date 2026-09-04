@@ -151,6 +151,6 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
 
     private ServiceProvider Services(
         FiscalPortalStub portal,
-        params (string Key, string Value)[] settings) =>
-        postgres.Services([("Extraction:Portal:BaseAddress", portal.BaseAddress), .. settings]);
+        params (string Key, string Value)[] settings)
+        => postgres.Services([("Extraction:Portal:BaseAddress", portal.BaseAddress), .. settings]);
 }

@@ -13,8 +13,8 @@ namespace Expenses.Integration.Tests.Harness;
 /// </summary>
 public static class ExpensesDatabase
 {
-    public static ExpensesDbContext Context(this PostgresFixture fixture) =>
-        new(new DbContextOptionsBuilder<ExpensesDbContext>()
+    public static ExpensesDbContext Context(this PostgresFixture fixture)
+        => new(new DbContextOptionsBuilder<ExpensesDbContext>()
             .UseNpgsql(fixture.ConnectionString)
             .Options);
 

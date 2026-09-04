@@ -30,8 +30,8 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
 
         // Captured with no purchase behind it: extraction runs synchronously, in this same request.
         var captured = await Capture(client);
-        var tempKey = captured.GetProperty("tempKey").GetString();
-        var state = captured.GetProperty("state").GetString();
+        string? tempKey = captured.GetProperty("tempKey").GetString();
+        string? state = captured.GetProperty("state").GetString();
 
         // Confirmed with the caller's own lines — capture's candidates are never held server-side,
         // so what is asserted here need not match what extraction proposed.
@@ -49,7 +49,7 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
 
         Assert.Equal(HttpStatusCode.Created, recorded.StatusCode);
         var purchase = await ExpensesApi.Read<JsonElement>(recorded);
-        var purchaseId = purchase.GetProperty("id").GetInt64();
+        long purchaseId = purchase.GetProperty("id").GetInt64();
         Assert.True(purchase.GetProperty("hasReceipt").GetBoolean());
 
         var extraction = await ExpensesApi.Read<JsonElement>(
@@ -137,8 +137,8 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
     }
 
     /// <summary>Distinct bytes per call, so each journey owns its stored image.</summary>
-    private static byte[] Jpeg() =>
-        [0xFF, 0xD8, 0xFF, 0xE0, (byte)_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x05, (byte)(_sequence >> 8)];
+    private static byte[] Jpeg()
+        => [0xFF, 0xD8, 0xFF, 0xE0, (byte)_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x05, (byte)(_sequence >> 8)];
 
     private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
 }

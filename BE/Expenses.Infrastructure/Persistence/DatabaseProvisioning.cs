@@ -21,7 +21,7 @@ public static class DatabaseProvisioning
     public static async Task Verify(ExpensesDbContext context, CancellationToken cancellationToken = default)
     {
         var connection = (NpgsqlConnection)context.Database.GetDbConnection();
-        var opened = connection.State != System.Data.ConnectionState.Open;
+        bool opened = connection.State != System.Data.ConnectionState.Open;
 
         if (opened)
         {
@@ -45,9 +45,9 @@ public static class DatabaseProvisioning
                     "The current database has no row in pg_database, so its provisioning cannot be checked.");
             }
 
-            var encoding = reader.GetString(0);
-            var provider = reader.GetChar(1);
-            var locale = reader.IsDBNull(2) ? reader.GetString(3) : reader.GetString(2);
+            string encoding = reader.GetString(0);
+            char provider = reader.GetChar(1);
+            string locale = reader.IsDBNull(2) ? reader.GetString(3) : reader.GetString(2);
 
             if (encoding != RequiredEncoding)
             {
@@ -80,8 +80,8 @@ public static class DatabaseProvisioning
     /// Names the fix as well as the fault, because the fix is not "alter the database" — none of
     /// these can be changed in place, and someone reading this needs to know that first (D13).
     /// </summary>
-    private static InvalidOperationException Misprovisioned(string fault) =>
-        new($"This database was not provisioned for the ledger: {fault}. "
+    private static InvalidOperationException Misprovisioned(string fault)
+        => new($"This database was not provisioned for the ledger: {fault}. "
             + "Encoding, locale provider and collation are fixed when a database is created and "
             + "cannot be altered afterwards, so recreate it with db/init/01-create-database.sql "
             + "and restore the data into the new database.");

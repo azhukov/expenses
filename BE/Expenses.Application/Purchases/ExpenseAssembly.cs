@@ -21,9 +21,9 @@ internal static class ExpenseAssembly
 
         foreach (var command in commands)
         {
-            var categoryId = await ResolveCategory(command.CategoryCode, categories, cancellationToken)
+            long? categoryId = await ResolveCategory(command.CategoryCode, categories, cancellationToken)
                 ?? command.MatchedCategoryId;
-            var unitId = await ResolveUnit(command.UnitCode, units, cancellationToken)
+            long? unitId = await ResolveUnit(command.UnitCode, units, cancellationToken)
                 ?? command.MatchedUnitId;
 
             try

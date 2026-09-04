@@ -37,7 +37,7 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
                 listUnitPrice: 2.5000m,
                 discountAmount: 1.4400m)]);
 
-        var id = await Store(purchase);
+        long id = await Store(purchase);
 
         await using var reading = postgres.Context();
         var stored = await reading.Purchases
@@ -55,7 +55,7 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Occurred_at_round_trips_unchanged_and_without_a_kind()
     {
-        var id = await Store(Purchase.Record(At(2), 2.00m, [Expense.Record("Coffee", 2.00m)]));
+        long id = await Store(Purchase.Record(At(2), 2.00m, [Expense.Record("Coffee", 2.00m)]));
 
         await using var reading = postgres.Context();
         var stored = await reading.Purchases.SingleAsync(read => read.Id == id);
@@ -88,7 +88,7 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
         var occurred = At(4);
         await Store(Purchase.Record(occurred, 12.40m, [Expense.Record("Lunch", 12.40m)]));
 
-        var second = await Store(Purchase.Record(occurred, 12.50m, [Expense.Record("Lunch", 12.50m)]));
+        long second = await Store(Purchase.Record(occurred, 12.50m, [Expense.Record("Lunch", 12.50m)]));
 
         Assert.True(second > 0);
     }
@@ -101,11 +101,11 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Two_purchases_may_reference_the_same_receipt_file()
     {
-        var hash = Hash(7);
-        var storageKey = "07/07/0707.jpg";
+        byte[] hash = Hash(7);
+        string storageKey = "07/07/0707.jpg";
 
-        var first = await Store(WithReceipt(At(7), hash, storageKey));
-        var second = await Store(WithReceipt(At(8), hash, storageKey));
+        long first = await Store(WithReceipt(At(7), hash, storageKey));
+        long second = await Store(WithReceipt(At(8), hash, storageKey));
 
         await using var context = postgres.Context();
         var sharing = await context.Purchases
@@ -135,7 +135,7 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task A_null_discount_and_a_zero_discount_round_trip_as_distinct_states()
     {
-        var id = await Store(Purchase.Record(
+        long id = await Store(Purchase.Record(
             At(5),
             3.00m,
             [
@@ -171,7 +171,7 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
         }
 
         await using var reading = postgres.Context();
-        var withoutTaxId = await reading.Merchants.CountAsync(merchant => merchant.TaxId == null);
+        int withoutTaxId = await reading.Merchants.CountAsync(merchant => merchant.TaxId == null);
 
         // Unique *when present*: several unidentified sellers must be able to coexist (D18).
         Assert.True(withoutTaxId >= 2);
@@ -197,8 +197,8 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     /// <summary>A purchase carrying a receipt reference — the file itself is not this test's concern.</summary>
-    private static Purchase WithReceipt(DateTime occurred, byte[] hash, string storageKey) =>
-        Purchase.Record(
+    private static Purchase WithReceipt(DateTime occurred, byte[] hash, string storageKey)
+        => Purchase.Record(
             occurred,
             4.00m,
             [Expense.Record("Coffee", 4.00m)],

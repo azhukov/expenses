@@ -93,7 +93,7 @@ public sealed record ExtractionResultView(
         result.EngineName,
         result.EngineVersion,
         result.StagesRun,
-        result.Candidates.Select(ExtractionCandidateView.Of).ToList(),
+        [.. result.Candidates.Select(ExtractionCandidateView.Of)],
         result.Total,
         result.TaxRatePercent,
         result.TaxAmount,

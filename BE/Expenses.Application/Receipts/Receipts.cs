@@ -132,7 +132,7 @@ public sealed class ConfirmCandidates(
         {
             // The expenses of the purchase are left exactly as they were, and the candidates stay
             // available for the user to correct.
-            var total = lines.Sum(line => line.Amount);
+            decimal total = lines.Sum(line => line.Amount);
             throw ExpensesException.For(
                 ApplicationErrors.PurchaseReconciliationMismatch,
                 exception.Message,
@@ -229,7 +229,7 @@ public sealed class RerunExtraction(
         var purchase = await purchases.Require(purchaseId, cancellationToken);
         var receipt = purchase.RequireReceipt();
 
-        var bytes = await images.Read(receipt.StorageKey, cancellationToken)
+        byte[] bytes = await images.Read(receipt.StorageKey, cancellationToken)
             ?? throw ExpensesException.For(
                 ApplicationErrors.ReceiptImageNotFound,
                 $"The stored file for the receipt of purchase {purchaseId} is missing.",
@@ -266,8 +266,8 @@ internal static class ReceiptLookup
     public static async Task<Purchase> Require(
         this IPurchaseRepository purchases,
         long purchaseId,
-        CancellationToken cancellationToken) =>
-        await purchases.FindById(purchaseId, cancellationToken)
+        CancellationToken cancellationToken)
+        => await purchases.FindById(purchaseId, cancellationToken)
         ?? throw ExpensesException.For(
             ApplicationErrors.PurchaseNotFound,
             $"There is no purchase with identifier {purchaseId}.",
@@ -277,8 +277,8 @@ internal static class ReceiptLookup
     /// A receipt is addressed by its purchase and has no identity of its own (D11), so "not found"
     /// is always a statement about the purchase.
     /// </summary>
-    public static Receipt RequireReceipt(this Purchase purchase) =>
-        purchase.Receipt
+    public static Receipt RequireReceipt(this Purchase purchase)
+        => purchase.Receipt
         ?? throw ExpensesException.For(
             ApplicationErrors.ReceiptImageNotFound,
             $"Purchase {purchase.Id} has no receipt image.",

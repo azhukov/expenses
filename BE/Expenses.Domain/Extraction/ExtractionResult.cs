@@ -176,7 +176,7 @@ public sealed class ExtractionResult
 
         result._candidates.AddRange(candidates);
 
-        foreach (var stage in stagesRun ?? [])
+        foreach (string stage in stagesRun ?? [])
         {
             result.RecordStageRun(stage);
         }

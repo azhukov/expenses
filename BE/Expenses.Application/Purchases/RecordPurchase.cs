@@ -117,7 +117,7 @@ public sealed class RecordPurchase(
     /// </summary>
     private async Task<Receipt> Promote(CapturedReceiptCommand capture, CancellationToken cancellationToken)
     {
-        var bytes = await tempStore.Read(capture.TempKey, cancellationToken)
+        byte[] bytes = await tempStore.Read(capture.TempKey, cancellationToken)
             ?? throw ExpensesException.For(
                 ApplicationErrors.CaptureNotFound,
                 $"No capture was found for key {capture.TempKey}. It may already have been confirmed, "
@@ -180,8 +180,8 @@ public sealed class RecordPurchase(
     /// The existing purchase is returned exactly as it stands: its expenses are not appended to or
     /// replaced, and neither is its merchant. A repeated request is absorbed, not applied (D3).
     /// </summary>
-    private static RecordPurchaseResult AlreadyRecorded(Purchase existing) =>
-        new(PurchaseView.Of(existing), AlreadyRecorded: true);
+    private static RecordPurchaseResult AlreadyRecorded(Purchase existing)
+        => new(PurchaseView.Of(existing), AlreadyRecorded: true);
 
     /// <summary>
     /// Checked here as well as inside the aggregate, so that the error can carry both amounts —
@@ -189,7 +189,7 @@ public sealed class RecordPurchase(
     /// </summary>
     private static void Reconcile(decimal amount, IReadOnlyList<Expense> lines)
     {
-        var total = lines.Sum(line => line.Amount);
+        decimal total = lines.Sum(line => line.Amount);
         if (total == amount)
         {
             return;

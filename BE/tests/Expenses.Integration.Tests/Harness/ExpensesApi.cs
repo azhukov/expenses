@@ -57,7 +57,7 @@ public sealed class ExpensesApi(string connectionString, params (string Key, str
     public T Resolve<T>()
         where T : notnull => Services.CreateScope().ServiceProvider.GetRequiredService<T>();
 
-    public static async Task<T> Read<T>(HttpResponseMessage response) =>
-        await response.Content.ReadFromJsonAsync<T>(Json)
+    public static async Task<T> Read<T>(HttpResponseMessage response)
+        => await response.Content.ReadFromJsonAsync<T>(Json)
         ?? throw new InvalidOperationException($"The response carried no {typeof(T).Name}.");
 }

@@ -50,7 +50,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Duplicate_submission()
     {
-        var command = NewPurchase(9.90m, [Line("Coffee", 9.90m)]);
+        object command = NewPurchase(9.90m, [Line("Coffee", 9.90m)]);
 
         var first = await Record(command);
         var second = await Record(command);
@@ -99,7 +99,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         var error = await ExpensesApi.Read<JsonElement>(response);
-        var body = await response.Content.ReadAsStringAsync();
+        string body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal("internal_error", error.GetProperty("code").GetString());
         Assert.False(string.IsNullOrWhiteSpace(error.GetProperty("correlationId").GetString()));
@@ -188,7 +188,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Capture_confirm_and_image_download()
     {
-        var purchaseId = await RecordedIdWithReceipt(5.55m, Jpeg(0x91));
+        long purchaseId = await RecordedIdWithReceipt(5.55m, Jpeg(0x91));
 
         var download = await _client.GetAsync($"/purchases/{purchaseId}/receipt/content");
 
@@ -227,7 +227,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Rerun_extraction_returns_the_full_result_synchronously()
     {
-        var purchaseId = await RecordedIdWithReceipt(7.77m, Jpeg(0x96));
+        long purchaseId = await RecordedIdWithReceipt(7.77m, Jpeg(0x96));
 
         var reran = await ExpensesApi.Read<JsonElement>(
             await _client.PostAsync($"/purchases/{purchaseId}/extraction/rerun", null));
@@ -244,7 +244,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         var units = await ExpensesApi.Read<JsonElement>(await _client.GetAsync("/units"));
         Assert.Contains(units.EnumerateArray(), unit => unit.GetProperty("code").GetString() == "KG");
 
-        var code = $"HTTP_TEST_{Interlocked.Increment(ref _sequence)}";
+        string code = $"HTTP_TEST_{Interlocked.Increment(ref _sequence)}";
         var created = await _client.PostAsJsonAsync("/categories", new { code, name = "Created over HTTP" });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
@@ -288,7 +288,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Candidates_are_confirmed_over_http()
     {
-        var purchaseId = await RecordedIdWithReceipt(10.00m, Jpeg(0x94));
+        long purchaseId = await RecordedIdWithReceipt(10.00m, Jpeg(0x94));
 
         // Re-running produces fresh candidates for the receipt already attached to the purchase.
         await _client.PostAsync($"/purchases/{purchaseId}/extraction/rerun", null);
@@ -310,7 +310,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Deleting_a_receipt_over_http_leaves_the_purchase()
     {
-        var purchaseId = await RecordedIdWithReceipt(11.11m, Jpeg(0x95));
+        long purchaseId = await RecordedIdWithReceipt(11.11m, Jpeg(0x95));
 
         var deleted = await _client.DeleteAsync($"/purchases/{purchaseId}/receipt");
 
@@ -324,22 +324,15 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Single(purchase.GetProperty("expenses").EnumerateArray());
     }
 
-    private async Task<HttpResponseMessage> Record(object command) =>
-        await _client.PostAsJsonAsync("/purchases", command, ExpensesApi.Json);
-
-    private async Task<long> RecordedId(decimal amount)
-    {
-        var response = await Record(NewPurchase(amount, [Line("Line", amount)]));
-
-        return (await ExpensesApi.Read<JsonElement>(response)).GetProperty("id").GetInt64();
-    }
+    private async Task<HttpResponseMessage> Record(object command)
+        => await _client.PostAsJsonAsync("/purchases", command, ExpensesApi.Json);
 
     /// <summary>Captures an image, then confirms it into a new purchase of the given amount.</summary>
     private async Task<long> RecordedIdWithReceipt(decimal amount, byte[] content)
     {
         var captured = await Capture(content);
-        var tempKey = captured.GetProperty("tempKey").GetString();
-        var state = captured.GetProperty("state").GetString();
+        string? tempKey = captured.GetProperty("tempKey").GetString();
+        string? state = captured.GetProperty("state").GetString();
 
         var response = await Record(new
         {
@@ -377,13 +370,13 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         return await ExpensesApi.Read<JsonElement>(response);
     }
 
-    private static object NewPurchase(decimal amount, object[] expenses, DateTime? occurredAt = null) =>
-        new { occurredAt = occurredAt ?? Next(), amount, expenses };
+    private static object NewPurchase(decimal amount, object[] expenses, DateTime? occurredAt = null)
+        => new { occurredAt = occurredAt ?? Next(), amount, expenses };
 
     private static object Line(string description, decimal amount) => new { description, amount };
 
     private static DateTime Next() => Occurred.AddMinutes(Interlocked.Increment(ref _sequence));
 
-    private static byte[] Jpeg(byte seed) =>
-        [0xFF, 0xD8, 0xFF, 0xE0, seed, 0x4A, 0x46, 0x49, 0x46, 0x00, seed, 0x03];
+    private static byte[] Jpeg(byte seed)
+        => [0xFF, 0xD8, 0xFF, 0xE0, seed, 0x4A, 0x46, 0x49, 0x46, 0x00, seed, 0x03];
 }

@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
@@ -28,7 +27,7 @@ public static class ExpensesLoggingExtensions
         this IHostApplicationBuilder builder,
         bool useStandardError)
     {
-        var logFilePath = Path.Combine(builder.Environment.ContentRootPath, "logs", "expenses-.log");
+        string logFilePath = Path.Combine(builder.Environment.ContentRootPath, "logs", "expenses-.log");
 
         builder.Services.AddSerilog((_, configuration) =>
         {

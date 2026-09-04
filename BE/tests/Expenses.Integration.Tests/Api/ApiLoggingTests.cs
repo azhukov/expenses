@@ -27,10 +27,10 @@ public sealed class ApiLoggingTests(PostgresFixture postgres) : IAsyncLifetime
             using var client = api.CreateClient();
         }
 
-        var logsDirectory = Path.Combine(_contentRoot, "logs");
+        string logsDirectory = Path.Combine(_contentRoot, "logs");
         Assert.True(Directory.Exists(logsDirectory), $"Expected a logs directory at {logsDirectory}.");
 
-        var logFiles = Directory.GetFiles(logsDirectory, "*.log");
+        string[] logFiles = Directory.GetFiles(logsDirectory, "*.log");
         Assert.NotEmpty(logFiles);
         Assert.Contains(
             logFiles,

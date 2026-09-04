@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Expenses.Integration.Tests.Harness;
@@ -31,7 +30,7 @@ public sealed class FiscalPortalStub : IAsyncDisposable
         {
             lock (_requests)
             {
-                return _requests.ToList();
+                return [.. _requests];
             }
         }
     }
@@ -44,31 +43,31 @@ public sealed class FiscalPortalStub : IAsyncDisposable
         "Fixtures",
         "verify-32AA324CFF5030271E16D59F7F8EF636.json"));
 
-    public static Task<FiscalPortalStub> Answering() =>
-        Start(async context =>
+    public static Task<FiscalPortalStub> Answering()
+        => Start(async context =>
         {
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync(RecordedInvoice());
         });
 
     /// <summary>A service that has no record of the invoice: 200, and nothing in it.</summary>
-    public static Task<FiscalPortalStub> WithNoRecord() =>
-        Start(async context =>
+    public static Task<FiscalPortalStub> WithNoRecord()
+        => Start(async context =>
         {
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync(string.Empty);
         });
 
-    public static Task<FiscalPortalStub> Failing(HttpStatusCode status) =>
-        Start(context =>
+    public static Task<FiscalPortalStub> Failing(HttpStatusCode status)
+        => Start(context =>
         {
             context.Response.StatusCode = (int)status;
             return Task.CompletedTask;
         });
 
     /// <summary>A service that accepts the request and then says nothing at all.</summary>
-    public static Task<FiscalPortalStub> Hanging() =>
-        Start(async context => await Task.Delay(TimeSpan.FromMinutes(5), context.RequestAborted));
+    public static Task<FiscalPortalStub> Hanging()
+        => Start(async context => await Task.Delay(TimeSpan.FromMinutes(5), context.RequestAborted));
 
     public async ValueTask DisposeAsync()
     {
@@ -91,7 +90,7 @@ public sealed class FiscalPortalStub : IAsyncDisposable
                 ? (await context.Request.ReadFormAsync()).ToDictionary(
                     field => field.Key,
                     field => field.Value.ToString())
-                : new Dictionary<string, string>();
+                : [];
 
             lock (stub._requests)
             {

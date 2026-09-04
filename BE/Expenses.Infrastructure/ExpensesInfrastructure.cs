@@ -28,7 +28,7 @@ public static class ExpensesInfrastructure
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connection = configuration.GetConnectionString(ConnectionName)
+        string connection = configuration.GetConnectionString(ConnectionName)
             ?? throw new InvalidOperationException(
                 $"No connection string named '{ConnectionName}' is configured.");
 

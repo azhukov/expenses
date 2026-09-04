@@ -24,10 +24,9 @@ public sealed class ListCategories(ICategoryRepository categories)
     {
         var listed = await categories.List(includeInactive, cancellationToken);
 
-        return listed
+        return [.. listed
             .OrderBy(category => category.Code, StringComparer.Ordinal)
-            .Select(CategoryView.Of)
-            .ToList();
+            .Select(CategoryView.Of)];
     }
 }
 
@@ -167,8 +166,8 @@ internal static class CategoryLookup
     public static async Task<Category> Require(
         this ICategoryRepository categories,
         string code,
-        CancellationToken cancellationToken) =>
-        await categories.FindByCode(code, cancellationToken)
+        CancellationToken cancellationToken)
+        => await categories.FindByCode(code, cancellationToken)
         ?? throw ExpensesException.For(
             ApplicationErrors.CategoryNotFound,
             $"There is no category with code '{code}'.",

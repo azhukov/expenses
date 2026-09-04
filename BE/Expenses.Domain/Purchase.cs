@@ -52,7 +52,7 @@ public sealed class Purchase
                 return null;
             }
 
-            var listTotal = Amount + TotalSaving;
+            decimal listTotal = Amount + TotalSaving;
             return listTotal == 0m ? null : Math.Round(TotalSaving / listTotal * 100m, 2);
         }
     }
@@ -68,8 +68,8 @@ public sealed class Purchase
         IEnumerable<Expense> expenses,
         long? merchantId = null,
         string? merchantRaw = null,
-        Receipt? receipt = null) =>
-        Create(NormaliseOccurrence(occurredAt), amount, expenses, merchantId, merchantRaw, receipt);
+        Receipt? receipt = null)
+        => Create(NormaliseOccurrence(occurredAt), amount, expenses, merchantId, merchantRaw, receipt);
 
     public static Purchase Record(
         DateOnly occurredOn,
@@ -77,8 +77,8 @@ public sealed class Purchase
         IEnumerable<Expense> expenses,
         long? merchantId = null,
         string? merchantRaw = null,
-        Receipt? receipt = null) =>
-        Create(occurredOn.ToDateTime(TimeOnly.MinValue), amount, expenses, merchantId, merchantRaw, receipt);
+        Receipt? receipt = null)
+        => Create(occurredOn.ToDateTime(TimeOnly.MinValue), amount, expenses, merchantId, merchantRaw, receipt);
 
     /// <summary>Matching a merchant later must not erase the verbatim text (D9, D18).</summary>
     public void MatchMerchant(long merchantId) => MerchantId = merchantId;
@@ -117,7 +117,7 @@ public sealed class Purchase
         string? merchantRaw,
         Receipt? receipt)
     {
-        var purchaseAmount = ValidateAmount(amount, nameof(amount));
+        decimal purchaseAmount = ValidateAmount(amount, nameof(amount));
         var lines = Validated(purchaseAmount, expenses);
 
         var purchase = new Purchase
@@ -147,7 +147,7 @@ public sealed class Purchase
             throw new InvalidOperationException("A purchase requires at least one expense.");
         }
 
-        var sum = lines.Sum(expense => expense.Amount);
+        decimal sum = lines.Sum(expense => expense.Amount);
         if (sum != amount)
         {
             throw new InvalidOperationException(
@@ -174,7 +174,7 @@ public sealed class Purchase
             return value;
         }
 
-        var rounded = Math.Round(value, AmountMaxScale);
+        decimal rounded = Math.Round(value, AmountMaxScale);
         if (rounded != value)
         {
             throw new ArgumentOutOfRangeException(
@@ -192,6 +192,6 @@ public sealed class Purchase
     /// keeps the same year, month, day, hour, minute and second. A date with no time of day
     /// becomes 00:00:00 on that date, which is what the <see cref="DateOnly"/> overload relies on.
     /// </summary>
-    private static DateTime NormaliseOccurrence(DateTime occurredAt) =>
-        DateTime.SpecifyKind(occurredAt, DateTimeKind.Unspecified);
+    private static DateTime NormaliseOccurrence(DateTime occurredAt)
+        => DateTime.SpecifyKind(occurredAt, DateTimeKind.Unspecified);
 }

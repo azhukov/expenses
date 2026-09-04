@@ -51,7 +51,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// </summary>
     public async Task<string> ProvisionAnother(string name)
     {
-        var script = (await ProvisioningScript()).Replace(
+        string script = (await ProvisioningScript()).Replace(
             $"CREATE DATABASE {DatabaseName}",
             $"CREATE DATABASE {name}",
             StringComparison.Ordinal);

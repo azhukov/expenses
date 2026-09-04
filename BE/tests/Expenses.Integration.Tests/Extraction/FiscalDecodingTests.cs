@@ -8,7 +8,6 @@ using SixLabors.ImageSharp.PixelFormats;
 using ZXing;
 using ZXing.Common;
 
-
 namespace Expenses.Integration.Tests.Extraction;
 
 /// <summary>
@@ -97,9 +96,9 @@ public sealed class FiscalDecodingTests(PostgresFixture postgres)
         }.Encode(payload);
 
         using var image = new Image<Rgba32>(matrix.Width, matrix.Height);
-        for (var y = 0; y < matrix.Height; y++)
+        for (int y = 0; y < matrix.Height; y++)
         {
-            for (var x = 0; x < matrix.Width; x++)
+            for (int x = 0; x < matrix.Width; x++)
             {
                 image[x, y] = matrix[x, y] ? Color.Black.ToPixel<Rgba32>() : Color.White.ToPixel<Rgba32>();
             }

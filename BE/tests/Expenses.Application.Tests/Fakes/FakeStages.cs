@@ -19,24 +19,24 @@ internal sealed class FakeStage(
 
     public int Runs { get; private set; }
 
-    public static FakeStage Producing(string name, ExtractionStageRole role, ExtractionResult result) =>
-        new(name, role, _ => new ExtractionStageOutcome(result));
+    public static FakeStage Producing(string name, ExtractionStageRole role, ExtractionResult result)
+        => new(name, role, _ => new ExtractionStageOutcome(result));
 
-    public static FakeStage Silent(string name, ExtractionStageRole role) =>
-        new(name, role, _ => ExtractionStageOutcome.Nothing);
+    public static FakeStage Silent(string name, ExtractionStageRole role)
+        => new(name, role, _ => ExtractionStageOutcome.Nothing);
 
     /// <summary>
     /// The deterministic stage that answers with a whole invoice and the identifier only the
     /// verification service knows, recorded as having come from there (D24).
     /// </summary>
-    public static FakeStage Retrieving(string name, ExtractionResult result, FiscalIdentifiers identifiers) =>
-        new(name, ExtractionStageRole.Primary, _ => new ExtractionStageOutcome(
+    public static FakeStage Retrieving(string name, ExtractionResult result, FiscalIdentifiers identifiers)
+        => new(name, ExtractionStageRole.Primary, _ => new ExtractionStageOutcome(
             result,
             identifiers,
             Receipt.FiscalSource.RetrievedFromService));
 
-    public static FakeStage Decoding(string name, FiscalIdentifiers identifiers) =>
-        new(name, ExtractionStageRole.Opportunistic, _ => new ExtractionStageOutcome(Fiscal: identifiers));
+    public static FakeStage Decoding(string name, FiscalIdentifiers identifiers)
+        => new(name, ExtractionStageRole.Opportunistic, _ => new ExtractionStageOutcome(Fiscal: identifiers));
 
     public Task<ExtractionStageOutcome> Run(
         ExtractionStageRequest request,
@@ -55,8 +55,8 @@ internal static class Results
         string stage,
         long receiptImageId = 1,
         string engine = "placeholder",
-        IReadOnlyDictionary<string, decimal>? reportedConfidence = null) =>
-        ExtractionResult.From(
+        IReadOnlyDictionary<string, decimal>? reportedConfidence = null)
+        => ExtractionResult.From(
             receiptImageId,
             engine,
             "1.0",
@@ -89,8 +89,8 @@ internal static class Results
     public static ExtractionResult Failing(
         string stage,
         bool alsoBreakDiscount = false,
-        long receiptImageId = 1) =>
-        ExtractionResult.From(
+        long receiptImageId = 1)
+        => ExtractionResult.From(
             receiptImageId,
             "placeholder",
             "1.0",

@@ -1,5 +1,4 @@
-﻿using Expenses.Application.Abstractions;
-using Expenses.Application.Errors;
+﻿using Expenses.Application.Errors;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
 using Expenses.Application.Tests.Fakes;

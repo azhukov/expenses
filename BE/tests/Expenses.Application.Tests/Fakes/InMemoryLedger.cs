@@ -89,9 +89,9 @@ internal sealed class InMemoryLedger :
     /// <summary>Writes bytes to the permanent store directly, as if a capture had already promoted them.</summary>
     public StoredReceiptFile GivenReceiptFile(byte[] content)
     {
-        var hash = SHA256.HashData(content);
-        var contentType = ContentTypeOf(content);
-        var storageKey = Convert.ToHexStringLower(hash);
+        byte[] hash = SHA256.HashData(content);
+        string contentType = ContentTypeOf(content);
+        string storageKey = Convert.ToHexStringLower(hash);
 
         _files[storageKey] = content;
 
@@ -154,22 +154,22 @@ internal sealed class InMemoryLedger :
 
     // ---- IPurchaseRepository ----------------------------------------------
 
-    public Task<Purchase?> FindById(long id, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_purchases.SingleOrDefault(purchase => purchase.Id == id));
+    public Task<Purchase?> FindById(long id, CancellationToken cancellationToken = default)
+        => Task.FromResult(_purchases.SingleOrDefault(purchase => purchase.Id == id));
 
     public Task<Purchase?> FindByOccurrenceAndAmount(
         DateTime occurredAt,
         decimal amount,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult(_purchases.FirstOrDefault(purchase =>
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(_purchases.FirstOrDefault(purchase =>
             purchase.OccurredAt == occurredAt && purchase.Amount == amount));
 
     /// <summary>
     /// Byte-identical receipts share one file, so this is what stops one purchase's deletion
     /// removing a file another is still showing (D11).
     /// </summary>
-    public Task<int> CountByReceiptContentHash(byte[] contentHash, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_purchases.Count(purchase =>
+    public Task<int> CountByReceiptContentHash(byte[] contentHash, CancellationToken cancellationToken = default)
+        => Task.FromResult(_purchases.Count(purchase =>
             purchase.Receipt is { } receipt && receipt.ContentHash.SequenceEqual(contentHash)));
 
     public Task<IReadOnlyList<Purchase>> List(
@@ -198,26 +198,22 @@ internal sealed class InMemoryLedger :
 
     // ---- ICategoryRepository ----------------------------------------------
 
-    Task<Category?> ICategoryRepository.FindById(long id, CancellationToken cancellationToken) =>
-        Task.FromResult(_categories.FirstOrDefault(category => category.Id == id));
+    Task<Category?> ICategoryRepository.FindById(long id, CancellationToken cancellationToken)
+        => Task.FromResult(_categories.FirstOrDefault(category => category.Id == id));
 
-    Task<Category?> ICategoryRepository.FindByCode(string code, CancellationToken cancellationToken) =>
-        Task.FromResult(_categories.FirstOrDefault(category =>
+    Task<Category?> ICategoryRepository.FindByCode(string code, CancellationToken cancellationToken)
+        => Task.FromResult(_categories.FirstOrDefault(category =>
             string.Equals(category.Code, code, StringComparison.OrdinalIgnoreCase)));
 
     Task<IReadOnlyList<Category>> ICategoryRepository.List(
         bool includeInactive,
-        CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<Category>>(_categories
-            .Where(category => includeInactive || category.IsActive)
-            .ToList());
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Category>>([.. _categories.Where(category => includeInactive || category.IsActive)]);
 
     Task<IReadOnlyList<Category>> ICategoryRepository.ActiveChildrenOf(
         long categoryId,
-        CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<Category>>(_categories
-            .Where(category => category.Parent?.Id == categoryId && category.IsActive)
-            .ToList());
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Category>>([.. _categories.Where(category => category.Parent?.Id == categoryId && category.IsActive)]);
 
     Task ICategoryRepository.Add(Category category, CancellationToken cancellationToken)
     {
@@ -234,37 +230,33 @@ internal sealed class InMemoryLedger :
 
     // ---- IUnitRepository ---------------------------------------------------
 
-    Task<Unit?> IUnitRepository.FindById(long id, CancellationToken cancellationToken) =>
-        Task.FromResult(_units.FirstOrDefault(unit => unit.Id == id));
+    Task<Unit?> IUnitRepository.FindById(long id, CancellationToken cancellationToken)
+        => Task.FromResult(_units.FirstOrDefault(unit => unit.Id == id));
 
-    Task<Unit?> IUnitRepository.FindByCode(string code, CancellationToken cancellationToken) =>
-        Task.FromResult(_units.FirstOrDefault(unit =>
+    Task<Unit?> IUnitRepository.FindByCode(string code, CancellationToken cancellationToken)
+        => Task.FromResult(_units.FirstOrDefault(unit =>
             string.Equals(unit.Code, code, StringComparison.OrdinalIgnoreCase)));
 
-    Task<IReadOnlyList<Unit>> IUnitRepository.List(bool includeInactive, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<Unit>>(_units
-            .Where(unit => includeInactive || unit.IsActive)
-            .ToList());
+    Task<IReadOnlyList<Unit>> IUnitRepository.List(bool includeInactive, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Unit>>([.. _units.Where(unit => includeInactive || unit.IsActive)]);
 
     // ---- IMerchantRepository -----------------------------------------------
 
-    Task<Merchant?> IMerchantRepository.FindById(long id, CancellationToken cancellationToken) =>
-        Task.FromResult(_merchants.FirstOrDefault(merchant => merchant.Id == id));
+    Task<Merchant?> IMerchantRepository.FindById(long id, CancellationToken cancellationToken)
+        => Task.FromResult(_merchants.FirstOrDefault(merchant => merchant.Id == id));
 
-    public Task<Merchant?> FindByTaxId(string taxId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_merchants.FirstOrDefault(merchant =>
+    public Task<Merchant?> FindByTaxId(string taxId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_merchants.FirstOrDefault(merchant =>
             merchant.TaxId is not null && string.Equals(merchant.TaxId, taxId, StringComparison.Ordinal)));
 
-    public Task<Merchant?> FindByName(string name, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_merchants.FirstOrDefault(merchant =>
+    public Task<Merchant?> FindByName(string name, CancellationToken cancellationToken = default)
+        => Task.FromResult(_merchants.FirstOrDefault(merchant =>
             string.Equals(merchant.Name, name, StringComparison.OrdinalIgnoreCase)));
 
     Task<IReadOnlyList<Merchant>> IMerchantRepository.List(
         bool includeInactive,
-        CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<Merchant>>(_merchants
-            .Where(merchant => includeInactive || merchant.IsActive)
-            .ToList());
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Merchant>>([.. _merchants.Where(merchant => includeInactive || merchant.IsActive)]);
 
     public Task<IReadOnlyList<MerchantMatch>> Search(string term, CancellationToken cancellationToken = default)
     {
@@ -284,10 +276,8 @@ internal sealed class InMemoryLedger :
 
     Task<IReadOnlyList<Merchant>> IMerchantRepository.ActiveChildrenOf(
         long merchantId,
-        CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<Merchant>>(_merchants
-            .Where(merchant => merchant.Parent?.Id == merchantId && merchant.IsActive)
-            .ToList());
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Merchant>>([.. _merchants.Where(merchant => merchant.Parent?.Id == merchantId && merchant.IsActive)]);
 
     Task IMerchantRepository.Add(Merchant merchant, CancellationToken cancellationToken)
     {
@@ -303,17 +293,17 @@ internal sealed class InMemoryLedger :
     /// </summary>
     public Task<StoredReceiptFile> Save(byte[] content, CancellationToken cancellationToken = default)
     {
-        var hash = SHA256.HashData(content);
-        var contentType = ContentTypeOf(content);
-        var storageKey = $"{Convert.ToHexStringLower(hash)}";
+        byte[] hash = SHA256.HashData(content);
+        string contentType = ContentTypeOf(content);
+        string storageKey = $"{Convert.ToHexStringLower(hash)}";
 
         _files[storageKey] = content;
 
         return Task.FromResult(new StoredReceiptFile(hash, storageKey, contentType, content.LongLength));
     }
 
-    public Task<byte[]?> Read(string storageKey, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_files.GetValueOrDefault(storageKey));
+    public Task<byte[]?> Read(string storageKey, CancellationToken cancellationToken = default)
+        => Task.FromResult(_files.GetValueOrDefault(storageKey));
 
     public Task Delete(string storageKey, CancellationToken cancellationToken = default)
     {
@@ -323,8 +313,8 @@ internal sealed class InMemoryLedger :
 
     // ---- IExtractionCandidateStore ----------------------------------------
 
-    public Task<ExtractionResult?> FindLatest(long purchaseId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_results.GetValueOrDefault(purchaseId));
+    public Task<ExtractionResult?> FindLatest(long purchaseId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_results.GetValueOrDefault(purchaseId));
 
     public Task Replace(long purchaseId, ExtractionResult result, CancellationToken cancellationToken = default)
     {
@@ -348,8 +338,8 @@ internal sealed class InMemoryLedger :
         return Task.FromResult(new TemporaryCapture(key, ContentTypeOf(content)));
     }
 
-    public Task<byte[]?> Read(Guid key, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_tempFiles.TryGetValue(key, out var stored) ? stored.Content : null);
+    public Task<byte[]?> Read(Guid key, CancellationToken cancellationToken = default)
+        => Task.FromResult(_tempFiles.TryGetValue(key, out var stored) ? stored.Content : null);
 
     public Task Delete(Guid key, CancellationToken cancellationToken = default)
     {
@@ -359,19 +349,18 @@ internal sealed class InMemoryLedger :
 
     public Task<IReadOnlyList<Guid>> ListOlderThan(
         DateTimeOffset cutoff,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<Guid>>(_tempFiles
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Guid>>([.. _tempFiles
             .Where(entry => entry.Value.WrittenAt < cutoff)
-            .Select(entry => entry.Key)
-            .ToList());
+            .Select(entry => entry.Key)]);
 
     /// <summary>
     /// Stands in for detection from content (7.2), which belongs to the storage adapter. The fake
     /// reads magic bytes rather than a declared type, so nothing above it can come to depend on a
     /// declared type the real adapter ignores.
     /// </summary>
-    private static string ContentTypeOf(byte[] content) =>
-        content.Length >= 3 && content[0] == 0xFF && content[1] == 0xD8
+    private static string ContentTypeOf(byte[] content)
+        => content.Length >= 3 && content[0] == 0xFF && content[1] == 0xD8
             ? "image/jpeg"
             : "application/octet-stream";
 }

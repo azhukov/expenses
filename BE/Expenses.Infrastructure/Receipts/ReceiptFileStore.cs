@@ -39,7 +39,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
     /// </summary>
     public static void Verify(ReceiptStoreOptions options)
     {
-        var root = options.RootPath;
+        string root = options.RootPath;
 
         try
         {
@@ -47,7 +47,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
 
             // Creating the directory proves nothing about being able to write into it — a
             // read-only mount answers the first and refuses the second.
-            var probe = Path.Combine(root, $".write-probe-{Environment.ProcessId}");
+            string probe = Path.Combine(root, $".write-probe-{Environment.ProcessId}");
             File.WriteAllBytes(probe, []);
             File.Delete(probe);
         }
@@ -62,11 +62,11 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
 
     public async Task<StoredReceiptFile> Save(byte[] content, CancellationToken cancellationToken = default)
     {
-        var contentType = ReceiptContent.Validate(content);
+        string contentType = ReceiptContent.Validate(content);
 
-        var hash = SHA256.HashData(content);
-        var storageKey = StorageKey(hash, contentType);
-        var path = Resolve(storageKey);
+        byte[] hash = SHA256.HashData(content);
+        string storageKey = StorageKey(hash, contentType);
+        string path = Resolve(storageKey);
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
@@ -82,7 +82,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
 
     public async Task<byte[]?> Read(string storageKey, CancellationToken cancellationToken = default)
     {
-        var path = Resolve(storageKey);
+        string path = Resolve(storageKey);
 
         return File.Exists(path) ? await File.ReadAllBytesAsync(path, cancellationToken) : null;
     }
@@ -112,7 +112,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
     /// </summary>
     private static async Task WriteAtomically(string path, byte[] content, CancellationToken cancellationToken)
     {
-        var temporary = $"{path}.{Guid.NewGuid():n}.tmp";
+        string temporary = $"{path}.{Guid.NewGuid():n}.tmp";
 
         try
         {
@@ -132,11 +132,11 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
     /// </summary>
     private static string StorageKey(byte[] hash, string contentType)
     {
-        var hex = Convert.ToHexStringLower(hash);
+        string hex = Convert.ToHexStringLower(hash);
 
         return $"{hex[..2]}/{hex[2..4]}/{hex}{Extensions.GetValueOrDefault(contentType, ".bin")}";
     }
 
-    private string Resolve(string storageKey) =>
-        Path.Combine(options.RootPath, storageKey.Replace('/', Path.DirectorySeparatorChar));
+    private string Resolve(string storageKey)
+        => Path.Combine(options.RootPath, storageKey.Replace('/', Path.DirectorySeparatorChar));
 }

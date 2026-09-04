@@ -1,7 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 using Expenses.Api;
 using Expenses.Api.Controllers;
-using Expenses.Application.Errors;
 using Expenses.Infrastructure;
 using Expenses.Infrastructure.Logging;
 using Expenses.Infrastructure.Persistence;

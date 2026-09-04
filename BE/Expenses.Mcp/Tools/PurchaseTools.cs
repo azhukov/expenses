@@ -98,12 +98,12 @@ public sealed record RecordPurchaseToolResult(
 {
     public static RecordPurchaseToolResult Of(RecordPurchaseResult result)
     {
-        var merchant = result.Merchant is null
+        string merchant = result.Merchant is null
             ? string.Empty
             : $" at {result.Merchant.Name}"
               + (result.MerchantNewlyAdded ? ", newly added to the merchant list" : string.Empty);
 
-        var summary = result.AlreadyRecorded
+        string summary = result.AlreadyRecorded
             ? $"This purchase was already recorded: {result.Purchase.Amount} on "
               + $"{result.Purchase.OccurredAt:yyyy-MM-dd HH:mm}, identifier {result.Purchase.Id}. "
               + "Nothing was changed."
@@ -141,8 +141,8 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
         [Description("The lines making up the purchase. Their amounts must sum to the total.")]
         IReadOnlyList<ExpenseArgument> expenses,
         [Description("Where the purchase was made, if known.")] MerchantArgument? merchant = null,
-        CancellationToken cancellationToken = default) =>
-        RecordPurchaseToolResult.Of(await recordPurchase.Execute(
+        CancellationToken cancellationToken = default)
+        => RecordPurchaseToolResult.Of(await recordPurchase.Execute(
             new RecordPurchaseCommand(
                 occurredAt,
                 amount,
@@ -169,8 +169,8 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
         [Description("When the purchase happened. Omit only if the capture's fiscal QR decoded a timestamp.")]
         DateTime? occurredAt = null,
         [Description("Where the purchase was made, if known.")] MerchantArgument? merchant = null,
-        CancellationToken cancellationToken = default) =>
-        RecordPurchaseToolResult.Of(await recordPurchase.Execute(
+        CancellationToken cancellationToken = default)
+        => RecordPurchaseToolResult.Of(await recordPurchase.Execute(
             new RecordPurchaseCommand(
                 occurredAt,
                 amount,
@@ -187,8 +187,8 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
         """)]
     public async Task<PurchaseView> GetPurchase(
         [Description("The purchase identifier.")] long id,
-        CancellationToken cancellationToken = default) =>
-        await getPurchase.Execute(id, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await getPurchase.Execute(id, cancellationToken);
 
     [McpServerTool(Name = "list_purchases")]
     [Description("""
@@ -201,6 +201,6 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
         [Description("Latest occurrence date to include, inclusive.")] DateOnly? to = null,
         [Description("How many purchases to skip, for paging.")] int skip = 0,
         [Description("How many purchases to return. At most 200.")] int? take = null,
-        CancellationToken cancellationToken = default) =>
-        await listPurchases.Execute(new ListPurchasesQuery(from, to, skip, take), cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await listPurchases.Execute(new ListPurchasesQuery(from, to, skip, take), cancellationToken);
 }

@@ -39,7 +39,7 @@ public sealed class ReceiptsController : ControllerBase
 
         // A file that is not there is a missing image, not a server fault: the row is still true
         // about what was uploaded, and the store is a separate backup boundary (D11).
-        var content = await images.Read(receipt.StorageKey, cancellationToken)
+        byte[] content = await images.Read(receipt.StorageKey, cancellationToken)
             ?? throw ExpensesException.For(
                 ApplicationErrors.ReceiptImageNotFound,
                 $"The stored file for the receipt of purchase {id} is missing.",

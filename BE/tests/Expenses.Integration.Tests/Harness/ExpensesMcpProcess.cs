@@ -114,13 +114,13 @@ public sealed class ExpensesMcpProcess : IAsyncDisposable
                 "Expenses.Mcp.dll could not be located: no Expenses.sln above the test output.");
         }
 
-        var configuration = AppContext.BaseDirectory.Contains(
+        string configuration = AppContext.BaseDirectory.Contains(
             $"{Path.DirectorySeparatorChar}Release{Path.DirectorySeparatorChar}",
             StringComparison.OrdinalIgnoreCase)
             ? "Release"
             : "Debug";
 
-        var assembly = Path.Combine(
+        string assembly = Path.Combine(
             repository.FullName, "Expenses.Mcp", "bin", configuration, "net10.0", "Expenses.Mcp.dll");
 
         if (!File.Exists(assembly))

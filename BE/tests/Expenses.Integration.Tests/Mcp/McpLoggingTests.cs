@@ -51,11 +51,11 @@ public sealed class McpLoggingTests(PostgresFixture postgres) : IAsyncLifetime
         using var reader = new StreamReader(process.StandardOutput);
 
         var deadline = DateTime.UtcNow.AddSeconds(30);
-        var seen = string.Empty;
+        string seen = string.Empty;
 
         while (DateTime.UtcNow < deadline && !seen.Contains("Expenses.Mcp starting (http transport)", StringComparison.Ordinal))
         {
-            var line = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            string? line = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
             if (line is null)
             {
                 break;

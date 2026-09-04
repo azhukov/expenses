@@ -18,8 +18,8 @@ public sealed class RecordPurchaseTests
 
     private readonly InMemoryLedger _ledger = new();
 
-    private RecordPurchase Subject =>
-        new(_ledger, _ledger, _ledger, new ResolveMerchant(_ledger, _ledger), _ledger, _ledger, _ledger);
+    private RecordPurchase Subject
+        => new(_ledger, _ledger, _ledger, new ResolveMerchant(_ledger, _ledger), _ledger, _ledger, _ledger);
 
     [Fact]
     public async Task Manual_single_line_entry()

@@ -15,7 +15,7 @@ public sealed class ListPurchases(IPurchaseRepository purchases)
         ListPurchasesQuery query,
         CancellationToken cancellationToken = default)
     {
-        var take = query.Take ?? DefaultPageSize;
+        int take = query.Take ?? DefaultPageSize;
 
         if (take is < 1 || take > MaxPageSize)
         {
@@ -48,6 +48,6 @@ public sealed class ListPurchases(IPurchaseRepository purchases)
             new PurchaseListQuery(query.From, query.To, query.Skip, take),
             cancellationToken);
 
-        return listed.Select(purchase => PurchaseView.Of(purchase)).ToList();
+        return [.. listed.Select(purchase => PurchaseView.Of(purchase))];
     }
 }

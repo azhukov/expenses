@@ -37,7 +37,7 @@ internal sealed class FiscalCodeDecoder : IFiscalCodeDecoder
         // zxing-cpp reads luminance. Decoding straight to L8 is both what it wants and less
         // memory than a colour frame of a 12-megapixel photograph.
         using var luminance = Image.Load<L8>(image.Content);
-        var pixels = new byte[luminance.Width * luminance.Height];
+        byte[] pixels = new byte[luminance.Width * luminance.Height];
         luminance.CopyPixelDataTo(pixels);
 
         var reader = new BarcodeReader
@@ -79,14 +79,14 @@ internal static class FiscalIdentity
                 ? url.Fragment[(url.Fragment.IndexOf('?', StringComparison.Ordinal) + 1)..]
                 : string.Empty);
 
-        var ikof = Parameter(query, fragment, "iic", "ikof");
-        var issuerTaxNumber = Parameter(query, fragment, "tin");
-        var createdAt = Parameter(query, fragment, "crtd");
+        string? ikof = Parameter(query, fragment, "iic", "ikof");
+        string? issuerTaxNumber = Parameter(query, fragment, "tin");
+        string? createdAt = Parameter(query, fragment, "crtd");
 
         // No JIKR. An earlier version of this read `crtd` — the creation timestamp — into the JIKR
         // slot, so every JIKR the shipped code recorded was a timestamp. The JIKR appears nowhere in
         // the code at all; it is simply not yet known until the portal answers with it (D24).
-        var jikr = Parameter(query, fragment, "jikr");
+        string? jikr = Parameter(query, fragment, "jikr");
 
         return ikof is null && jikr is null && issuerTaxNumber is null && createdAt is null
             ? new FiscalIdentifiers(payload.Trim())
@@ -102,16 +102,16 @@ internal static class FiscalIdentity
     /// The invoice total the code states. Read at the invariant culture, because the portal prints
     /// a decimal point wherever the receipt was issued and wherever this happens to run.
     /// </summary>
-    private static decimal? Total(string? value) =>
-        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var total)
+    private static decimal? Total(string? value)
+        => decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal total)
             ? total
             : null;
 
     private static string? Parameter(
         IReadOnlyDictionary<string, string> query,
         IReadOnlyDictionary<string, string> fragment,
-        params string[] names) =>
-        names
+        params string[] names)
+        => names
             .SelectMany(name => new[]
             {
                 query.GetValueOrDefault(name),
@@ -125,8 +125,8 @@ internal static class FiscalIdentity
     /// would arrive as a space and the portal would be asked about an invoice created at no time at
     /// all. Percent-escapes are still decoded; '+' is left as the character it is.
     /// </summary>
-    private static IReadOnlyDictionary<string, string> Parameters(string text) =>
-        text.TrimStart('?', '#')
+    private static IReadOnlyDictionary<string, string> Parameters(string text)
+        => text.TrimStart('?', '#')
             .Split('&', StringSplitOptions.RemoveEmptyEntries)
             .Select(pair => pair.Split('=', 2))
             .Where(pair => pair.Length == 2)

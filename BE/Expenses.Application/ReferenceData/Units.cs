@@ -14,9 +14,8 @@ public sealed class ListUnits(IUnitRepository units)
     {
         var listed = await units.List(includeInactive, cancellationToken);
 
-        return listed
+        return [.. listed
             .OrderBy(unit => unit.Code, StringComparer.Ordinal)
-            .Select(UnitView.Of)
-            .ToList();
+            .Select(UnitView.Of)];
     }
 }

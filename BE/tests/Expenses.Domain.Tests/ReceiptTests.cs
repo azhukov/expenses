@@ -5,8 +5,8 @@ namespace Expenses.Domain.Tests;
 /// <summary>Scenarios from receipt-ingestion: "Extraction lifecycle", "Extraction can be re-run".</summary>
 public sealed class ReceiptTests
 {
-    private static Receipt AnImage(ExtractionState state = ExtractionState.Extracted, string? failureReason = null) =>
-        Receipt.Of(new byte[32], "ab/cd/abcd.jpg", "image/jpeg", sizeInBytes: 2_000_000, state, failureReason);
+    private static Receipt AnImage(ExtractionState state = ExtractionState.Extracted, string? failureReason = null)
+        => Receipt.Of(new byte[32], "ab/cd/abcd.jpg", "image/jpeg", sizeInBytes: 2_000_000, state, failureReason);
 
     [Fact]
     public void Content_hash_must_be_a_sha256()

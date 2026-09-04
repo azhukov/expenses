@@ -56,7 +56,7 @@ public sealed class PurchaseQueryTests
     [Fact]
     public async Task Listing_is_paged()
     {
-        for (var day = 1; day <= 5; day++)
+        for (int day = 1; day <= 5; day++)
         {
             GivenPurchaseOn(new DateTime(2026, 8, day, 12, 0, 0, DateTimeKind.Unspecified), day);
         }
@@ -86,6 +86,6 @@ public sealed class PurchaseQueryTests
         Assert.Equal(ApplicationErrors.ListingRangeInvalid, error.Error.Code);
     }
 
-    private void GivenPurchaseOn(DateTime occurredAt, decimal amount) =>
-        _ledger.Given(Purchase.Record(occurredAt, amount, [Expense.Record("Line", amount)]));
+    private void GivenPurchaseOn(DateTime occurredAt, decimal amount)
+        => _ledger.Given(Purchase.Record(occurredAt, amount, [Expense.Record("Line", amount)]));
 }

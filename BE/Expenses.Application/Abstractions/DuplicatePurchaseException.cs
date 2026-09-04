@@ -6,16 +6,9 @@
 /// guard is expressed in one place — the use case — rather than leaking an infrastructure
 /// exception upward or reimplementing the guard downward.
 /// </summary>
-public sealed class DuplicatePurchaseException : Exception
+public sealed class DuplicatePurchaseException(DateTime occurredAt, decimal amount, Exception? innerException = null) : Exception($"A purchase occurring {occurredAt:O} for {amount} is already recorded.", innerException)
 {
-    public DuplicatePurchaseException(DateTime occurredAt, decimal amount, Exception? innerException = null)
-        : base($"A purchase occurring {occurredAt:O} for {amount} is already recorded.", innerException)
-    {
-        OccurredAt = occurredAt;
-        Amount = amount;
-    }
+    public DateTime OccurredAt { get; } = occurredAt;
 
-    public DateTime OccurredAt { get; }
-
-    public decimal Amount { get; }
+    public decimal Amount { get; } = amount;
 }

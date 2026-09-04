@@ -51,7 +51,7 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         Assert.Contains(results, result => result.AlreadyRecorded);
 
         using var scope = _services.CreateScope();
-        var stored = await scope.ServiceProvider.GetRequiredService<ExpensesDbContext>()
+        int stored = await scope.ServiceProvider.GetRequiredService<ExpensesDbContext>()
             .Purchases.CountAsync(purchase => purchase.OccurredAt == occurred && purchase.Amount == 2.90m);
 
         Assert.Equal(1, stored);
@@ -60,12 +60,12 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     [Fact]
     public async Task Icu_collation_orders_mixed_language_content()
     {
-        var codes = new[] { "COLL_ZEBRA", "COLL_ÄPFEL", "COLL_APPLE", "COLL_ČAJ", "COLL_CAKE" };
+        string[] codes = new[] { "COLL_ZEBRA", "COLL_ÄPFEL", "COLL_APPLE", "COLL_ČAJ", "COLL_CAKE" };
 
         using (var scope = _services.CreateScope())
         {
             var categories = scope.ServiceProvider.GetRequiredService<ICategoryRepository>();
-            foreach (var code in codes)
+            foreach (string? code in codes)
             {
                 await categories.Add(Category.Create(code, code[5..]));
             }
@@ -154,7 +154,7 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
             .Select(merchant => merchant.Id)
             .ToListAsync();
 
-        var total = await context.Purchases
+        decimal total = await context.Purchases
             .Where(purchase => purchase.MerchantId != null && family.Contains(purchase.MerchantId.Value))
             .SumAsync(purchase => purchase.Amount);
 
@@ -187,7 +187,7 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
                     captured.Extracted.Jikr,
                     captured.FiscalSource)));
 
-        var purchaseId = purchase.Purchase.Id;
+        long purchaseId = purchase.Purchase.Id;
         var view = await scope.ServiceProvider.GetRequiredService<GetExtractionCandidates>().Execute(purchaseId);
 
         Assert.Equal("SUPPLIED-AT-UPLOAD", view.Receipt.FiscalIkofSupplied);
@@ -204,7 +204,7 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     [Fact]
     public async Task A_purchase_with_a_deactivated_category_is_refused_but_history_keeps_it()
     {
-        var code = $"RETIRE_{Interlocked.Increment(ref _sequence)}";
+        string code = $"RETIRE_{Interlocked.Increment(ref _sequence)}";
 
         using var scope = _services.CreateScope();
         var categories = scope.ServiceProvider.GetRequiredService<ICategoryRepository>();
@@ -235,8 +235,8 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         return await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(command);
     }
 
-    private static RecordPurchaseCommand Purchase(decimal amount, MerchantCommand? merchant = null) =>
-        new(Next(), amount, [new ExpenseCommand("Line", amount)], merchant);
+    private static RecordPurchaseCommand Purchase(decimal amount, MerchantCommand? merchant = null)
+        => new(Next(), amount, [new ExpenseCommand("Line", amount)], merchant);
 
     /// <summary>A PNG carrying a QR code, so the decode stage has something real to read.</summary>
     private static byte[] QrReceipt(string payload) => QrImage.Png(payload);

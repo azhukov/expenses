@@ -55,7 +55,7 @@ public sealed class CategoryTests
     public void Depth_is_not_limited()
     {
         var current = Category.Create("L0", "Level 0");
-        for (var level = 1; level <= 12; level++)
+        for (int level = 1; level <= 12; level++)
         {
             current = Category.Create($"L{level}", $"Level {level}", current);
         }

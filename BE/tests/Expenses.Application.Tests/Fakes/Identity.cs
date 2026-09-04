@@ -18,6 +18,6 @@ internal static class Identity
         return entity;
     }
 
-    public static long IdOf(object entity) =>
-        (long)typeof(object).GetType().GetProperty("Id")!.GetValue(entity)!;
+    public static long IdOf(object entity)
+        => (long)typeof(object).GetType().GetProperty("Id")!.GetValue(entity)!;
 }

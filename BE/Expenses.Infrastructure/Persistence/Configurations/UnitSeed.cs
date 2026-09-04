@@ -21,8 +21,8 @@ internal static class UnitSeed
         Row(7, "ML", "Millilitre", "ml", Unit.UnitKind.Volume),
     ];
 
-    private static object Row(long id, string code, string name, string symbol, Unit.UnitKind kind) =>
-        new
+    private static object Row(long id, string code, string name, string symbol, Unit.UnitKind kind)
+        => new
         {
             Id = id,
             Code = code,

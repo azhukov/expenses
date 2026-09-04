@@ -25,8 +25,8 @@ public sealed class ReferenceDataTools(
         """)]
     public async Task<IReadOnlyList<CategoryView>> ListCategories(
         [Description("Include categories that have been retired.")] bool includeInactive = false,
-        CancellationToken cancellationToken = default) =>
-        await listCategories.Execute(includeInactive, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await listCategories.Execute(includeInactive, cancellationToken);
 
     [McpServerTool(Name = "list_units")]
     [Description("""
@@ -35,8 +35,8 @@ public sealed class ReferenceDataTools(
         """)]
     public async Task<IReadOnlyList<UnitView>> ListUnits(
         [Description("Include units that have been retired.")] bool includeInactive = false,
-        CancellationToken cancellationToken = default) =>
-        await listUnits.Execute(includeInactive, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await listUnits.Execute(includeInactive, cancellationToken);
 
     [McpServerTool(Name = "create_category")]
     [Description("""
@@ -48,8 +48,8 @@ public sealed class ReferenceDataTools(
         [Description("A new, permanent code such as HOBBY_SUPPLIES.")] string code,
         [Description("The display name.")] string name,
         [Description("The code of a parent category, to nest this one beneath it.")] string? parentCode = null,
-        CancellationToken cancellationToken = default) =>
-        await createCategory.Execute(new CreateCategoryCommand(code, name, parentCode), cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await createCategory.Execute(new CreateCategoryCommand(code, name, parentCode), cancellationToken);
 
     [McpServerTool(Name = "rename_category")]
     [Description("""
@@ -59,8 +59,8 @@ public sealed class ReferenceDataTools(
     public async Task<CategoryView> RenameCategory(
         [Description("The code of the category to rename.")] string code,
         [Description("The new display name.")] string name,
-        CancellationToken cancellationToken = default) =>
-        await renameCategory.Execute(new RenameCategoryCommand(code, name), cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await renameCategory.Execute(new RenameCategoryCommand(code, name), cancellationToken);
 
     [McpServerTool(Name = "deactivate_category")]
     [Description("""
@@ -69,8 +69,8 @@ public sealed class ReferenceDataTools(
         """)]
     public async Task<CategoryView> DeactivateCategory(
         [Description("The code of the category to retire.")] string code,
-        CancellationToken cancellationToken = default) =>
-        await deactivateCategory.Execute(code, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await deactivateCategory.Execute(code, cancellationToken);
 }
 
 /// <summary>
@@ -92,8 +92,8 @@ public sealed class MerchantTools(
         """)]
     public async Task<IReadOnlyList<MerchantView>> ListMerchants(
         [Description("Include merchants that have been retired.")] bool includeInactive = false,
-        CancellationToken cancellationToken = default) =>
-        await listMerchants.Execute(includeInactive, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await listMerchants.Execute(includeInactive, cancellationToken);
 
     [McpServerTool(Name = "search_merchants")]
     [Description("""
@@ -103,8 +103,8 @@ public sealed class MerchantTools(
         """)]
     public async Task<IReadOnlyList<MerchantMatchView>> SearchMerchants(
         [Description("Part of a merchant name, as the user remembers it.")] string term,
-        CancellationToken cancellationToken = default) =>
-        await searchMerchants.Execute(term, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await searchMerchants.Execute(term, cancellationToken);
 
     [McpServerTool(Name = "rename_merchant")]
     [Description("""
@@ -113,8 +113,8 @@ public sealed class MerchantTools(
     public async Task<MerchantView> RenameMerchant(
         [Description("The merchant identifier.")] long id,
         [Description("The new display name.")] string name,
-        CancellationToken cancellationToken = default) =>
-        await renameMerchant.Execute(id, name, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await renameMerchant.Execute(id, name, cancellationToken);
 
     [McpServerTool(Name = "set_merchant_parent")]
     [Description("""
@@ -124,8 +124,8 @@ public sealed class MerchantTools(
     public async Task<MerchantView> SetMerchantParent(
         [Description("The branch merchant identifier.")] long id,
         [Description("The chain merchant identifier, or null to detach.")] long? parentId = null,
-        CancellationToken cancellationToken = default) =>
-        await setMerchantParent.Execute(id, parentId, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await setMerchantParent.Execute(id, parentId, cancellationToken);
 
     [McpServerTool(Name = "deactivate_merchant")]
     [Description("""
@@ -133,6 +133,6 @@ public sealed class MerchantTools(
         """)]
     public async Task<MerchantView> DeactivateMerchant(
         [Description("The merchant identifier.")] long id,
-        CancellationToken cancellationToken = default) =>
-        await deactivateMerchant.Execute(id, cancellationToken);
+        CancellationToken cancellationToken = default)
+        => await deactivateMerchant.Execute(id, cancellationToken);
 }

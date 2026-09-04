@@ -73,9 +73,9 @@ internal static class DomainErrorTranslation
         _ => throw exception,
     };
 
-    private static bool IsNegative(ArgumentOutOfRangeException exception) =>
-        exception.ActualValue is decimal value && value < 0m;
+    private static bool IsNegative(ArgumentOutOfRangeException exception)
+        => exception.ActualValue is decimal value && value < 0m;
 
-    private static ExpensesException Wrap(string code, Exception exception) =>
-        new(ApplicationError.From(code, exception), exception);
+    private static ExpensesException Wrap(string code, Exception exception)
+        => new(ApplicationError.From(code, exception), exception);
 }

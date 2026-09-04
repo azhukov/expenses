@@ -65,14 +65,14 @@ internal sealed class PlaceholderReceiptExtractor(PlaceholderOptions options, st
 
         // Derived from the bytes rather than invented, so the same image is the same result on
         // every run and two different images are two different results.
-        var seed = Seed(image.Content);
+        uint seed = Seed(image.Content);
         var candidates = new List<ExtractionCandidate>(Lines);
-        var total = 0m;
+        decimal total = 0m;
 
-        for (var line = 1; line <= Lines; line++)
+        for (int line = 1; line <= Lines; line++)
         {
-            var amount = Amount(seed, line);
-            var discount = line == 1 ? Math.Round(amount / 2m, 2) : (decimal?)null;
+            decimal amount = Amount(seed, line);
+            decimal? discount = line == 1 ? Math.Round(amount / 2m, 2) : (decimal?)null;
 
             candidates.Add(ExtractionCandidate.Propose(
                 line,
@@ -94,7 +94,7 @@ internal sealed class PlaceholderReceiptExtractor(PlaceholderOptions options, st
 
         // The failure is arithmetic a validator can prove wrong, not a score claiming doubt: a
         // simulated confidence would exercise the fallback for a reason no real engine has (D20).
-        var reportedTotal = options.Outcome == PlaceholderOutcome.NonReconciling ? total + 0.50m : total;
+        decimal reportedTotal = options.Outcome == PlaceholderOutcome.NonReconciling ? total + 0.50m : total;
 
         return Task.FromResult<ExtractionResult?>(ExtractionResult.From(
             image.PurchaseId,
@@ -117,8 +117,8 @@ internal sealed class PlaceholderReceiptExtractor(PlaceholderOptions options, st
     /// Only values arithmetic cannot decide carry a reported confidence: a number the oracle checks
     /// has no use for one (D20).
     /// </summary>
-    private IReadOnlyDictionary<string, decimal>? ReportedConfidence() =>
-        options.Outcome == PlaceholderOutcome.LowConfidence
+    private IReadOnlyDictionary<string, decimal>? ReportedConfidence()
+        => options.Outcome == PlaceholderOutcome.LowConfidence
             ? new Dictionary<string, decimal>
             {
                 [ExtractedValues.Description] = options.LowConfidenceValue,
@@ -126,20 +126,20 @@ internal sealed class PlaceholderReceiptExtractor(PlaceholderOptions options, st
             }
             : null;
 
-    private IReadOnlyDictionary<string, string> Provenance(params string[] values) =>
-        values.ToDictionary(value => value, _ => stageName);
+    private IReadOnlyDictionary<string, string> Provenance(params string[] values)
+        => values.ToDictionary(value => value, _ => stageName);
 
     /// <summary>Amounts between 1.00 and about 25.00, stable for a given image and line.</summary>
-    private static decimal Amount(uint seed, int line) =>
-        Math.Round(1.00m + ((seed >> (line * 3)) % 2400) / 100m, 2);
+    private static decimal Amount(uint seed, int line)
+        => Math.Round(1.00m + ((seed >> (line * 3)) % 2400) / 100m, 2);
 
     private static uint Seed(byte[] content)
     {
         // FNV-1a over the bytes: cheap, deterministic, and dependent on the whole file rather than
         // its first few bytes, so two images that differ late still differ here.
-        var hash = 2166136261u;
+        uint hash = 2166136261u;
 
-        foreach (var value in content)
+        foreach (byte value in content)
         {
             hash = (hash ^ value) * 16777619u;
         }

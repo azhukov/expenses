@@ -24,9 +24,9 @@ public static class QrImage
         var black = Color.Black.ToPixel<Rgba32>();
         var white = Color.White.ToPixel<Rgba32>();
 
-        for (var y = 0; y < matrix.Height; y++)
+        for (int y = 0; y < matrix.Height; y++)
         {
-            for (var x = 0; x < matrix.Width; x++)
+            for (int x = 0; x < matrix.Width; x++)
             {
                 image[x, y] = matrix[x, y] ? black : white;
             }

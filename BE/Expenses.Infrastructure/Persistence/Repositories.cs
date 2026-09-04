@@ -10,15 +10,15 @@ namespace Expenses.Infrastructure.Persistence;
 /// </summary>
 internal sealed class PurchaseRepository(ExpensesDbContext context) : IPurchaseRepository
 {
-    public async Task<Purchase?> FindById(long id, CancellationToken cancellationToken = default) =>
-        await context.Purchases.FirstOrDefaultAsync(purchase => purchase.Id == id, cancellationToken);
+    public async Task<Purchase?> FindById(long id, CancellationToken cancellationToken = default)
+        => await context.Purchases.FirstOrDefaultAsync(purchase => purchase.Id == id, cancellationToken);
 
     /// <summary>The fast path of the duplicate guard (D4).</summary>
     public async Task<Purchase?> FindByOccurrenceAndAmount(
         DateTime occurredAt,
         decimal amount,
-        CancellationToken cancellationToken = default) =>
-        await context.Purchases.FirstOrDefaultAsync(
+        CancellationToken cancellationToken = default)
+        => await context.Purchases.FirstOrDefaultAsync(
             purchase => purchase.OccurredAt == occurredAt && purchase.Amount == amount,
             cancellationToken);
 
@@ -29,8 +29,8 @@ internal sealed class PurchaseRepository(ExpensesDbContext context) : IPurchaseR
     /// </summary>
     public async Task<int> CountByReceiptContentHash(
         byte[] contentHash,
-        CancellationToken cancellationToken = default) =>
-        await context.Purchases.CountAsync(
+        CancellationToken cancellationToken = default)
+        => await context.Purchases.CountAsync(
             purchase => purchase.Receipt!.ContentHash == contentHash,
             cancellationToken);
 
@@ -65,43 +65,43 @@ internal sealed class PurchaseRepository(ExpensesDbContext context) : IPurchaseR
             .ToListAsync(cancellationToken);
     }
 
-    public async Task Add(Purchase purchase, CancellationToken cancellationToken = default) =>
-        await context.Purchases.AddAsync(purchase, cancellationToken);
+    public async Task Add(Purchase purchase, CancellationToken cancellationToken = default)
+        => await context.Purchases.AddAsync(purchase, cancellationToken);
 }
 
 internal sealed class CategoryRepository(ExpensesDbContext context) : ICategoryRepository
 {
-    public async Task<Category?> FindById(long id, CancellationToken cancellationToken = default) =>
-        await context.Categories.FirstOrDefaultAsync(category => category.Id == id, cancellationToken);
+    public async Task<Category?> FindById(long id, CancellationToken cancellationToken = default)
+        => await context.Categories.FirstOrDefaultAsync(category => category.Id == id, cancellationToken);
 
     /// <summary>
     /// Codes are ASCII and uppercase by convention, but a caller that types one in lower case is
     /// naming the same entry, so the comparison is case-insensitive rather than the caller having
     /// to know the convention (D8).
     /// </summary>
-    public async Task<Category?> FindByCode(string code, CancellationToken cancellationToken = default) =>
-        await context.Categories.FirstOrDefaultAsync(
+    public async Task<Category?> FindByCode(string code, CancellationToken cancellationToken = default)
+        => await context.Categories.FirstOrDefaultAsync(
             category => EF.Functions.ILike(category.Code, code),
             cancellationToken);
 
     public async Task<IReadOnlyList<Category>> List(
         bool includeInactive,
-        CancellationToken cancellationToken = default) =>
-        await context.Categories
+        CancellationToken cancellationToken = default)
+        => await context.Categories
             .Where(category => includeInactive || category.IsActive)
             .OrderBy(category => category.Code)
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<Category>> ActiveChildrenOf(
         long categoryId,
-        CancellationToken cancellationToken = default) =>
-        await context.Categories
+        CancellationToken cancellationToken = default)
+        => await context.Categories
             .Where(category => category.ParentId == categoryId && category.IsActive)
             .OrderBy(category => category.Code)
             .ToListAsync(cancellationToken);
 
-    public async Task Add(Category category, CancellationToken cancellationToken = default) =>
-        await context.Categories.AddAsync(category, cancellationToken);
+    public async Task Add(Category category, CancellationToken cancellationToken = default)
+        => await context.Categories.AddAsync(category, cancellationToken);
 
     public Task Remove(Category category, CancellationToken cancellationToken = default)
     {
@@ -112,16 +112,16 @@ internal sealed class CategoryRepository(ExpensesDbContext context) : ICategoryR
 
 internal sealed class UnitRepository(ExpensesDbContext context) : IUnitRepository
 {
-    public async Task<Unit?> FindById(long id, CancellationToken cancellationToken = default) =>
-        await context.Units.FirstOrDefaultAsync(unit => unit.Id == id, cancellationToken);
+    public async Task<Unit?> FindById(long id, CancellationToken cancellationToken = default)
+        => await context.Units.FirstOrDefaultAsync(unit => unit.Id == id, cancellationToken);
 
-    public async Task<Unit?> FindByCode(string code, CancellationToken cancellationToken = default) =>
-        await context.Units.FirstOrDefaultAsync(unit => EF.Functions.ILike(unit.Code, code), cancellationToken);
+    public async Task<Unit?> FindByCode(string code, CancellationToken cancellationToken = default)
+        => await context.Units.FirstOrDefaultAsync(unit => EF.Functions.ILike(unit.Code, code), cancellationToken);
 
     public async Task<IReadOnlyList<Unit>> List(
         bool includeInactive,
-        CancellationToken cancellationToken = default) =>
-        await context.Units
+        CancellationToken cancellationToken = default)
+        => await context.Units
             .Where(unit => includeInactive || unit.IsActive)
             .OrderBy(unit => unit.Code)
             .ToListAsync(cancellationToken);
@@ -133,21 +133,21 @@ internal sealed class UnitRepository(ExpensesDbContext context) : IUnitRepositor
 /// </summary>
 internal sealed class MerchantRepository(ExpensesDbContext context) : IMerchantRepository
 {
-    public async Task<Merchant?> FindById(long id, CancellationToken cancellationToken = default) =>
-        await context.Merchants.FirstOrDefaultAsync(merchant => merchant.Id == id, cancellationToken);
+    public async Task<Merchant?> FindById(long id, CancellationToken cancellationToken = default)
+        => await context.Merchants.FirstOrDefaultAsync(merchant => merchant.Id == id, cancellationToken);
 
-    public async Task<Merchant?> FindByTaxId(string taxId, CancellationToken cancellationToken = default) =>
-        await context.Merchants.FirstOrDefaultAsync(merchant => merchant.TaxId == taxId, cancellationToken);
+    public async Task<Merchant?> FindByTaxId(string taxId, CancellationToken cancellationToken = default)
+        => await context.Merchants.FirstOrDefaultAsync(merchant => merchant.TaxId == taxId, cancellationToken);
 
-    public async Task<Merchant?> FindByName(string name, CancellationToken cancellationToken = default) =>
-        await context.Merchants.FirstOrDefaultAsync(
+    public async Task<Merchant?> FindByName(string name, CancellationToken cancellationToken = default)
+        => await context.Merchants.FirstOrDefaultAsync(
             merchant => EF.Functions.ILike(merchant.Name, name),
             cancellationToken);
 
     public async Task<IReadOnlyList<Merchant>> List(
         bool includeInactive,
-        CancellationToken cancellationToken = default) =>
-        await context.Merchants
+        CancellationToken cancellationToken = default)
+        => await context.Merchants
             .Where(merchant => includeInactive || merchant.IsActive)
             .OrderBy(merchant => merchant.Name)
             .ToListAsync(cancellationToken);
@@ -159,7 +159,7 @@ internal sealed class MerchantRepository(ExpensesDbContext context) : IMerchantR
         // Both sides are stripped of accents, so a name typed without them still finds the merchant
         // it names. Trigram matching tolerates the character-level noise this data has, where
         // stemming would need a language nothing here can reliably detect (D14).
-        var pattern = $"%{term}%";
+        string pattern = $"%{term}%";
 
         var dictionary = await context.Merchants
             .Where(merchant => EF.Functions.ILike(
@@ -186,14 +186,14 @@ internal sealed class MerchantRepository(ExpensesDbContext context) : IMerchantR
 
     public async Task<IReadOnlyList<Merchant>> ActiveChildrenOf(
         long merchantId,
-        CancellationToken cancellationToken = default) =>
-        await context.Merchants
+        CancellationToken cancellationToken = default)
+        => await context.Merchants
             .Where(merchant => merchant.ParentId == merchantId && merchant.IsActive)
             .OrderBy(merchant => merchant.Name)
             .ToListAsync(cancellationToken);
 
-    public async Task Add(Merchant merchant, CancellationToken cancellationToken = default) =>
-        await context.Merchants.AddAsync(merchant, cancellationToken);
+    public async Task Add(Merchant merchant, CancellationToken cancellationToken = default)
+        => await context.Merchants.AddAsync(merchant, cancellationToken);
 }
 
 /// <summary>

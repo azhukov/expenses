@@ -66,10 +66,10 @@ public sealed class ExpensesLoggingTests : IDisposable
                 .LogInformation("marker-file-created");
         }
 
-        var logsDirectory = Path.Combine(_contentRoot, "logs");
+        string logsDirectory = Path.Combine(_contentRoot, "logs");
         Assert.True(Directory.Exists(logsDirectory), $"Expected a logs directory at {logsDirectory}.");
 
-        var logFiles = Directory.GetFiles(logsDirectory, "*.log");
+        string[] logFiles = Directory.GetFiles(logsDirectory, "*.log");
         Assert.NotEmpty(logFiles);
         Assert.Contains(logFiles, file => File.ReadAllText(file).Contains("marker-file-created", StringComparison.Ordinal));
     }
@@ -86,7 +86,7 @@ public sealed class ExpensesLoggingTests : IDisposable
         logger.LogInformation("marker-below-default-level");
         logger.LogWarning("marker-at-default-level");
 
-        var output = stdout.ToString();
+        string output = stdout.ToString();
         Assert.DoesNotContain("marker-below-default-level", output, StringComparison.Ordinal);
         Assert.Contains("marker-at-default-level", output, StringComparison.Ordinal);
     }
@@ -109,7 +109,7 @@ public sealed class ExpensesLoggingTests : IDisposable
         overriddenLogger.LogDebug("marker-category-override-emits");
         defaultLogger.LogDebug("marker-category-without-override-suppressed");
 
-        var output = stdout.ToString();
+        string output = stdout.ToString();
         Assert.Contains("marker-category-override-emits", output, StringComparison.Ordinal);
         Assert.DoesNotContain("marker-category-without-override-suppressed", output, StringComparison.Ordinal);
     }
@@ -122,7 +122,7 @@ public sealed class ExpensesLoggingTests : IDisposable
 
         // 40 days of pre-existing daily files, one per day up to yesterday — well past the 31-day
         // retention limit before the host even starts.
-        for (var day = 1; day <= 40; day++)
+        for (int day = 1; day <= 40; day++)
         {
             File.WriteAllText(
                 Path.Combine(logsDirectory.FullName, $"expenses-{today.AddDays(-day):yyyyMMdd}.log"),
@@ -135,7 +135,7 @@ public sealed class ExpensesLoggingTests : IDisposable
                 .LogInformation("marker-triggers-retention");
         }
 
-        var remaining = Directory.GetFiles(logsDirectory.FullName, "*.log");
+        string[] remaining = Directory.GetFiles(logsDirectory.FullName, "*.log");
 
         // "Approximately" 31: the sink counts today's own file among the retained ones, so 41
         // files existed (40 pre-existing + today's) and it prunes down to its limit.
@@ -143,7 +143,7 @@ public sealed class ExpensesLoggingTests : IDisposable
             remaining.Length <= 31,
             $"Expected at most 31 retained log files, found {remaining.Length}.");
 
-        var oldestPreExisting = Path.Combine(logsDirectory.FullName, $"expenses-{today.AddDays(-40):yyyyMMdd}.log");
+        string oldestPreExisting = Path.Combine(logsDirectory.FullName, $"expenses-{today.AddDays(-40):yyyyMMdd}.log");
         Assert.DoesNotContain(oldestPreExisting, remaining);
     }
 
