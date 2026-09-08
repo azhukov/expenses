@@ -310,9 +310,7 @@ const mismatch = {
 
 describe('Extraction problems are surfaced before confirmation', () => {
   it('names an arithmetic mismatch rather than warning generically', async () => {
-    await reviewOf(
-      extracted({ state: 'NeedsReview', validation: { checks: [mismatch] } }),
-    )
+    await reviewOf(extracted({ state: 'NeedsReview', validation: { checks: [mismatch] } }))
 
     expect(screen.getByTestId('review-reasons')).toHaveTextContent(
       /the lines do not sum to the total/i,
@@ -334,7 +332,12 @@ describe('Extraction problems are surfaced before confirmation', () => {
         validation: {
           checks: [
             { ...mismatch, outcome: 'Passed' },
-            { name: 'total_tax', outcome: 'NotApplicable', description: 'No tax was read.', values: {} },
+            {
+              name: 'total_tax',
+              outcome: 'NotApplicable',
+              description: 'No tax was read.',
+              values: {},
+            },
           ],
         },
       }),
@@ -544,9 +547,12 @@ describe('A rejected confirmation is reported in place', () => {
 
   it('states that a date is required when neither the receipt nor the user gave one', async () => {
     record.mockRejectedValue(
-      new LedgerError('A purchase requires a date. Supply one, or confirm a capture whose fiscal QR decoded one.', {
-        code: 'purchase.occurrence_required',
-      }),
+      new LedgerError(
+        'A purchase requires a date. Supply one, or confirm a capture whose fiscal QR decoded one.',
+        {
+          code: 'purchase.occurrence_required',
+        },
+      ),
     )
     const confirm = await reviewOf(
       extracted({ extracted: noFiscal, supplied: noFiscal, fiscalSource: 'None' }),

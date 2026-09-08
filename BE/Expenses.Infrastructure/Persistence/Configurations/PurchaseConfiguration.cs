@@ -1,4 +1,4 @@
-﻿using Expenses.Domain;
+﻿using Expenses.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -23,20 +23,15 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
                 "ck_purchases_merchant_raw_length",
                 "merchant_raw IS NULL OR length(merchant_raw) <= 512");
 
-            // "Has a receipt" is one fact, not six independently nullable ones (D11).
+            // "Has a receipt" is one fact, not four independently nullable ones (D11).
             table.HasCheckConstraint(
                 "ck_purchases_receipt_all_or_nothing",
                 """
-                (receipt_content_hash IS NULL AND receipt_storage_key IS NULL AND receipt_content_type IS NULL
+                (receipt_storage_key IS NULL AND receipt_content_type IS NULL
                     AND receipt_size_in_bytes IS NULL AND receipt_state IS NULL)
-                OR (receipt_content_hash IS NOT NULL AND receipt_storage_key IS NOT NULL
-                    AND receipt_content_type IS NOT NULL AND receipt_size_in_bytes IS NOT NULL
-                    AND receipt_state IS NOT NULL)
+                OR (receipt_storage_key IS NOT NULL AND receipt_content_type IS NOT NULL
+                    AND receipt_size_in_bytes IS NOT NULL AND receipt_state IS NOT NULL)
                 """);
-
-            table.HasCheckConstraint(
-                "ck_purchases_receipt_content_hash_length",
-                $"receipt_content_hash IS NULL OR length(receipt_content_hash) = {Receipt.ContentHashLength}");
 
             table.HasCheckConstraint(
                 "ck_purchases_receipt_storage_key_length",
@@ -102,18 +97,14 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
     /// the file, and the ledger holds the identity of that file and nothing more.
     ///
     /// Every one of these is named explicitly in snake_case: not only does EF's own convention for
-    /// an owned reference produce <c>Receipt_ContentHash</c> rather than <c>ReceiptContentHash</c>,
+    /// an owned reference produce <c>Receipt_StorageKey</c> rather than <c>ReceiptStorageKey</c>,
     /// snake_case never matches a PascalCase property name to begin with (D23).
     /// </summary>
     private static void ConfigureReceipt(EntityTypeBuilder<Purchase> builder)
     {
         builder.OwnsOne(purchase => purchase.Receipt, receipt =>
         {
-            receipt.Property(value => value.ContentHash)
-                .HasColumnName("receipt_content_hash")
-                .HasColumnType("bytea");
-
-            // Stored as written rather than recomputed from the hash, so the layout of the store
+            // Stored as written rather than recomputed from the content, so the layout of the store
             // can change without rewriting a single existing reference (D11).
             receipt.Property(value => value.StorageKey)
                 .HasColumnName("receipt_storage_key")
@@ -158,11 +149,11 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
             // Derived from the four values above; storing it would be a second source of truth.
             receipt.Ignore(value => value.Corroboration);
 
-            // Not unique: byte-identical receipts share one file, so two purchases may carry the
-            // same hash. The index is there to answer "is anything else still referencing this
-            // file" at deletion time (D11).
-            receipt.HasIndex(value => value.ContentHash)
-                .HasDatabaseName("ix_purchases_receipt_content_hash");
+            // Not unique: the store is content-addressed, so byte-identical receipts share one file
+            // and two purchases may carry the same key. The index is there to answer "is anything
+            // else still referencing this file" at deletion time (D11).
+            receipt.HasIndex(value => value.StorageKey)
+                .HasDatabaseName("ix_purchases_receipt_storage_key");
         });
 
         builder.Navigation(purchase => purchase.Receipt).IsRequired(false);

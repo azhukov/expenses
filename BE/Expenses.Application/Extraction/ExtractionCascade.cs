@@ -1,5 +1,5 @@
 ﻿using Expenses.Application.Abstractions;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Extraction;

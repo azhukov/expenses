@@ -29,8 +29,33 @@ npm run dev -- --host               # reachable from a phone on the same network
 | `npm run dev` | Vite dev server, with the `/api` proxy |
 | `npm test` | Vitest, once |
 | `npm run test:watch` | Vitest, watching |
+| `npm run test:e2e` | Playwright, against a real API and database — see below |
 | `npm run lint` | ESLint |
+| `npm run style` | The whole style gate: Prettier, ESLint, tsc, structure |
+| `npm run structure` | The `src/` shape rules alone (`structure.config.json`) |
 | `npm run build` | Type-check and bundle into `dist/` |
+
+## The three test suites
+
+`npm test` is the fast one and the one to run while working: jsdom, `fetch` mocked, colocated with
+the code it covers. It never starts a server.
+
+`npm run test:e2e` is the opposite — a real browser, the built client, the real HTTP host and a
+real PostgreSQL, with nothing stubbed. It needs that stack running, so the way to invoke it is
+[`../test-e2e.sh`](../test-e2e.sh) from the repository root, which brings the stack up on an empty
+database, builds the client, runs the suite and tears everything down. `npm run test:e2e` on its
+own assumes you have already done that.
+
+The third is the backend's own, in `BE/` — see [BE/README.md](../BE/README.md). All three, plus
+both style gates, are what `.github/workflows/ci.yml` runs on a pull request.
+
+## Where the rules live
+
+Four tools, split by what each is good at: Prettier owns layout (`.prettierrc.json`), ESLint owns
+what a formatter cannot decide (`eslint.config.js`), tsc owns the types, and
+[`scripts/check-structure.mjs`](scripts/check-structure.mjs) owns the shape of `src/` — file
+naming, colocation, and the layer map in [`structure.config.json`](structure.config.json) that
+ESLint also reads to police the import graph. `npm run style` is all four.
 
 ## It is not production-deployable yet
 

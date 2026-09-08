@@ -1,6 +1,7 @@
-﻿using Expenses.Application.Abstractions;
+﻿using System.Security.Cryptography;
+using Expenses.Application.Abstractions;
 using Expenses.Application.Errors;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Infrastructure.Persistence;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.EntityFrameworkCore;
@@ -48,7 +49,6 @@ public sealed class ReceiptFileStoreTests(PostgresFixture postgres) : IAsyncLife
         var stored = await Store(bytes);
 
         // The reference is what the ledger will hold; the bytes are on disk under it (D11).
-        Assert.Equal(Receipt.ContentHashLength, stored.ContentHash.Length);
         Assert.Equal(bytes.LongLength, stored.SizeInBytes);
         Assert.True(File.Exists(Path.Combine(_root, stored.StorageKey.Replace('/', Path.DirectorySeparatorChar))));
     }
@@ -56,9 +56,13 @@ public sealed class ReceiptFileStoreTests(PostgresFixture postgres) : IAsyncLife
     [Fact]
     public async Task The_layout_is_content_addressed_and_fanned_out()
     {
-        var stored = await Store(Jpeg(0x12));
+        byte[] bytes = Jpeg(0x12);
 
-        string hex = Convert.ToHexStringLower(stored.ContentHash);
+        var stored = await Store(bytes);
+
+        // The key is derived from the bytes and nothing else, which is what makes it the identity
+        // of the file: the same content always resolves to the same key (D11).
+        string hex = Convert.ToHexStringLower(SHA256.HashData(bytes));
         Assert.Equal($"{hex[..2]}/{hex[2..4]}/{hex}.jpg", stored.StorageKey);
     }
 

@@ -1,6 +1,6 @@
 ﻿using System.Security.Cryptography;
 using Expenses.Application.Abstractions;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Tests.Fakes;
@@ -89,13 +89,12 @@ internal sealed class InMemoryLedger :
     /// <summary>Writes bytes to the permanent store directly, as if a capture had already promoted them.</summary>
     public StoredReceiptFile GivenReceiptFile(byte[] content)
     {
-        byte[] hash = SHA256.HashData(content);
         string contentType = ContentTypeOf(content);
-        string storageKey = Convert.ToHexStringLower(hash);
+        string storageKey = Convert.ToHexStringLower(SHA256.HashData(content));
 
         _files[storageKey] = content;
 
-        return new StoredReceiptFile(hash, storageKey, contentType, content.LongLength);
+        return new StoredReceiptFile(storageKey, contentType, content.LongLength);
     }
 
     /// <summary>Seeds a temporary capture directly, as if a prior call to capture had produced it.</summary>
@@ -168,9 +167,9 @@ internal sealed class InMemoryLedger :
     /// Byte-identical receipts share one file, so this is what stops one purchase's deletion
     /// removing a file another is still showing (D11).
     /// </summary>
-    public Task<int> CountByReceiptContentHash(byte[] contentHash, CancellationToken cancellationToken = default)
+    public Task<int> CountByReceiptStorageKey(string storageKey, CancellationToken cancellationToken = default)
         => Task.FromResult(_purchases.Count(purchase =>
-            purchase.Receipt is { } receipt && receipt.ContentHash.SequenceEqual(contentHash)));
+            purchase.Receipt is { } receipt && receipt.StorageKey == storageKey));
 
     public Task<IReadOnlyList<Purchase>> List(
         PurchaseListQuery query,
@@ -293,13 +292,12 @@ internal sealed class InMemoryLedger :
     /// </summary>
     public Task<StoredReceiptFile> Save(byte[] content, CancellationToken cancellationToken = default)
     {
-        byte[] hash = SHA256.HashData(content);
         string contentType = ContentTypeOf(content);
-        string storageKey = $"{Convert.ToHexStringLower(hash)}";
+        string storageKey = Convert.ToHexStringLower(SHA256.HashData(content));
 
         _files[storageKey] = content;
 
-        return Task.FromResult(new StoredReceiptFile(hash, storageKey, contentType, content.LongLength));
+        return Task.FromResult(new StoredReceiptFile(storageKey, contentType, content.LongLength));
     }
 
     public Task<byte[]?> Read(string storageKey, CancellationToken cancellationToken = default)

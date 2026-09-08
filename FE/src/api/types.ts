@@ -81,11 +81,7 @@ export interface ErrorResponse {
 
 /** Where a fiscal identifier came from. `None` is the absence of any (D20 in the API). */
 export type FiscalSource =
-  | 'None'
-  | 'SuppliedAtUpload'
-  | 'DecodedFromCode'
-  | 'ReadAsText'
-  | 'RetrievedFromService'
+  'None' | 'SuppliedAtUpload' | 'DecodedFromCode' | 'ReadAsText' | 'RetrievedFromService'
 
 /** How one arithmetic check came out. */
 export type CheckOutcome = 'Passed' | 'Failed' | 'NotApplicable'

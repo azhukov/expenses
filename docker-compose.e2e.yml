@@ -1,0 +1,68 @@
+# The stack the end-to-end suite drives: a database and the HTTP host, and nothing else.
+#
+#   docker compose -f docker-compose.e2e.yml up -d --build
+#   (cd FE && npm run test:e2e)
+#   docker compose -f docker-compose.e2e.yml down -v
+#
+# ./test-e2e.sh does all three. It is a separate file rather than an override of
+# docker-compose.yml because the topology genuinely differs, and because Compose appends `ports`
+# across files instead of replacing them — an override could not have unpublished 5432.
+#
+# What differs from the development stack:
+#
+#   * its own project name, so it never adopts or destroys the containers ./up.sh started
+#   * no MCP host: the browser client never talks to it (D1)
+#   * PostgreSQL is not published at all — only the API reaches it, over the compose network — so
+#     a running development stack on 5432 is not in the way
+#   * no named volumes. Every run starts on an empty ledger, which is what makes the suite's
+#     assertions about what is in the month true rather than hopeful.
+
+name: expenses-e2e
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: expenses
+      POSTGRES_PASSWORD: expenses
+      # The ledger's own database is created by the init script, which decides encoding, locale
+      # provider and collation — none of which can be altered after creation (D13).
+      POSTGRES_DB: postgres
+    volumes:
+      - ./BE/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U expenses -d expenses']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./BE
+      dockerfile: Expenses.Api/Dockerfile
+    environment:
+      # Development because that is the environment in which this host applies migrations (D15),
+      # and an empty database is the point of this stack.
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__Expenses: 'Host=postgres;Port=5432;Database=expenses;Username=expenses;Password=expenses'
+      Receipts__RootPath: /var/lib/expenses/receipts
+      TemporaryReceipts__RootPath: /var/lib/expenses/receipts-temp
+      # Port 9 is discard: it accepts nothing and answers nothing. Extraction therefore fails fast
+      # and identically on every run, instead of the suite's outcome depending on whether a
+      # government portal is up. Manual entry after a failed extraction is the path under test.
+      Extraction__Portal__BaseAddress: 'http://127.0.0.1:9'
+      Extraction__Portal__TimeoutMilliseconds: 1000
+    ports:
+      # The port the client's dev proxy and `vite preview` proxy both target, so nothing about the
+      # client has to know it is talking to the e2e stack.
+      - '5082:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:8080/openapi/v1.json > /dev/null']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s

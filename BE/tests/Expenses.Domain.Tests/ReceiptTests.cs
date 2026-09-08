@@ -1,4 +1,5 @@
-﻿using ExtractionState = Expenses.Domain.Receipt.ExtractionState;
+﻿using Expenses.Domain.Entities;
+using ExtractionState = Expenses.Domain.Entities.Receipt.ExtractionState;
 
 namespace Expenses.Domain.Tests;
 
@@ -6,16 +7,7 @@ namespace Expenses.Domain.Tests;
 public sealed class ReceiptTests
 {
     private static Receipt AnImage(ExtractionState state = ExtractionState.Extracted, string? failureReason = null)
-        => Receipt.Of(new byte[32], "ab/cd/abcd.jpg", "image/jpeg", sizeInBytes: 2_000_000, state, failureReason);
-
-    [Fact]
-    public void Content_hash_must_be_a_sha256()
-    {
-        var error = Assert.Throws<ArgumentException>(() =>
-            Receipt.Of(new byte[16], "ab/cd/abcd.jpg", "image/jpeg", sizeInBytes: 1, ExtractionState.Extracted));
-
-        Assert.Equal("contentHash", error.ParamName);
-    }
+        => Receipt.Of("ab/cd/abcd.jpg", "image/jpeg", sizeInBytes: 2_000_000, state, failureReason);
 
     [Fact]
     public void A_receipt_is_constructed_already_extracted()
@@ -73,7 +65,7 @@ public sealed class ReceiptTests
     public void A_receipt_requires_the_storage_key_of_its_file()
     {
         var error = Assert.Throws<ArgumentException>(() =>
-            Receipt.Of(new byte[32], "  ", "image/jpeg", sizeInBytes: 1, ExtractionState.Extracted));
+            Receipt.Of("  ", "image/jpeg", sizeInBytes: 1, ExtractionState.Extracted));
 
         Assert.Equal("storageKey", error.ParamName);
     }
@@ -81,7 +73,7 @@ public sealed class ReceiptTests
     [Fact]
     public void The_storage_key_is_retained_as_written()
     {
-        // Stored rather than recomputed from the hash, so the layout of the store can change
+        // Stored rather than recomputed from the content, so the layout of the store can change
         // without invalidating existing references (D11).
         Assert.Equal("ab/cd/abcd.jpg", AnImage().StorageKey);
     }

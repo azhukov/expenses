@@ -77,7 +77,11 @@ describe('Capturing a receipt image', () => {
 
   it('surfaces a rejected upload in the ledger error the rest of the client uses', async () => {
     respondWith(
-      { code: 'receipt.image_too_large', message: 'A receipt image may be at most 15 MB.', fields: {} },
+      {
+        code: 'receipt.image_too_large',
+        message: 'A receipt image may be at most 15 MB.',
+        fields: {},
+      },
       { ok: false, status: 400 },
     )
 

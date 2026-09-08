@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using Expenses.Domain.Entities;
 
 namespace Expenses.Domain.Tests;
 

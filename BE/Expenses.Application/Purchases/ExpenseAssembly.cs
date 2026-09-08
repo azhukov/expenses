@@ -1,6 +1,6 @@
 ﻿using Expenses.Application.Abstractions;
 using Expenses.Application.Errors;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 
 namespace Expenses.Application.Purchases;
 

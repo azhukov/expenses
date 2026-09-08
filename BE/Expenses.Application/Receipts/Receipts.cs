@@ -2,7 +2,7 @@
 using Expenses.Application.Errors;
 using Expenses.Application.Extraction;
 using Expenses.Application.Purchases;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Receipts;
@@ -204,7 +204,7 @@ public sealed class DeleteReceipt(
 
         // After the reference is gone, so an interruption leaves an unreferenced file rather than a
         // reference to an absent one.
-        if (await purchases.CountByReceiptContentHash(receipt.ContentHash, cancellationToken) == 0)
+        if (await purchases.CountByReceiptStorageKey(receipt.StorageKey, cancellationToken) == 0)
         {
             await images.Delete(receipt.StorageKey, cancellationToken);
         }

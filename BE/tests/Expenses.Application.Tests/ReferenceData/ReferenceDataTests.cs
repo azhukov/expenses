@@ -1,7 +1,7 @@
 ﻿using Expenses.Application.Errors;
 using Expenses.Application.ReferenceData;
 using Expenses.Application.Tests.Fakes;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 
 namespace Expenses.Application.Tests.ReferenceData;
 

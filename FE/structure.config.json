@@ -1,0 +1,29 @@
+{
+  "_comment": [
+    "The shape of the React/Vite app, as data. Two tools read this file and nothing else:",
+    "scripts/check-structure.mjs enforces the filesystem shape (naming, colocation, orphan CSS),",
+    "and eslint.config.js turns `layers` into no-restricted-imports rules. Change the app's shape",
+    "here, once, and both gates follow — do not hand-edit the rules in either consumer."
+  ],
+
+  "_layers": [
+    "A module may import from its own directory or from a strictly lower rank, never sideways and",
+    "never upward. Rank 0 is a leaf that knows nothing about the app above it. A new feature",
+    "directory has to be given a rank here before it will pass FE008."
+  ],
+  "layers": {
+    "api": 0,
+    "format": 0,
+    "labels": 1,
+    "month": 1,
+    "capture": 2,
+    "components": 2,
+    "routes": 3
+  },
+
+  "_assetDirs": "Directories holding no importable modules of their own: stylesheets and test setup.",
+  "assetDirs": ["styles", "test"],
+
+  "_lowerCaseTsx": "The .tsx files that are not components, and so are not PascalCase.",
+  "lowerCaseTsx": ["main.tsx", "routes.tsx"]
+}

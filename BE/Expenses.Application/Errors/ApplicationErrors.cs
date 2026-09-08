@@ -36,7 +36,6 @@ public static class ApplicationErrors
     public const string MerchantNameRequired = "merchant.name_required";
     public const string MerchantParentCycle = "merchant.parent_cycle";
 
-    public const string ReceiptImageContentHashInvalid = "receipt_image.content_hash_invalid";
     public const string ReceiptStorageKeyInvalid = "receipt_image.storage_key_invalid";
     public const string ReceiptImageContentTypeRequired = "receipt_image.content_type_required";
     public const string ReceiptImageSizeInvalid = "receipt_image.size_invalid";

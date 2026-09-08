@@ -8,6 +8,12 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- IDE0005 is a warning in .editorconfig, which makes the compiler demand GenerateDocumentationFile
+         (https://github.com/dotnet/roslyn/issues/41640). Turning the doc file on for every build would
+         drag in ~960 XML-doc warnings, so the plain build mutes that demand and the dedicated CI step
+         ("Unnecessary usings (IDE0005)") builds with -p:GenerateDocumentationFile=true instead. -->
+    <NoWarn>$(NoWarn);EnableGenerateDocumentationFile</NoWarn>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 

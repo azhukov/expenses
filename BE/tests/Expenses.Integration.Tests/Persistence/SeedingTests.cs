@@ -1,5 +1,5 @@
 ﻿using Expenses.Application.Abstractions;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Infrastructure;
 using Expenses.Infrastructure.Persistence;
 using Expenses.Integration.Tests.Harness;

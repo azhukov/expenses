@@ -63,7 +63,7 @@ export async function read<T>(path: string, init?: RequestInit): Promise<T> {
  * call that talks to the API, so that a write never grows an error vocabulary a read does not have.
  */
 export async function failureOf(response: Response): Promise<LedgerError> {
-  const body = await response.json().catch(() => null)
+  const body: unknown = await response.json().catch(() => null)
 
   if (isErrorResponse(body)) {
     return new LedgerError(body.message, {

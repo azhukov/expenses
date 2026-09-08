@@ -23,7 +23,6 @@
   --colour-attention: #8a5a00;
   --colour-attention-surface: #fdf4e0;
   --colour-failure: #97231f;
-
 }
 
 *,
@@ -44,7 +43,12 @@ body,
 
 body {
   /* 16px minimum, so that focusing a control never triggers iOS Safari's zoom. */
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   font-size: 1rem;
   line-height: 1.4;
   color: var(--colour-ink);

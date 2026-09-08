@@ -4,7 +4,14 @@ import type { CategoryView, MerchantView, PurchaseView } from '../api/types'
 import { categoryName, merchantLabel, UNKNOWN_CATEGORY, UNKNOWN_MERCHANT } from './labels'
 
 const merchants: MerchantView[] = [
-  { id: 7, name: 'Mercadona', taxId: 'A46103834', parentId: null, parentName: null, isActive: true },
+  {
+    id: 7,
+    name: 'Mercadona',
+    taxId: 'A46103834',
+    parentId: null,
+    parentName: null,
+    isActive: true,
+  },
 ]
 
 const categories: CategoryView[] = [
@@ -37,7 +44,10 @@ function purchase(overrides: Partial<PurchaseView>): PurchaseView {
 
 describe('A known merchant is named', () => {
   it('shows the display name the dictionary describes', () => {
-    const label = merchantLabel(purchase({ merchantId: 7, merchantRaw: 'MERCADONA S.A.' }), merchants)
+    const label = merchantLabel(
+      purchase({ merchantId: 7, merchantRaw: 'MERCADONA S.A.' }),
+      merchants,
+    )
 
     expect(label).toBe('Mercadona')
   })
@@ -45,13 +55,19 @@ describe('A known merchant is named', () => {
 
 describe('An unmatched merchant falls back to what was printed', () => {
   it('shows the verbatim text when no merchant is referenced', () => {
-    const label = merchantLabel(purchase({ merchantId: null, merchantRaw: 'CAFE BAR PEPE' }), merchants)
+    const label = merchantLabel(
+      purchase({ merchantId: null, merchantRaw: 'CAFE BAR PEPE' }),
+      merchants,
+    )
 
     expect(label).toBe('CAFE BAR PEPE')
   })
 
   it('shows the verbatim text when the dictionary does not describe the merchant', () => {
-    const label = merchantLabel(purchase({ merchantId: 99, merchantRaw: 'CAFE BAR PEPE' }), merchants)
+    const label = merchantLabel(
+      purchase({ merchantId: 99, merchantRaw: 'CAFE BAR PEPE' }),
+      merchants,
+    )
 
     expect(label).toBe('CAFE BAR PEPE')
   })

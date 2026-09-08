@@ -61,8 +61,6 @@ internal static class DomainErrorTranslation
 
     public static ExpensesException Receipt(Exception exception) => exception switch
     {
-        ArgumentException { ParamName: "contentHash" } =>
-            Wrap(ApplicationErrors.ReceiptImageContentHashInvalid, exception),
         ArgumentException { ParamName: "storageKey" } =>
             Wrap(ApplicationErrors.ReceiptStorageKeyInvalid, exception),
         ArgumentException { ParamName: "contentType" } =>

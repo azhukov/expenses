@@ -2,6 +2,7 @@
 using Expenses.Application.Extraction;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
+using Expenses.Domain.Entities;
 using ModelContextProtocol.Server;
 
 namespace Expenses.Mcp.Tools;
@@ -72,11 +73,11 @@ public sealed record ExtractionToolResult(
 
         string state = view.Receipt.State switch
         {
-            Domain.Receipt.ExtractionState.Extracted =>
+            Receipt.ExtractionState.Extracted =>
                 $"Extraction read {view.Result?.Candidates.Count ?? 0} lines and the numbers add up.",
-            Domain.Receipt.ExtractionState.NeedsReview =>
+            Receipt.ExtractionState.NeedsReview =>
                 $"Extraction read {view.Result?.Candidates.Count ?? 0} lines but the result needs a human eye.",
-            Domain.Receipt.ExtractionState.Failed =>
+            Receipt.ExtractionState.Failed =>
                 $"Extraction failed: {view.Receipt.FailureReason}",
             _ => "The extraction state is unknown.",
         };
@@ -103,12 +104,12 @@ public sealed record ExtractionToolResult(
         // Candidates are transient (D12): saying so is what stops an assistant reading the absence
         // as a receipt with nothing on it.
         if (!view.CandidatesHeld && view.Receipt.State
-            is Domain.Receipt.ExtractionState.Extracted or Domain.Receipt.ExtractionState.NeedsReview)
+            is Receipt.ExtractionState.Extracted or Receipt.ExtractionState.NeedsReview)
         {
             reasons.Add("Its candidate lines are no longer held; re-run extraction to read them again.");
         }
 
-        if (view.Receipt.Corroboration == Domain.Receipt.FiscalCorroboration.Disagreed)
+        if (view.Receipt.Corroboration == Receipt.FiscalCorroboration.Disagreed)
         {
             reasons.Add("The fiscal identifier supplied at upload differs from the one read from the image; "
                 + "both were kept.");

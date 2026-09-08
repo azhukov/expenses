@@ -1,4 +1,6 @@
-﻿namespace Expenses.Domain.Tests;
+﻿using Expenses.Domain.Entities;
+
+namespace Expenses.Domain.Tests;
 
 /// <summary>
 /// Scenarios from reference-data: "Reference entries are identified by a stable code",

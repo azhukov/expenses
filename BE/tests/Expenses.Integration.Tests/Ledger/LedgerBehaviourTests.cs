@@ -4,7 +4,7 @@ using Expenses.Application.Extraction;
 using Expenses.Application.Merchants;
 using Expenses.Application.Purchases;
 using Expenses.Application.Receipts;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Infrastructure.Persistence;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.EntityFrameworkCore;

@@ -1,4 +1,4 @@
-﻿using Expenses.Domain;
+﻿using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -95,17 +95,16 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
 
     /// <summary>
     /// Two purchases may carry byte-identical receipts: they share one file in the store, so the
-    /// hash is indexed but deliberately not unique. A unique index here would reject the second
-    /// purchase outright (D11).
+    /// storage key is indexed but deliberately not unique. A unique index here would reject the
+    /// second purchase outright (D11).
     /// </summary>
     [Fact]
     public async Task Two_purchases_may_reference_the_same_receipt_file()
     {
-        byte[] hash = Hash(7);
         string storageKey = "07/07/0707.jpg";
 
-        long first = await Store(WithReceipt(At(7), hash, storageKey));
-        long second = await Store(WithReceipt(At(8), hash, storageKey));
+        long first = await Store(WithReceipt(At(7), storageKey));
+        long second = await Store(WithReceipt(At(8), storageKey));
 
         await using var context = postgres.Context();
         var sharing = await context.Purchases
@@ -118,7 +117,7 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
 
     /// <summary>
     /// The receipt columns are set together or not at all: "has a receipt" is one fact rather than
-    /// six independently nullable ones (D11).
+    /// four independently nullable ones (D11).
     /// </summary>
     [Fact]
     public async Task A_partial_receipt_is_rejected_by_the_database()
@@ -197,12 +196,12 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     /// <summary>A purchase carrying a receipt reference — the file itself is not this test's concern.</summary>
-    private static Purchase WithReceipt(DateTime occurred, byte[] hash, string storageKey)
+    private static Purchase WithReceipt(DateTime occurred, string storageKey)
         => Purchase.Record(
             occurred,
             4.00m,
             [Expense.Record("Coffee", 4.00m)],
-            receipt: Receipt.Of(hash, storageKey, "image/jpeg", 1024, Receipt.ExtractionState.Extracted));
+            receipt: Receipt.Of(storageKey, "image/jpeg", 1024, Receipt.ExtractionState.Extracted));
 
     private async Task<long> Store(Purchase purchase)
     {
@@ -218,6 +217,4 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
     /// shared by every test in the class and a collision would be someone else's failure.
     /// </summary>
     private static DateTime At(int minute) => s_occurred.AddMinutes(minute);
-
-    private static byte[] Hash(byte seed) => [.. Enumerable.Repeat(seed, Receipt.ContentHashLength)];
 }

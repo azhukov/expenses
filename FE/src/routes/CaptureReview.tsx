@@ -59,7 +59,9 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
   )
 
   function change(key: number, field: keyof EditableLine, value: string) {
-    setLines(current => current.map(line => (line.key === key ? { ...line, [field]: value } : line)))
+    setLines(current =>
+      current.map(line => (line.key === key ? { ...line, [field]: value } : line)),
+    )
   }
 
   return (
@@ -69,9 +71,7 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
         onConfirm({ lines, amount, merchant, occurredAt, dateEdited })
       }}
     >
-      {capture.failureReason !== null && (
-        <p role="alert">{capture.failureReason}</p>
-      )}
+      {capture.failureReason !== null && <p role="alert">{capture.failureReason}</p>}
 
       {reasons.length > 0 && (
         <ul data-testid="review-reasons">

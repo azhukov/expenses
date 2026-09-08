@@ -1,5 +1,5 @@
 ﻿using Expenses.Application.Extraction;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Receipts;

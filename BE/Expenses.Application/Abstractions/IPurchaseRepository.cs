@@ -1,4 +1,4 @@
-﻿using Expenses.Domain;
+﻿using Expenses.Domain.Entities;
 
 namespace Expenses.Application.Abstractions;
 
@@ -20,11 +20,11 @@ public interface IPurchaseRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// How many purchases carry a receipt with these bytes. Byte-identical receipts share one file
-    /// in the store, so deleting one purchase's receipt must not delete a file another is still
-    /// showing (D11).
+    /// How many purchases carry a receipt stored under this key. The store is content-addressed, so
+    /// byte-identical receipts share one file, and deleting one purchase's receipt must not delete a
+    /// file another is still showing (D11).
     /// </summary>
-    Task<int> CountByReceiptContentHash(byte[] contentHash, CancellationToken cancellationToken = default);
+    Task<int> CountByReceiptStorageKey(string storageKey, CancellationToken cancellationToken = default);
 
     /// <summary>Most recent first, paged. Ordering belongs here because the database does it.</summary>
     Task<IReadOnlyList<Purchase>> List(PurchaseListQuery query, CancellationToken cancellationToken = default);

@@ -1,5 +1,5 @@
 ﻿using Expenses.Application.Abstractions;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
 

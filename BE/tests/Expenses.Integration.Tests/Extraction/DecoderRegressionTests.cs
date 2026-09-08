@@ -1,7 +1,7 @@
 ﻿using Expenses.Application.Abstractions;
 using Expenses.Application.Extraction;
 using Expenses.Application.Receipts;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
 

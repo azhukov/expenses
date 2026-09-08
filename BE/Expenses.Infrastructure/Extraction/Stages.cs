@@ -1,6 +1,6 @@
 ﻿using Expenses.Application.Abstractions;
 using Expenses.Application.Extraction;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Expenses.Infrastructure.Extraction;

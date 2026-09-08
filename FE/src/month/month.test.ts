@@ -38,11 +38,17 @@ describe('The month-boundary parameters follow the device date', () => {
   })
 
   it('ends on the last day of a 31-day month', () => {
-    expect(currentMonthRange(new Date(2026, 0, 5))).toEqual({ from: '2026-01-01', to: '2026-01-31' })
+    expect(currentMonthRange(new Date(2026, 0, 5))).toEqual({
+      from: '2026-01-01',
+      to: '2026-01-31',
+    })
   })
 
   it('ends on the last day of a leap February', () => {
-    expect(currentMonthRange(new Date(2028, 1, 5))).toEqual({ from: '2028-02-01', to: '2028-02-29' })
+    expect(currentMonthRange(new Date(2028, 1, 5))).toEqual({
+      from: '2028-02-01',
+      to: '2028-02-29',
+    })
   })
 
   it('does not shift the boundary for a late-evening local time', () => {

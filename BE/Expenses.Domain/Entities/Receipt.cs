@@ -1,4 +1,4 @@
-﻿namespace Expenses.Domain;
+﻿namespace Expenses.Domain.Entities;
 
 /// <summary>
 /// The receipt a purchase carries: the reference to its stored file, and what extraction has made
@@ -7,8 +7,6 @@
 /// </summary>
 public sealed class Receipt
 {
-    public const int ContentHashLength = 32;
-
     public const int StorageKeyMaxLength = 256;
 
     /// <summary>
@@ -70,18 +68,15 @@ public sealed class Receipt
     private Receipt()
     {
         // EF materialisation.
-        ContentHash = null!;
         StorageKey = null!;
         ContentType = null!;
     }
 
-    /// <summary>SHA-256 of the raw bytes — 32 bytes exactly. Identifies the file in the store.</summary>
-    public byte[] ContentHash { get; private set; }
-
     /// <summary>
-    /// Where the file is, relative to the receipt store. Retained as written rather than
-    /// recomputed from the hash, so the layout of the store can change without rewriting
-    /// history (D11).
+    /// Where the file is, relative to the receipt store, and with it the identity of the file's
+    /// content: the store is content-addressed, so byte-identical receipts resolve to one key and
+    /// two purchases carrying the same key are the same file. Retained as written rather than
+    /// recomputed, so the layout of the store can change without rewriting history (D11).
     /// </summary>
     public string StorageKey { get; private set; }
 
@@ -191,20 +186,12 @@ public sealed class Receipt
     /// completion within the request that produced this receipt.
     /// </summary>
     public static Receipt Of(
-        byte[] contentHash,
         string storageKey,
         string contentType,
         long sizeInBytes,
         ExtractionState state,
         string? failureReason = null)
     {
-        if (contentHash.Length != ContentHashLength)
-        {
-            throw new ArgumentException(
-                $"A content hash is a {ContentHashLength}-byte SHA-256, but {contentHash.Length} bytes were supplied.",
-                nameof(contentHash));
-        }
-
         if (string.IsNullOrWhiteSpace(storageKey))
         {
             throw new ArgumentException(
@@ -236,7 +223,6 @@ public sealed class Receipt
 
         return new Receipt
         {
-            ContentHash = contentHash,
             StorageKey = storageKey.Trim(),
             ContentType = contentType.Trim(),
             SizeInBytes = sizeInBytes,

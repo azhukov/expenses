@@ -87,18 +87,18 @@ The system SHALL detect when uploaded bytes are identical to those of an image a
 
 ### Requirement: Receipt bytes are stored as files the purchase refers to
 
-The system SHALL store the bytes of a receipt in a file under a configured receipt store, and SHALL record against the purchase only the reference to that file together with the content hash, content type and size of the image. The ledger SHALL NOT contain the bytes themselves. The reference SHALL be retained as recorded rather than recomputed, so that the layout of the store can change without invalidating existing references. The system SHALL write the file before recording the reference, and SHALL clear the reference before deleting the file, so that a reference to an absent file is never created by an interruption.
+The system SHALL store the bytes of a receipt in a file under a configured receipt store, and SHALL record against the purchase only the reference to that file together with the content type and size of the image. The reference SHALL be derived from the content of the file, so that it is also the identity of that content and byte-identical receipts share one reference. The ledger SHALL NOT contain the bytes themselves. The reference SHALL be retained as recorded rather than recomputed, so that the layout of the store can change without invalidating existing references. The system SHALL write the file before recording the reference, and SHALL clear the reference before deleting the file, so that a reference to an absent file is never created by an interruption.
 
 #### Scenario: Stored bytes are outside the ledger
 
 - **WHEN** a receipt image is uploaded for a purchase
 - **THEN** its bytes are written to a file in the receipt store
-- **AND** the purchase records the reference to that file, its content hash, content type and size, and not its bytes
+- **AND** the purchase records the reference to that file, its content type and size, and not its bytes
 
 #### Scenario: A purchase either carries a whole receipt or none
 
 - **WHEN** a purchase is retrieved
-- **THEN** either it carries a file reference, content hash, content type, size and extraction state together, or it carries none of them
+- **THEN** either it carries a file reference, content type, size and extraction state together, or it carries none of them
 - **AND** no partial receipt is ever recorded
 
 #### Scenario: Interrupted upload leaves no broken reference
@@ -115,7 +115,7 @@ The system SHALL store the bytes of a receipt in a file under a configured recei
 
 #### Scenario: Deleting a receipt whose bytes another purchase shares
 
-- **WHEN** the receipt of one purchase is deleted while another purchase references the same content hash
+- **WHEN** the receipt of one purchase is deleted while another purchase references the same file
 - **THEN** the file is retained
 - **AND** the other purchase's receipt can still be retrieved
 

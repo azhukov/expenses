@@ -1,0 +1,289 @@
+# The one gate. Every test the repo has - unit, integration, end-to-end - plus the style rules
+# both halves enforce, in a single workflow whose `gate` job is the only required check on main.
+#
+# Why one workflow rather than the be.yml / fe.yml pair it replaces: a required status check that
+# never runs is a PR that can never merge. With `paths:` filters at the workflow level, a PR
+# touching only FE never reports the BE check, and GitHub waits for it forever. So the filtering
+# moved down to the jobs - an untouched half still skips, costing nothing - and `gate` runs
+# unconditionally to report the one verdict branch protection waits on.
+#
+# What runs where:
+#
+#   fe-style        Prettier, ESLint, tsc, and the src/ shape rules (structure.config.json)
+#   fe-unit         vitest, jsdom, colocated with the code
+#   be-style        the .editorconfig gate: TreatWarningsAsErrors, whitespace, IDE0005
+#   be-unit         Domain and Application tests - no database, no containers
+#   be-integration  the real HTTP host over a real PostgreSQL through Testcontainers (D17)
+#   e2e             a browser against the built client, the real API and a real database
+#
+# To fix what the style jobs report, run the fe-style-fix or be-editorconfig-fix skill. To run any
+# of this locally: ./act-fe.sh, ./act-be.sh, ./act-all.sh, or ./test-e2e.sh for the browser suite
+# alone.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch makes the in-flight run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Which halves this change actually touches. Hand-rolled rather than a third-party filter action:
+  # it is one `git diff`, and the gate below depends on getting this right.
+  changes:
+    name: what changed
+    runs-on: ubuntu-latest
+    outputs:
+      fe: ${{ steps.filter.outputs.fe }}
+      be: ${{ steps.filter.outputs.be }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The diff needs both ends of the range, which a shallow clone does not have.
+          fetch-depth: 0
+
+      - id: filter
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # No usable base - a branch's first push, or a manual run - means run everything. The
+          # cost of a redundant suite is minutes; the cost of a skipped one is a broken main.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "no usable base commit - running every suite"
+            echo "fe=true" >> "$GITHUB_OUTPUT"
+            echo "be=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE" HEAD)
+          echo "$changed"
+
+          # Here-strings, not pipes: `grep -q` exits at the first match, and under the default
+          # `bash -eo pipefail` a large enough list kills `echo` with SIGPIPE (141), which
+          # pipefail then makes the pipeline's status - silently turning a match into "false".
+
+          # The workflow itself, the compose files and the local runners affect both halves.
+          shared=$(grep -Eq '^(\.github/workflows/ci\.yml|docker-compose.*\.yml|test-e2e\.sh)$' <<<"$changed" && echo true || echo false)
+
+          grep -q '^FE/' <<<"$changed" && fe=true || fe=$shared
+          grep -q '^BE/' <<<"$changed" && be=true || be=$shared
+
+          echo "fe=$fe" >> "$GITHUB_OUTPUT"
+          echo "be=$be" >> "$GITHUB_OUTPUT"
+
+  fe-style:
+    name: FE style
+    needs: changes
+    if: needs.changes.outputs.fe == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: FE
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: FE/package-lock.json
+
+      - run: npm ci
+
+      # Every step runs even when an earlier one failed: one run should report every problem.
+      - name: Format (Prettier)
+        if: ${{ !cancelled() }}
+        run: npm run format:check
+
+      - name: Lint (ESLint)
+        if: ${{ !cancelled() }}
+        run: npm run lint
+
+      - name: Types (tsc)
+        if: ${{ !cancelled() }}
+        run: npm run typecheck
+
+      # Naming, colocation and the layer map - the rules the other three tools cannot see.
+      - name: Structure (check-structure)
+        if: ${{ !cancelled() }}
+        run: npm run structure
+
+  fe-unit:
+    name: FE unit tests
+    needs: changes
+    if: needs.changes.outputs.fe == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: FE
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: FE/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+
+  be-style:
+    name: BE style
+    needs: changes
+    if: needs.changes.outputs.be == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 10.0.x rather than global.json's exact "10.0.0", which no longer ships as an installer;
+      # global.json's rollForward is latestMajor, so any 10.x satisfies the pin.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet restore BE/Expenses.sln
+
+      # Directory.Build.props sets TreatWarningsAsErrors and EnforceCodeStyleInBuild, so the plain
+      # build is the .editorconfig gate: a single IDE2006 fails it.
+      - name: Build (.editorconfig rules at warning and above)
+        run: dotnet build BE/Expenses.sln --no-restore -p:GenerateFullPaths=true
+
+      - name: Whitespace, BOM and final newlines
+        if: ${{ !cancelled() }}
+        run: dotnet format whitespace BE/Expenses.sln --no-restore --verify-no-changes
+
+      # IDE0005 never fires in a normal build; the documentation file wakes it up, and NoWarn mutes
+      # the ~960 XML-doc warnings that switch brings with it (%3B is MSBuild's escape for ';').
+      # See https://github.com/dotnet/roslyn/issues/41640
+      - name: Unnecessary usings (IDE0005)
+        if: ${{ !cancelled() }}
+        run: >
+          dotnet build BE/Expenses.sln --no-restore --no-incremental
+          -p:GenerateDocumentationFile=true
+          -p:NoWarn=CS1591%3BCS1587
+          -p:GenerateFullPaths=true
+
+  be-unit:
+    name: BE unit tests
+    needs: changes
+    if: needs.changes.outputs.be == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet restore BE/Expenses.sln
+
+      # Split from the integration suite deliberately: these need no Docker and finish in seconds,
+      # so a domain regression is reported long before the containers have started. Two steps
+      # rather than two arguments — `dotnet test` takes one project, and a second is MSB1008.
+      - name: Domain tests
+        run: dotnet test BE/tests/Expenses.Domain.Tests --no-restore
+
+      - name: Application tests
+        if: ${{ !cancelled() }}
+        run: dotnet test BE/tests/Expenses.Application.Tests --no-restore
+
+  be-integration:
+    name: BE integration tests
+    needs: changes
+    if: needs.changes.outputs.be == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet restore BE/Expenses.sln
+
+      # A real PostgreSQL through Testcontainers (D17); the Docker daemon ubuntu-latest ships with
+      # is enough, so no services: block is needed.
+      - name: Integration tests
+        run: dotnet test BE/tests/Expenses.Integration.Tests --no-restore
+
+  e2e:
+    name: E2E
+    needs: changes
+    if: needs.changes.outputs.fe == 'true' || needs.changes.outputs.be == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: FE/package-lock.json
+
+      # Built before the stack, so a compile error fails in seconds rather than after a .NET image
+      # has been built. `vite preview` serves this, and Playwright starts it.
+      - name: Build the client
+        working-directory: FE
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install the browser
+        working-directory: FE
+        run: npx playwright install --with-deps chromium
+
+      # --wait blocks until the API's healthcheck passes, which means migrations are applied and
+      # Kestrel is listening (D15).
+      - name: Start the stack
+        run: docker compose -f docker-compose.e2e.yml up -d --build --wait
+
+      - name: Run the suite
+        working-directory: FE
+        run: npx playwright test
+
+      # Traces and screenshots are kept only for failures, so this artifact is the whole story of
+      # why a run went red - worth more than the log.
+      - name: Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: FE/playwright-report
+          retention-days: 7
+
+      - name: Stack logs
+        if: failure()
+        run: docker compose -f docker-compose.e2e.yml logs --tail 200
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v
+
+  # The one required check. It runs whatever the others did, so branch protection always has a
+  # verdict to wait on - including on a PR where every suite legitimately skipped.
+  gate:
+    name: gate
+    if: always()
+    needs: [changes, fe-style, fe-unit, be-style, be-unit, be-integration, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every suite passed or was skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS"
+
+          # `skipped` is a pass: the half it covers was not touched. `success` is a pass. Anything
+          # else - failure, cancelled - fails the gate, and with it the pull request.
+          failed=$(echo "$RESULTS" | jq -r 'to_entries
+            | map(select(.value.result != "success" and .value.result != "skipped"))
+            | .[].key')
+
+          if [ -n "$failed" ]; then
+            echo "Failed: $failed"
+            exit 1
+          fi
+
+          echo "All suites passed or were skipped."

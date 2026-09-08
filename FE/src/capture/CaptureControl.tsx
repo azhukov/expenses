@@ -26,7 +26,7 @@ export function CaptureControl() {
     // The `File` is handed on untouched — no resize, no re-encode. A fiscal code on thermal paper
     // is dense enough that downscaling turns a decodable receipt into a probabilistic guess, and
     // the regression is invisible (D4). Uploading is the capture screen's job, not this one's.
-    navigate('/capture', { state: { file } })
+    void navigate('/capture', { state: { file } })
   }
 
   return (

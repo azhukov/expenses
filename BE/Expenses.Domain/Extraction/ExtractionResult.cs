@@ -1,4 +1,6 @@
-﻿namespace Expenses.Domain.Extraction;
+﻿using Expenses.Domain.Entities;
+
+namespace Expenses.Domain.Extraction;
 
 /// <summary>
 /// A proposed expense line. Deliberately holds raw decimals with no validation applied: an

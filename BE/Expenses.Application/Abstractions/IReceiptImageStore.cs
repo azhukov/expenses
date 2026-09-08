@@ -1,19 +1,21 @@
-﻿using Expenses.Domain;
+﻿using Expenses.Domain.Entities;
 
 namespace Expenses.Application.Abstractions;
 
 /// <summary>The bytes of one receipt, loaded deliberately and never incidentally (D11).</summary>
+#pragma warning disable CA1819 // Properties should not return arrays
 public sealed record ReceiptImageContent(long PurchaseId, string ContentType, byte[] Content);
+#pragma warning restore CA1819 // Properties should not return arrays
 
 /// <summary>
 /// A file that is on disk. Constructing a <see cref="Receipt"/> from this is what records the
 /// reference, and it happens after the write, so a purchase can never point at a file that was
 /// never written (D11).
 /// </summary>
-public sealed record StoredReceiptFile(byte[] ContentHash, string StorageKey, string ContentType, long SizeInBytes)
+public sealed record StoredReceiptFile(string StorageKey, string ContentType, long SizeInBytes)
 {
     public Receipt AsReceipt(Receipt.ExtractionState state, string? failureReason = null)
-        => Receipt.Of(ContentHash, StorageKey, ContentType, SizeInBytes, state, failureReason);
+        => Receipt.Of(StorageKey, ContentType, SizeInBytes, state, failureReason);
 }
 
 /// <summary>

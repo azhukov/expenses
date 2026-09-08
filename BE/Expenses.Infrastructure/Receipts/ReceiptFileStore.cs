@@ -64,8 +64,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
     {
         string contentType = ReceiptContent.Validate(content);
 
-        byte[] hash = SHA256.HashData(content);
-        string storageKey = StorageKey(hash, contentType);
+        string storageKey = StorageKey(SHA256.HashData(content), contentType);
         string path = Resolve(storageKey);
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -77,7 +76,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
             await WriteAtomically(path, content, cancellationToken);
         }
 
-        return new StoredReceiptFile(hash, storageKey, contentType, content.LongLength);
+        return new StoredReceiptFile(storageKey, contentType, content.LongLength);
     }
 
     public async Task<byte[]?> Read(string storageKey, CancellationToken cancellationToken = default)

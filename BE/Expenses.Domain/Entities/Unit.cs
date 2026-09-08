@@ -1,4 +1,4 @@
-﻿namespace Expenses.Domain;
+﻿namespace Expenses.Domain.Entities;
 
 /// <summary>
 /// Fixed reference data keyed by an immutable <see cref="Code"/> (D8). Not user-creatable in this

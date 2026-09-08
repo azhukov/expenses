@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 using Expenses.Application.Purchases;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using ModelContextProtocol.Server;
 
 namespace Expenses.Mcp.Tools;

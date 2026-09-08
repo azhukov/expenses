@@ -200,4 +200,3 @@ export function confirmationOf(capture: CaptureResult, edits: Edits): RecordPurc
     },
   }
 }
-

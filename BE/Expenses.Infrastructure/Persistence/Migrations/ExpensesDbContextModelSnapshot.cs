@@ -24,7 +24,7 @@ namespace Expenses.Infrastructure.Persistence.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "unaccent");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Expenses.Domain.Category", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Category", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -70,7 +70,7 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Expense", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Expense", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -151,7 +151,7 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Merchant", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Merchant", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -199,7 +199,7 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Purchase", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Purchase", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -243,15 +243,13 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_purchases_merchant_raw_length", "merchant_raw IS NULL OR length(merchant_raw) <= 512");
 
-                            t.HasCheckConstraint("ck_purchases_receipt_all_or_nothing", "(receipt_content_hash IS NULL AND receipt_storage_key IS NULL AND receipt_content_type IS NULL\n    AND receipt_size_in_bytes IS NULL AND receipt_state IS NULL)\nOR (receipt_content_hash IS NOT NULL AND receipt_storage_key IS NOT NULL\n    AND receipt_content_type IS NOT NULL AND receipt_size_in_bytes IS NOT NULL\n    AND receipt_state IS NOT NULL)");
-
-                            t.HasCheckConstraint("ck_purchases_receipt_content_hash_length", "receipt_content_hash IS NULL OR length(receipt_content_hash) = 32");
+                            t.HasCheckConstraint("ck_purchases_receipt_all_or_nothing", "(receipt_storage_key IS NULL AND receipt_content_type IS NULL\r\n    AND receipt_size_in_bytes IS NULL AND receipt_state IS NULL)\r\nOR (receipt_storage_key IS NOT NULL AND receipt_content_type IS NOT NULL\r\n    AND receipt_size_in_bytes IS NOT NULL AND receipt_state IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_purchases_receipt_storage_key_length", "receipt_storage_key IS NULL OR length(receipt_storage_key) <= 256");
                         });
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Unit", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Unit", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -360,9 +358,9 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Category", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Category", b =>
                 {
-                    b.HasOne("Expenses.Domain.Category", "Parent")
+                    b.HasOne("Expenses.Domain.Entities.Category", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -371,30 +369,30 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     b.Navigation("Parent");
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Expense", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Expense", b =>
                 {
-                    b.HasOne("Expenses.Domain.Category", null)
+                    b.HasOne("Expenses.Domain.Entities.Category", null)
                         .WithMany()
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_expenses_categories_category_id");
 
-                    b.HasOne("Expenses.Domain.Purchase", null)
+                    b.HasOne("Expenses.Domain.Entities.Purchase", null)
                         .WithMany("Expenses")
                         .HasForeignKey("PurchaseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .HasConstraintName("FK_expenses_purchases_purchase_id");
 
-                    b.HasOne("Expenses.Domain.Unit", null)
+                    b.HasOne("Expenses.Domain.Entities.Unit", null)
                         .WithMany()
                         .HasForeignKey("UnitId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_expenses_units_unit_id");
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Merchant", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Merchant", b =>
                 {
-                    b.HasOne("Expenses.Domain.Merchant", "Parent")
+                    b.HasOne("Expenses.Domain.Entities.Merchant", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -403,23 +401,18 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     b.Navigation("Parent");
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Purchase", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Purchase", b =>
                 {
-                    b.HasOne("Expenses.Domain.Merchant", null)
+                    b.HasOne("Expenses.Domain.Entities.Merchant", null)
                         .WithMany()
                         .HasForeignKey("MerchantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_purchases_merchants_merchant_id");
 
-                    b.OwnsOne("Expenses.Domain.Receipt", "Receipt", b1 =>
+                    b.OwnsOne("Expenses.Domain.Entities.Receipt", "Receipt", b1 =>
                         {
                             b1.Property<long>("PurchaseId")
                                 .HasColumnType("bigint");
-
-                            b1.Property<byte[]>("ContentHash")
-                                .IsRequired()
-                                .HasColumnType("bytea")
-                                .HasColumnName("receipt_content_hash");
 
                             b1.Property<string>("ContentType")
                                 .IsRequired()
@@ -465,8 +458,8 @@ namespace Expenses.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("PurchaseId");
 
-                            b1.HasIndex("ContentHash")
-                                .HasDatabaseName("ix_purchases_receipt_content_hash");
+                            b1.HasIndex("StorageKey")
+                                .HasDatabaseName("ix_purchases_receipt_storage_key");
 
                             b1.ToTable("purchases");
 
@@ -477,17 +470,17 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     b.Navigation("Receipt");
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Category", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Category", b =>
                 {
                     b.Navigation("Children");
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Merchant", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Merchant", b =>
                 {
                     b.Navigation("Children");
                 });
 
-            modelBuilder.Entity("Expenses.Domain.Purchase", b =>
+            modelBuilder.Entity("Expenses.Domain.Entities.Purchase", b =>
                 {
                     b.Navigation("Expenses");
                 });

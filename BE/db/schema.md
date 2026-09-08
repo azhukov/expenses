@@ -45,8 +45,7 @@ erDiagram
         numeric amount "19,2; unique with occurred_at"
         bigint merchant_id FK "null; restrict"
         text merchant_raw "null; <= 512 chars; gin trigram"
-        bytea receipt_content_hash "null; sha-256 of the file, exactly 32 bytes"
-        text receipt_storage_key "null; <= 256 chars; path relative to the receipt store"
+        text receipt_storage_key "null; <= 256 chars; path relative to the receipt store; indexed"
         varchar receipt_content_type "128; null"
         bigint receipt_size_in_bytes "null"
         integer receipt_state "null; 0 Pending, 1 Extracting, 2 Extracted, 3 NeedsReview, 4 Failed"
@@ -115,7 +114,7 @@ reference to it.
 | Extension | Derived from the sniffed content type, never from the uploaded file name. |
 | Write order | File first, then the row — an atomic write to a temporary name followed by a rename, then the update. A file no purchase references is inert garbage; a purchase pointing at a file that was never written is the failure that ordering prevents. |
 | Deduplication | Content addressing does it: identical bytes resolve to the same path and the second write is a no-op. Two purchases may therefore reference one file, which is why `receipt_storage_key` is **not** unique. |
-| Deletion | The reference is cleared first, and the file is deleted afterwards, best effort, **only when no other purchase references the same `receipt_content_hash`**. A shared file outlives the first purchase that referenced it. |
+| Deletion | The reference is cleared first, and the file is deleted afterwards, best effort, **only when no other purchase references the same `receipt_storage_key`**. A shared file outlives the first purchase that referenced it. |
 | Backup | The database dump alone is **not** a complete backup. The receipt store must be backed up beside it. |
 
 ## Uniqueness
@@ -126,7 +125,7 @@ reference to it.
 | `ix_categories_code`, `ix_units_code` | Reference codes are the stable vocabulary, so renaming a name never breaks a reference. |
 | `ix_merchants_tax_id` | Unique where `tax_id IS NOT NULL`; merchants without one are unconstrained. |
 
-`ix_purchases_receipt_content_hash` is a plain, non-unique index: it exists so that "does any other
+`ix_purchases_receipt_storage_key` is a plain, non-unique index: it exists so that "does any other
 purchase still reference this file" is a lookup rather than a scan at deletion time.
 
 ## Check constraints
@@ -136,8 +135,7 @@ snake_case.
 
 | Constraint | Condition |
 | --- | --- |
-| `ck_purchases_receipt_all_or_nothing` | Either every one of `receipt_content_hash`, `receipt_storage_key`, `receipt_content_type`, `receipt_size_in_bytes` and `receipt_state` is null, or none is |
-| `ck_purchases_receipt_content_hash_length` | `receipt_content_hash IS NULL OR length(receipt_content_hash) = 32` |
+| `ck_purchases_receipt_all_or_nothing` | Either every one of `receipt_storage_key`, `receipt_content_type`, `receipt_size_in_bytes` and `receipt_state` is null, or none is |
 | `ck_purchases_receipt_storage_key_length` | `receipt_storage_key IS NULL OR length(receipt_storage_key) <= 256` |
 | `ck_purchases_merchant_raw_length` | `merchant_raw IS NULL OR length(merchant_raw) <= 512` |
 | `ck_expenses_description_length` | `length(description) <= 512` |

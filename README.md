@@ -19,6 +19,34 @@ The browser client is not in `docker compose`: it is run from `FE/` with `npm in
 dev` on <http://localhost:5173>, and reaches the API through a dev proxy. How the built client is
 served in production has deliberately not been decided yet — see [FE/README.md](FE/README.md).
 
+## Tests, and the gate
+
+Every change reaches `main` through a pull request, and one required check — `gate` in
+[.github/workflows/ci.yml](.github/workflows/ci.yml) — decides whether it may. That check waits on
+every suite the repository has:
+
+| | | |
+| --- | --- | --- |
+| unit | `BE/tests/Expenses.Domain.Tests`, `Expenses.Application.Tests` | no database, no containers |
+| unit | `FE` vitest | jsdom, `fetch` mocked |
+| integration | `BE/tests/Expenses.Integration.Tests` | the real host over a real PostgreSQL through Testcontainers (D17) |
+| end-to-end | `FE/e2e` | a browser, the built client, the real API, a real database |
+| style | both halves | `BE/.editorconfig` at warning and above; Prettier, ESLint, tsc and the `src/` shape rules in `FE` |
+
+A pull request touching only one half skips the other half's jobs, and `gate` still reports, so a
+skipped suite never leaves a PR waiting forever on a check that will not run.
+
+Locally:
+
+```bash
+./test-fe.sh               # the client unit suite, nothing running required
+./test-e2e.sh              # the end-to-end suite, stack and all
+./test-be.sh               # every BE suite, with merged coverage in the console
+./act-fe.sh                # the FE jobs, in act's containers
+./act-be.sh                # the BE jobs
+./act-all.sh               # everything the gate runs
+```
+
 `docker compose up -d postgres` brings up just the database, which is all the test suite and a
 locally-run host need. See [BE/README.md](BE/README.md) for what each service does and why the MCP
 container waits on the API's healthcheck, and

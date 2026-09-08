@@ -1,5 +1,5 @@
 ﻿using Expenses.Application.Abstractions;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -24,14 +24,14 @@ internal sealed class PurchaseRepository(ExpensesDbContext context) : IPurchaseR
 
     /// <summary>
     /// Byte-identical receipts share one file, so removing one purchase's receipt must not remove
-    /// a file another purchase is still showing (D11). The index on the hash is what makes this a
-    /// lookup rather than a scan.
+    /// a file another purchase is still showing (D11). The index on the storage key is what makes
+    /// this a lookup rather than a scan.
     /// </summary>
-    public async Task<int> CountByReceiptContentHash(
-        byte[] contentHash,
+    public async Task<int> CountByReceiptStorageKey(
+        string storageKey,
         CancellationToken cancellationToken = default)
         => await context.Purchases.CountAsync(
-            purchase => purchase.Receipt!.ContentHash == contentHash,
+            purchase => purchase.Receipt!.StorageKey == storageKey,
             cancellationToken);
 
     /// <summary>

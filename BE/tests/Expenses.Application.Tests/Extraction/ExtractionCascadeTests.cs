@@ -1,7 +1,7 @@
 ﻿using Expenses.Application.Abstractions;
 using Expenses.Application.Extraction;
 using Expenses.Application.Tests.Fakes;
-using Expenses.Domain;
+using Expenses.Domain.Entities;
 
 namespace Expenses.Application.Tests.Extraction;
 
