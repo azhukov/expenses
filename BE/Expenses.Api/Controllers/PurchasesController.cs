@@ -1,4 +1,5 @@
-﻿using Expenses.Application.Purchases;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Expenses.Api.Controllers;
@@ -18,18 +19,17 @@ public sealed class PurchasesController : ControllerBase
     [EndpointName("RecordPurchase")]
     public async Task<ActionResult<RecordPurchaseResponse>> Record(
         RecordPurchaseRequest request,
-        [FromServices] RecordPurchase recordPurchase,
+        [FromServices] PurchaseService purchases,
         CancellationToken cancellationToken)
     {
         RequestGuards.RejectDiscountPercentage(request.Expenses);
 
-        var result = await recordPurchase.Execute(
-            new RecordPurchaseCommand(
-                request.OccurredAt,
-                request.Amount,
-                [.. request.Expenses.Select(expense => expense.ToCommand())],
-                request.Merchant?.ToCommand(),
-                request.Capture?.ToCommand()),
+        var result = await purchases.Record(
+            request.OccurredAt,
+            request.Amount,
+            [.. request.Expenses.Select(expense => expense.ToCommand())],
+            request.Merchant?.ToCommand(),
+            request.Capture?.ToCommand(),
             cancellationToken);
 
         var response = RecordPurchaseResponse.Of(result);
@@ -46,8 +46,8 @@ public sealed class PurchasesController : ControllerBase
     [EndpointName("GetPurchase")]
     public async Task<ActionResult<PurchaseView>> Get(
         long id,
-        [FromServices] GetPurchase getPurchase,
-        CancellationToken cancellationToken) => Ok(await getPurchase.Execute(id, cancellationToken));
+        [FromServices] PurchaseService purchases,
+        CancellationToken cancellationToken) => Ok(await purchases.Get(id, cancellationToken));
 
     /// <summary>Lists purchases in an occurrence date range, most recent first.</summary>
     [HttpGet]
@@ -57,8 +57,6 @@ public sealed class PurchasesController : ControllerBase
         [FromQuery] DateOnly? to,
         [FromQuery] int? skip,
         [FromQuery] int? take,
-        [FromServices] ListPurchases listPurchases,
-        CancellationToken cancellationToken) => Ok(await listPurchases.Execute(
-            new ListPurchasesQuery(from, to, skip ?? 0, take),
-            cancellationToken));
+        [FromServices] PurchaseService purchases,
+        CancellationToken cancellationToken) => Ok(await purchases.List(from, to, skip ?? 0, take, cancellationToken));
 }

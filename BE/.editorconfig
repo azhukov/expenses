@@ -419,6 +419,19 @@ dotnet_diagnostic.VSTHRD100.severity = error    # Avoid async void methods
 # https://github.com/microsoft/VSSDK-Analyzers/blob/main/doc/index.md
 dotnet_diagnostic.VSSDK006.severity = warning   # Check whether the result of GetService calls is null
 
+# StyleCop.Analyzers
+# Only SA1402 (one type per file) is wanted; every other StyleCop rule/category is silenced.
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.NamingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.OrderingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.LayoutRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.ReadabilityRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.DocumentationRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.MaintainabilityRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.SpacingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.SpecialRules.severity = none
+dotnet_diagnostic.SA0001.severity = none        # XML comment analysis disabled (GenerateDocumentationFile is off)
+dotnet_diagnostic.SA1402.severity = error       # File may only contain a single type
+
 # White space rules (experimental)
 
 dotnet_style_allow_multiple_blank_lines_experimental = false

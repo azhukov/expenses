@@ -1,122 +1,9 @@
 ﻿using System.ComponentModel;
-using Expenses.Application.Purchases;
-using Expenses.Domain.Entities;
+using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using ModelContextProtocol.Server;
 
 namespace Expenses.Mcp.Tools;
-
-/// <summary>
-/// A line as an assistant supplies it. Reference data is named by <c>code</c>, never by display
-/// name: <c>GROCERIES</c> is unambiguous where "Groceries" is not (D8).
-/// </summary>
-public sealed record ExpenseArgument(
-    [property: Description("What was bought, as it should read in the ledger.")]
-    string Description,
-    [property: Description("What was actually paid for this line. Authoritative.")]
-    decimal Amount,
-    [property: Description("How much was bought. Defaults to 1.")]
-    decimal? Quantity = null,
-    [property: Description("Unit code, such as KG. Never a display name.")]
-    string? UnitCode = null,
-    [property: Description("Price per unit. Descriptive: it need not multiply out to the amount.")]
-    decimal? UnitPrice = null,
-    [property: Description("Category code, such as GROCERIES. Never a display name.")]
-    string? CategoryCode = null,
-    [property: Description("What the item normally costs, when a discount was printed.")]
-    decimal? ListUnitPrice = null,
-    [property: Description("How much was taken off, as a positive amount. Never a percentage.")]
-    decimal? DiscountAmount = null)
-{
-    public ExpenseCommand ToCommand() => new(
-        Description,
-        Amount,
-        Quantity,
-        UnitCode,
-        UnitPrice,
-        CategoryCode,
-        ListUnitPrice: ListUnitPrice,
-        DiscountAmount: DiscountAmount);
-}
-
-/// <summary>
-/// What a capture reported, resubmitted to confirm it. Nothing about a capture is held server-side
-/// (D12), so an assistant carries this forward exactly as the capture tool returned it — or edited,
-/// where the extraction result needed correcting.
-/// </summary>
-public sealed record CapturedReceiptArgument(
-    [property: Description("The temporary key the capture response returned.")]
-    Guid TempKey,
-    [property: Description("The extraction outcome the capture response reported: Extracted, NeedsReview or Failed.")]
-    Receipt.ExtractionState State,
-    [property: Description("Why extraction failed, when the state is Failed.")]
-    string? FailureReason = null,
-    [property: Description("The IKOF fiscal identifier supplied at capture, if any.")]
-    string? SuppliedIkof = null,
-    [property: Description("The JIKR fiscal identifier supplied at capture, if any.")]
-    string? SuppliedJikr = null,
-    [property: Description("The IKOF fiscal identifier extraction read from the image, if any.")]
-    string? ExtractedIkof = null,
-    [property: Description("The JIKR fiscal identifier extraction read from the image, if any.")]
-    string? ExtractedJikr = null,
-    [property: Description("How the extracted fiscal identifiers were obtained, as capture reported it.")]
-    Receipt.FiscalSource FiscalExtractedSource = Receipt.FiscalSource.None,
-    [property: Description(
-        "The invoice creation timestamp a fiscal QR decoded, if any, as capture reported it. Used to "
-        + "default the purchase's date when none is supplied.")]
-    string? FiscalCreatedAt = null)
-{
-    public CapturedReceiptCommand ToCommand() => new(
-        TempKey,
-        State,
-        FailureReason,
-        SuppliedIkof,
-        SuppliedJikr,
-        ExtractedIkof,
-        ExtractedJikr,
-        FiscalExtractedSource,
-        FiscalCreatedAt);
-}
-
-public sealed record MerchantArgument(
-    [property: Description("The merchant as printed on the receipt or named by the user.")]
-    string Text,
-    [property: Description("The merchant's tax identification number, where the receipt printed one.")]
-    string? TaxId = null)
-{
-    public MerchantCommand ToCommand() => new(Text, TaxId);
-}
-
-/// <summary>
-/// What recording produced. <see cref="Summary"/> is the sentence an assistant relays: a repeated
-/// call is a success that says so, not an error it would try to route around (D3).
-/// </summary>
-public sealed record RecordPurchaseToolResult(
-    string Summary,
-    bool AlreadyRecorded,
-    bool MerchantNewlyAdded,
-    PurchaseView Purchase)
-{
-    public static RecordPurchaseToolResult Of(RecordPurchaseResult result)
-    {
-        string merchant = result.Merchant is null
-            ? string.Empty
-            : $" at {result.Merchant.Name}"
-              + (result.MerchantNewlyAdded ? ", newly added to the merchant list" : string.Empty);
-
-        string summary = result.AlreadyRecorded
-            ? $"This purchase was already recorded: {result.Purchase.Amount} on "
-              + $"{result.Purchase.OccurredAt:yyyy-MM-dd HH:mm}, identifier {result.Purchase.Id}. "
-              + "Nothing was changed."
-            : $"Recorded {result.Purchase.Amount} on {result.Purchase.OccurredAt:yyyy-MM-dd HH:mm}"
-              + $"{merchant}, identifier {result.Purchase.Id}.";
-
-        return new RecordPurchaseToolResult(
-            summary,
-            result.AlreadyRecorded,
-            result.MerchantNewlyAdded,
-            result.Purchase);
-    }
-}
 
 /// <summary>
 /// Recording and reading purchases. Every tool here delegates to the same use case the HTTP
@@ -124,7 +11,7 @@ public sealed record RecordPurchaseToolResult(
 /// translated once, by the filter in <see cref="ExpensesMcpServer"/>.
 /// </summary>
 [McpServerToolType]
-public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase getPurchase, ListPurchases listPurchases)
+public sealed class PurchaseTools(PurchaseService purchases)
 {
     [McpServerTool(Name = "record_purchase")]
     [Description("""
@@ -142,17 +29,16 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
         IReadOnlyList<ExpenseArgument> expenses,
         [Description("Where the purchase was made, if known.")] MerchantArgument? merchant = null,
         CancellationToken cancellationToken = default)
-        => RecordPurchaseToolResult.Of(await recordPurchase.Execute(
-            new RecordPurchaseCommand(
-                occurredAt,
-                amount,
-                [.. expenses.Select(expense => expense.ToCommand())],
-                merchant?.ToCommand()),
-            cancellationToken));
+        => RecordPurchaseToolResult.Of(await purchases.Record(
+            occurredAt,
+            amount,
+            [.. expenses.Select(expense => expense.ToCommand())],
+            merchant?.ToCommand(),
+            cancellationToken: cancellationToken));
 
     [McpServerTool(Name = "confirm_capture")]
     [Description("""
-        Confirms a capture — made over HTTP, since image bytes are never a tool argument here — into
+        Confirms a capture вЂ” made over HTTP, since image bytes are never a tool argument here вЂ” into
         a new purchase. Resubmit exactly what the capture response reported (or corrected values,
         where extraction needed fixing): its temporary key and extraction outcome, together with the
         date, amount and expense lines the user is asserting. The promoted image is attached as the
@@ -170,13 +56,12 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
         DateTime? occurredAt = null,
         [Description("Where the purchase was made, if known.")] MerchantArgument? merchant = null,
         CancellationToken cancellationToken = default)
-        => RecordPurchaseToolResult.Of(await recordPurchase.Execute(
-            new RecordPurchaseCommand(
-                occurredAt,
-                amount,
-                [.. expenses.Select(expense => expense.ToCommand())],
-                merchant?.ToCommand(),
-                capture.ToCommand()),
+        => RecordPurchaseToolResult.Of(await purchases.Record(
+            occurredAt,
+            amount,
+            [.. expenses.Select(expense => expense.ToCommand())],
+            merchant?.ToCommand(),
+            capture.ToCommand(),
             cancellationToken));
 
     [McpServerTool(Name = "get_purchase")]
@@ -188,7 +73,7 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
     public async Task<PurchaseView> GetPurchase(
         [Description("The purchase identifier.")] long id,
         CancellationToken cancellationToken = default)
-        => await getPurchase.Execute(id, cancellationToken);
+        => await purchases.Get(id, cancellationToken);
 
     [McpServerTool(Name = "list_purchases")]
     [Description("""
@@ -202,5 +87,5 @@ public sealed class PurchaseTools(RecordPurchase recordPurchase, GetPurchase get
         [Description("How many purchases to skip, for paging.")] int skip = 0,
         [Description("How many purchases to return. At most 200.")] int? take = null,
         CancellationToken cancellationToken = default)
-        => await listPurchases.Execute(new ListPurchasesQuery(from, to, skip, take), cancellationToken);
+        => await purchases.List(from, to, skip, take, cancellationToken);
 }

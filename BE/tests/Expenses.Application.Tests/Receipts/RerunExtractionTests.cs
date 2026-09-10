@@ -1,7 +1,7 @@
-﻿using Expenses.Application.Errors;
-using Expenses.Application.Extraction;
-using Expenses.Application.Purchases;
-using Expenses.Application.Receipts;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Errors;
+using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain.Entities;
 
@@ -22,7 +22,7 @@ public sealed class RerunExtractionTests
         var extracted = await Subject(FakeStage.Producing(
             "vision-expensive",
             ExtractionStageRole.Primary,
-            Results.Reconciling("vision-expensive"))).Execute(purchase.Id);
+            Results.Reconciling("vision-expensive"))).RerunExtraction(purchase.Id);
 
         var stored = await _ledger.FindLatest(purchase.Id);
         Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
@@ -34,12 +34,11 @@ public sealed class RerunExtractionTests
     public async Task Re_run_after_confirmation()
     {
         var purchase = GivenPurchaseWithReceipt(Receipt.ExtractionState.Extracted);
-        await new ConfirmCandidates(_ledger, _ledger, _ledger, _ledger, _ledger)
-            .Execute(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m)]);
+        await Subject().ConfirmCandidates(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m)]);
 
         var extracted = await Subject(FakeStage.Producing(
             "vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
-            .Execute(purchase.Id);
+            .RerunExtraction(purchase.Id);
 
         Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
         Assert.Equal(["Sladoled"], purchase.Expenses.Select(expense => expense.Description));
@@ -52,7 +51,7 @@ public sealed class RerunExtractionTests
 
         var extracted = await Subject(FakeStage.Producing(
             "vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
-            .Execute(purchase.Id);
+            .RerunExtraction(purchase.Id);
 
         Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
         Assert.Null(extracted.FailureReason);
@@ -64,7 +63,7 @@ public sealed class RerunExtractionTests
         var purchase = _ledger.Given(Purchase.Record(s_occurred, 8.48m, [Expense.Record("Groceries", 8.48m)]));
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            Subject().Execute(purchase.Id));
+            Subject().RerunExtraction(purchase.Id));
 
         Assert.Equal(ApplicationErrors.ReceiptImageNotFound, error.Error.Code);
     }
@@ -72,13 +71,13 @@ public sealed class RerunExtractionTests
     [Fact]
     public async Task Re_running_a_purchase_that_does_not_exist_is_reported()
     {
-        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject().Execute(4711));
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject().RerunExtraction(4711));
 
         Assert.Equal(ApplicationErrors.PurchaseNotFound, error.Error.Code);
     }
 
-    private RerunExtraction Subject(params IExtractionStage[] stages)
-        => new(_ledger, _ledger, _ledger, new ExtractionCascade(stages), _ledger);
+    private ReceiptService Subject(params IExtractionStage[] stages)
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade(stages), _ledger);
 
     private Purchase GivenPurchaseWithReceipt(Receipt.ExtractionState state, string? failureReason = null)
     {

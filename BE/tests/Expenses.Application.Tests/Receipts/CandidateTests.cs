@@ -1,6 +1,6 @@
-﻿using Expenses.Application.Errors;
-using Expenses.Application.Purchases;
-using Expenses.Application.Receipts;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Errors;
+using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
@@ -17,16 +17,15 @@ public sealed class CandidateTests
 
     private readonly InMemoryLedger _ledger = new();
 
-    private ConfirmCandidates Confirm => new(_ledger, _ledger, _ledger, _ledger, _ledger);
-
-    private GetExtractionCandidates Read => new(_ledger, _ledger);
+    private ReceiptService Subject
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([]), _ledger);
 
     [Fact]
     public async Task Candidates_do_not_change_the_ledger()
     {
         var purchase = await GivenExtractedPurchase();
 
-        var view = await Read.Execute(purchase.Id);
+        var view = await Subject.GetExtractionCandidates(purchase.Id);
 
         Assert.Equal(2, view.Result?.Candidates.Count);
         var expense = Assert.Single(purchase.Expenses);
@@ -38,7 +37,7 @@ public sealed class CandidateTests
     {
         var purchase = await GivenExtractedPurchase();
 
-        var view = await Read.Execute(purchase.Id);
+        var view = await Subject.GetExtractionCandidates(purchase.Id);
 
         Assert.Equal("placeholder", view.Result?.EngineName);
         Assert.Equal("1.0", view.Result?.EngineVersion);
@@ -52,7 +51,7 @@ public sealed class CandidateTests
         // none held even though its receipt is already Extracted.
         var purchase = GivenPurchaseWithReceipt();
 
-        var view = await Read.Execute(purchase.Id);
+        var view = await Subject.GetExtractionCandidates(purchase.Id);
 
         Assert.Null(view.Result);
         Assert.False(view.CandidatesHeld);
@@ -69,7 +68,7 @@ public sealed class CandidateTests
         var purchase = await GivenExtractedPurchase();
         await _ledger.Discard(purchase.Id);
 
-        var view = await Read.Execute(purchase.Id);
+        var view = await Subject.GetExtractionCandidates(purchase.Id);
 
         Assert.False(view.CandidatesHeld);
         Assert.Null(view.Result);
@@ -82,7 +81,7 @@ public sealed class CandidateTests
     public async Task Confirmed_lines_are_unaffected_by_losing_candidates()
     {
         var purchase = await GivenExtractedPurchase();
-        await Confirm.Execute(purchase.Id);
+        await Subject.ConfirmCandidates(purchase.Id);
 
         await _ledger.Discard(purchase.Id);
 
@@ -95,7 +94,7 @@ public sealed class CandidateTests
     {
         var purchase = await GivenExtractedPurchase();
 
-        var confirmed = await Confirm.Execute(purchase.Id);
+        var confirmed = await Subject.ConfirmCandidates(purchase.Id);
 
         Assert.Equal(["Sladoled", "Cokolada"], confirmed.Expenses.Select(expense => expense.Description));
         Assert.Equal(8.48m, confirmed.Expenses.Sum(expense => expense.Amount));
@@ -111,7 +110,7 @@ public sealed class CandidateTests
         var kilogram = _ledger.Given(Unit.Create("KG", "Kilogram", "kg", Unit.UnitKind.Mass));
         var purchase = await GivenExtractedPurchase(unitId: kilogram.Id, unitRaw: "Bund");
 
-        var confirmed = await Confirm.Execute(purchase.Id);
+        var confirmed = await Subject.ConfirmCandidates(purchase.Id);
 
         Assert.Equal(kilogram.Id, confirmed.Expenses[0].UnitId);
         Assert.Equal("Bund", confirmed.Expenses[0].UnitRaw);
@@ -126,7 +125,7 @@ public sealed class CandidateTests
     {
         var purchase = await GivenExtractedPurchase(secondAmount: 4.99m);
 
-        var error = await Assert.ThrowsAsync<ExpensesException>(() => Confirm.Execute(purchase.Id));
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.ConfirmCandidates(purchase.Id));
 
         Assert.Equal(ApplicationErrors.PurchaseReconciliationMismatch, error.Error.Code);
         Assert.Equal(8.48m, error.Error.Fields["amount"]);
@@ -140,7 +139,7 @@ public sealed class CandidateTests
     {
         var purchase = await GivenExtractedPurchase(secondAmount: 4.99m);
 
-        var confirmed = await Confirm.Execute(purchase.Id, [
+        var confirmed = await Subject.ConfirmCandidates(purchase.Id, [
             new ExpenseCommand("Sladoled", 4.49m, ListUnitPrice: 8.50m, DiscountAmount: 4.01m),
             new ExpenseCommand("Cokolada", 3.99m),
         ]);
@@ -158,7 +157,7 @@ public sealed class CandidateTests
     {
         var purchase = GivenPurchaseWithReceipt();
 
-        var confirmed = await Confirm.Execute(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m)]);
+        var confirmed = await Subject.ConfirmCandidates(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m)]);
 
         Assert.Equal("Sladoled", Assert.Single(confirmed.Expenses).Description);
     }
@@ -168,7 +167,7 @@ public sealed class CandidateTests
     {
         var purchase = GivenPurchaseWithReceipt();
 
-        var error = await Assert.ThrowsAsync<ExpensesException>(() => Confirm.Execute(purchase.Id));
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.ConfirmCandidates(purchase.Id));
 
         Assert.Equal(ApplicationErrors.ExtractionCandidatesNotFound, error.Error.Code);
     }
@@ -178,7 +177,7 @@ public sealed class CandidateTests
     {
         var purchase = await GivenExtractedPurchase();
 
-        await new DiscardCandidates(_ledger, _ledger).Execute(purchase.Id);
+        await Subject.DiscardCandidates(purchase.Id);
 
         Assert.Null(await _ledger.FindLatest(purchase.Id));
         Assert.NotNull(purchase.Receipt);

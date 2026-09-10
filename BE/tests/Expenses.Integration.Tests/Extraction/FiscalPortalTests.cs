@@ -1,5 +1,7 @@
 ﻿using System.Net;
-using Expenses.Application.Extraction;
+using Expenses.Application.Dtos;
+using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
 

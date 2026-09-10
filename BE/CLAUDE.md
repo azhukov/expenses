@@ -42,6 +42,9 @@ Adding a `ProjectReference` or `PackageReference` that breaks a ring fails the b
 - **Do not introduce a type over a single primitive (D7).** A `decimal` amount stays a `decimal`; a
   quantity stays a `decimal`. In the outer rings, shared rules over a primitive are static
   functions, not wrappers.
+- **One class or interface per file.** Enforced by StyleCop.Analyzers' SA1402, set to `error` in
+  `.editorconfig` (every other StyleCop rule is silenced). Nested types are exempt — a state enum
+  nested inside its owning entity is not a second type for this rule.
 - Comments explain *why*, in prose, at the density of the surrounding file. Don't narrate the code.
 
 ## Commands

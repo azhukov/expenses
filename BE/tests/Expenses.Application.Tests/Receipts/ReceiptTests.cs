@@ -1,5 +1,5 @@
-﻿using Expenses.Application.Abstractions;
-using Expenses.Application.Receipts;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain.Entities;
 
@@ -18,7 +18,8 @@ public sealed class ReceiptTests
 
     private readonly InMemoryLedger _ledger = new();
 
-    private DeleteReceipt Delete => new(_ledger, _ledger, _ledger, _ledger);
+    private ReceiptService Delete
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([]), _ledger);
 
     [Fact]
     public async Task Manual_purchase_has_no_image()
@@ -35,7 +36,7 @@ public sealed class ReceiptTests
         var first = GivenPurchaseWithReceipt(stored, amount: 8.48m);
         var second = GivenPurchaseWithReceipt(stored, amount: 9.99m);
 
-        await Delete.Execute(first.Id);
+        await Delete.Delete(first.Id);
 
         Assert.Null(first.Receipt);
         Assert.NotNull(second.Receipt);
@@ -48,7 +49,7 @@ public sealed class ReceiptTests
         var stored = _ledger.GivenReceiptFile(Jpeg(1));
         var purchase = GivenPurchaseWithReceipt(stored);
 
-        await Delete.Execute(purchase.Id);
+        await Delete.Delete(purchase.Id);
 
         Assert.Null(purchase.Receipt);
         Assert.Empty(_ledger.Files);
@@ -60,7 +61,7 @@ public sealed class ReceiptTests
         var stored = _ledger.GivenReceiptFile(Jpeg(1));
         var purchase = GivenPurchaseWithReceipt(stored);
 
-        await Delete.Execute(purchase.Id);
+        await Delete.Delete(purchase.Id);
 
         Assert.Single(purchase.Expenses);
         Assert.Equal(8.48m, purchase.Amount);

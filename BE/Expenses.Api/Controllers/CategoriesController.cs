@@ -1,4 +1,5 @@
-﻿using Expenses.Application.ReferenceData;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Expenses.Api.Controllers;
@@ -14,8 +15,8 @@ public sealed class CategoriesController : ControllerBase
     [EndpointName("ListCategories")]
     public async Task<ActionResult<IReadOnlyList<CategoryView>>> List(
         [FromQuery] bool? includeInactive,
-        [FromServices] ListCategories categories,
-        CancellationToken cancellationToken) => Ok(await categories.Execute(
+        [FromServices] CategoryService categories,
+        CancellationToken cancellationToken) => Ok(await categories.List(
             includeInactive ?? false,
             cancellationToken));
 
@@ -24,11 +25,13 @@ public sealed class CategoriesController : ControllerBase
     [EndpointName("CreateCategory")]
     public async Task<ActionResult<CategoryView>> Create(
         CreateCategoryRequest request,
-        [FromServices] CreateCategory create,
+        [FromServices] CategoryService categories,
         CancellationToken cancellationToken)
     {
-        var created = await create.Execute(
-            new CreateCategoryCommand(request.Code, request.Name, request.ParentCode),
+        var created = await categories.Create(
+            request.Code,
+            request.Name,
+            request.ParentCode,
             cancellationToken);
 
         return Created($"/categories/{created.Code}", created);
@@ -40,9 +43,11 @@ public sealed class CategoriesController : ControllerBase
     public async Task<ActionResult<CategoryView>> Rename(
         string code,
         RenameCategoryRequest request,
-        [FromServices] RenameCategory rename,
-        CancellationToken cancellationToken) => Ok(await rename.Execute(
-            new RenameCategoryCommand(code, request.Name, request.Code),
+        [FromServices] CategoryService categories,
+        CancellationToken cancellationToken) => Ok(await categories.Rename(
+            code,
+            request.Name,
+            request.Code,
             cancellationToken));
 
     /// <summary>Retires a category, leaving expenses that reference it unchanged.</summary>
@@ -50,18 +55,18 @@ public sealed class CategoriesController : ControllerBase
     [EndpointName("DeactivateCategory")]
     public async Task<ActionResult<CategoryView>> Deactivate(
         string code,
-        [FromServices] DeactivateCategory deactivate,
-        CancellationToken cancellationToken) => Ok(await deactivate.Execute(code, cancellationToken));
+        [FromServices] CategoryService categories,
+        CancellationToken cancellationToken) => Ok(await categories.Deactivate(code, cancellationToken));
 
     /// <summary>Deletes a user-created category; a seeded one is refused.</summary>
     [HttpDelete("{code}")]
     [EndpointName("DeleteCategory")]
     public async Task<ActionResult> Delete(
         string code,
-        [FromServices] DeleteCategory delete,
+        [FromServices] CategoryService categories,
         CancellationToken cancellationToken)
     {
-        await delete.Execute(code, cancellationToken);
+        await categories.Delete(code, cancellationToken);
 
         return NoContent();
     }

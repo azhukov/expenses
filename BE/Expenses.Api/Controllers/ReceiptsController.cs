@@ -1,7 +1,7 @@
-﻿using Expenses.Application.Abstractions;
+﻿using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
-using Expenses.Application.Purchases;
-using Expenses.Application.Receipts;
+using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Expenses.Api.Controllers;
@@ -55,8 +55,8 @@ public sealed class ReceiptsController : ControllerBase
     [EndpointName("DeleteReceiptImage")]
     public async Task<ActionResult<PurchaseView>> Delete(
         long id,
-        [FromServices] DeleteReceipt delete,
-        CancellationToken cancellationToken) => Ok(await delete.Execute(id, cancellationToken));
+        [FromServices] ReceiptService receipts,
+        CancellationToken cancellationToken) => Ok(await receipts.Delete(id, cancellationToken));
 
     /// <summary>Returns a receipt's extraction state, candidates, stage provenance and arithmetic checks.</summary>
     [HttpGet("extraction")]
@@ -64,9 +64,9 @@ public sealed class ReceiptsController : ControllerBase
     [EndpointName("GetExtraction")]
     public async Task<ActionResult<ExtractionResponse>> GetExtraction(
         long id,
-        [FromServices] GetExtractionCandidates candidates,
+        [FromServices] ReceiptService receipts,
         CancellationToken cancellationToken) => Ok(ExtractionResponse.Of(
-            await candidates.Execute(id, cancellationToken)));
+            await receipts.GetExtractionCandidates(id, cancellationToken)));
 
     /// <summary>Turns candidate lines — as extracted or as edited — into the expenses of the purchase.</summary>
     [HttpPost("extraction/confirm")]
@@ -75,14 +75,14 @@ public sealed class ReceiptsController : ControllerBase
     public async Task<ActionResult<PurchaseView>> Confirm(
         long id,
         [FromBody] ConfirmCandidatesRequest? request,
-        [FromServices] ConfirmCandidates confirm,
+        [FromServices] ReceiptService receipts,
         CancellationToken cancellationToken)
     {
         RequestGuards.RejectDiscountPercentage(request?.Expenses);
 
         var edited = request?.Expenses?.Select(expense => expense.ToCommand()).ToList();
 
-        return Ok(await confirm.Execute(id, edited, cancellationToken));
+        return Ok(await receipts.ConfirmCandidates(id, edited, cancellationToken));
     }
 
     /// <summary>Removes a receipt's candidate lines, leaving the receipt and the purchase.</summary>
@@ -91,10 +91,10 @@ public sealed class ReceiptsController : ControllerBase
     [EndpointName("DiscardCandidates")]
     public async Task<ActionResult> Discard(
         long id,
-        [FromServices] DiscardCandidates discard,
+        [FromServices] ReceiptService receipts,
         CancellationToken cancellationToken)
     {
-        await discard.Execute(id, cancellationToken);
+        await receipts.DiscardCandidates(id, cancellationToken);
 
         return NoContent();
     }
@@ -105,14 +105,13 @@ public sealed class ReceiptsController : ControllerBase
     [EndpointName("RerunExtraction")]
     public async Task<ActionResult<ExtractionResponse>> Rerun(
         long id,
-        [FromServices] RerunExtraction rerun,
-        [FromServices] GetExtractionCandidates candidates,
+        [FromServices] ReceiptService receipts,
         CancellationToken cancellationToken)
     {
-        await rerun.Execute(id, cancellationToken);
+        await receipts.RerunExtraction(id, cancellationToken);
 
         // Read back rather than returned by the re-run itself, so the shape matches GetExtraction
         // exactly — the candidates it just replaced, in the same response.
-        return Ok(ExtractionResponse.Of(await candidates.Execute(id, cancellationToken)));
+        return Ok(ExtractionResponse.Of(await receipts.GetExtractionCandidates(id, cancellationToken)));
     }
 }

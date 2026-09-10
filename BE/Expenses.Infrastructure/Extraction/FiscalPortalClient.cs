@@ -1,27 +1,12 @@
 ﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Expenses.Application.Extraction;
+using Expenses.Application.Dtos;
+using Expenses.Application.Interfaces;
 using Expenses.Domain.Extraction;
 using Microsoft.Extensions.Logging;
 
 namespace Expenses.Infrastructure.Extraction;
-
-internal sealed class PortalOptions
-{
-    /// <summary>
-    /// The one national fiscalisation portal every receipt in this design is assumed to be verified
-    /// by. Configured rather than compiled in so a test can point it somewhere that is not a
-    /// government service (D26).
-    /// </summary>
-    public string BaseAddress { get; set; } = "https://mapr.tax.gov.me";
-
-    /// <summary>
-    /// Bounded, because ingestion may never wait on someone else's server. When it runs out the
-    /// stage produced nothing, which is an outcome the cascade already handles everywhere.
-    /// </summary>
-    public int TimeoutMilliseconds { get; set; } = 5000;
-}
 
 /// <summary>
 /// The fiscal verification service, as read out of the portal's own JavaScript bundle: a form-encoded
@@ -29,7 +14,7 @@ internal sealed class PortalOptions
 /// invoice. It is undocumented and may change without notice, which is the other reason every
 /// failure here is nothing rather than an error (D26).
 ///
-/// Every failure — no record, a refusal, a timeout, a shape this has never seen — returns null. The
+/// Every failure вЂ” no record, a refusal, a timeout, a shape this has never seen вЂ” returns null. The
 /// portal is on the critical path of a better answer, never of an answer at all.
 /// </summary>
 internal sealed class FiscalPortalClient(
@@ -136,7 +121,7 @@ internal sealed class FiscalPortalClient(
 
     /// <summary>
     /// Taken verbatim (D27). The one derived value is the line's list price, which the portal states
-    /// per unit while the check it feeds is a line-level one, so it is extended by the quantity —
+    /// per unit while the check it feeds is a line-level one, so it is extended by the quantity вЂ”
     /// a kilogram price of 15.00 over 0.548 kg lists at 8.22, against a line amount of 8.22.
     /// </summary>
     private static RetrievedInvoice? Map(long purchaseId, FiscalIdentifiers decoded, VerifiedInvoice invoice)
@@ -175,7 +160,7 @@ internal sealed class FiscalPortalClient(
 
             // A rate only where the invoice has one. This receipt carries lines at 21% and at 7%,
             // and stating either as the invoice's rate would be inventing a fact the portal did
-            // not state — the tax amount it did state stands on its own.
+            // not state вЂ” the tax amount it did state stands on its own.
             taxRatePercent: invoice.SameTaxes is { Count: 1 } ? invoice.SameTaxes[0].VatRate : null,
             taxAmount: invoice.TotalVATAmount,
             merchantName: invoice.Seller?.Name,
@@ -197,7 +182,7 @@ internal sealed class FiscalPortalClient(
     /// <summary>
     /// The response shape, as observed on one invoice. Anything the portal returns that is not named
     /// here is ignored rather than guessed at, and anything named here that is missing arrives as
-    /// its default — a refund or a corrected invoice may well look different from the one receipt
+    /// its default вЂ” a refund or a corrected invoice may well look different from the one receipt
     /// this was read from.
     /// </summary>
     private sealed record VerifiedInvoice

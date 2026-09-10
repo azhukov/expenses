@@ -2,10 +2,8 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Expenses.Application.Merchants;
-using Expenses.Application.Purchases;
-using Expenses.Application.Receipts;
-using Expenses.Application.ReferenceData;
+using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -38,17 +36,15 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task Extraction_state_is_readable_from_the_purchase()
     {
         using var scope = _services.CreateScope();
-        var captured = await scope.ServiceProvider.GetRequiredService<CaptureReceipt>().Execute(Jpeg());
+        var captured = await scope.ServiceProvider.GetRequiredService<ReceiptService>().Capture(Jpeg());
 
-        var recorded = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
-            new RecordPurchaseCommand(
+        var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
                 Next(),
                 6.00m,
                 [new ExpenseCommand("Line", 6.00m)],
-                Capture: new CapturedReceiptCommand(captured.TempKey, captured.State, captured.FailureReason)));
+                capture: new CapturedReceiptCommand(captured.TempKey, captured.State, captured.FailureReason));
 
-        var purchase = await scope.ServiceProvider.GetRequiredService<GetPurchase>()
-            .Execute(recorded.Purchase.Id);
+        var purchase = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Get(recorded.Purchase.Id);
 
         // Retrieving a purchase says where its receipt has got to, in the same read: the receipt is
         // columns on the purchase rather than a row to join (D11) — and already terminal, since
@@ -63,8 +59,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
         using var scope = _services.CreateScope();
         var recorded = await Record(scope.ServiceProvider, 7.00m);
 
-        var purchase = await scope.ServiceProvider.GetRequiredService<GetPurchase>()
-            .Execute(recorded.Purchase.Id);
+        var purchase = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Get(recorded.Purchase.Id);
 
         Assert.False(purchase.HasReceipt);
         Assert.Null(purchase.ExtractionState);
@@ -77,17 +72,15 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
         const string Greek = "Ελληνικός καφές";
 
         using var scope = _services.CreateScope();
-        var recorded = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
-            new RecordPurchaseCommand(
+        var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
                 Next(),
                 3.00m,
                 [
                     new ExpenseCommand(Cyrillic, 2.00m, UnitRaw: "шт", CategoryRaw: "продукты"),
                     new ExpenseCommand(Greek, 1.00m),
-                ]));
+                ]);
 
-        var purchase = await scope.ServiceProvider.GetRequiredService<GetPurchase>()
-            .Execute(recorded.Purchase.Id);
+        var purchase = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Get(recorded.Purchase.Id);
 
         // Multilingual support is storage and collation, not translation: the text comes back
         // exactly as it went in (D8, D13).
@@ -104,15 +97,14 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
         string childCode = $"GAP_CHILD_{s_sequence}";
 
         using var scope = _services.CreateScope();
-        var create = scope.ServiceProvider.GetRequiredService<CreateCategory>();
-        await create.Execute(new CreateCategoryCommand(parentCode, "Parent"));
-        await create.Execute(new CreateCategoryCommand(childCode, "Child", parentCode));
+        var create = scope.ServiceProvider.GetRequiredService<CategoryService>();
+        await create.Create(parentCode, "Parent");
+        await create.Create(childCode, "Child", parentCode);
 
-        var recorded = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
-            new RecordPurchaseCommand(
+        var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
                 Next(),
                 2.00m,
-                [new ExpenseCommand("Assigned to a parent", 2.00m, CategoryCode: parentCode)]));
+                [new ExpenseCommand("Assigned to a parent", 2.00m, CategoryCode: parentCode)]);
 
         Assert.NotNull(recorded.Purchase.Expenses[0].CategoryId);
     }
@@ -121,20 +113,16 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task A_purchase_references_a_chain_directly()
     {
         using var scope = _services.CreateScope();
-        var chain = await scope.ServiceProvider.GetRequiredService<ResolveMerchant>()
-            .Execute("GAP CHAIN", "09950001");
-        var branch = await scope.ServiceProvider.GetRequiredService<ResolveMerchant>()
-            .Execute("GAP CHAIN 034", "09950002");
+        var chain = await scope.ServiceProvider.GetRequiredService<MerchantService>().Resolve("GAP CHAIN", "09950001");
+        var branch = await scope.ServiceProvider.GetRequiredService<MerchantService>().Resolve("GAP CHAIN 034", "09950002");
 
-        await scope.ServiceProvider.GetRequiredService<SetMerchantParent>()
-            .Execute(branch.Merchant.Id, chain.Merchant.Id);
+        await scope.ServiceProvider.GetRequiredService<MerchantService>().SetParent(branch.Merchant.Id, chain.Merchant.Id);
 
-        var recorded = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
-            new RecordPurchaseCommand(
+        var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
                 Next(),
                 5.00m,
                 [new ExpenseCommand("At the chain itself", 5.00m)],
-                new MerchantCommand("GAP CHAIN", "09950001")));
+                new MerchantCommand("GAP CHAIN", "09950001"));
 
         // A merchant with children is assignable in its own right, exactly like a category (D18).
         Assert.Equal(chain.Merchant.Id, recorded.Purchase.MerchantId);
@@ -185,8 +173,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     private static async Task<RecordPurchaseResult> Record(IServiceProvider services, decimal amount)
-        => await services.GetRequiredService<RecordPurchase>().Execute(
-            new RecordPurchaseCommand(Next(), amount, [new ExpenseCommand("Line", amount)]));
+        => await services.GetRequiredService<PurchaseService>().Record(Next(), amount, [new ExpenseCommand("Line", amount)]);
 
     private static byte[] Jpeg()
         => [0xFF, 0xD8, 0xFF, 0xE0, (byte)s_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x06, (byte)(s_sequence >> 8)];

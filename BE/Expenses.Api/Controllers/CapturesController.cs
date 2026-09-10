@@ -1,6 +1,6 @@
-﻿using Expenses.Application.Errors;
-using Expenses.Application.Extraction;
-using Expenses.Application.Receipts;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Errors;
+using Expenses.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Expenses.Api.Controllers;
@@ -25,7 +25,7 @@ public sealed class CapturesController : ControllerBase
     [Produces("application/json")]
     [EndpointName("CaptureReceipt")]
     public async Task<ActionResult<CaptureResult>> Capture(
-        [FromServices] CaptureReceipt capture,
+        [FromServices] ReceiptService receipts,
         CancellationToken cancellationToken)
     {
         var form = await Request.ReadFormAsync(cancellationToken);
@@ -51,7 +51,7 @@ public sealed class CapturesController : ControllerBase
         // Identifiers a client decoded at capture, accepted without extraction having run (D20).
         var supplied = new FiscalIdentifiers(form["fiscalIkof"], form["fiscalJikr"]);
 
-        var result = await capture.Execute(buffer.ToArray(), supplied, cancellationToken);
+        var result = await receipts.Capture(buffer.ToArray(), supplied, cancellationToken);
 
         return Ok(result);
     }

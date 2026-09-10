@@ -1,9 +1,7 @@
-﻿using Expenses.Application.Abstractions;
+﻿using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
-using Expenses.Application.Extraction;
-using Expenses.Application.Merchants;
-using Expenses.Application.Purchases;
-using Expenses.Application.Receipts;
+using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Domain.Entities;
 using Expenses.Infrastructure.Persistence;
 using Expenses.Integration.Tests.Harness;
@@ -39,13 +37,13 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     public async Task Concurrent_duplicate_submissions()
     {
         var occurred = Next();
-        var command = new RecordPurchaseCommand(occurred, 2.90m, [new ExpenseCommand("Coffee", 2.90m)]);
+        IReadOnlyList<ExpenseCommand> expenses = [new ExpenseCommand("Coffee", 2.90m)];
 
         // Two writers, no coordination: the case a check-then-insert loses and the unique index
         // exists for (D4).
         var results = await Task.WhenAll(
-            Task.Run(() => Execute(command)),
-            Task.Run(() => Execute(command)));
+            Task.Run(() => Execute(occurred, 2.90m, expenses)),
+            Task.Run(() => Execute(occurred, 2.90m, expenses)));
 
         Assert.All(results, result => Assert.Equal(results[0].Purchase.Id, result.Purchase.Id));
         Assert.Contains(results, result => result.AlreadyRecorded);
@@ -98,14 +96,14 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         }
 
         using var reading = _services.CreateScope();
-        var search = reading.ServiceProvider.GetRequiredService<SearchMerchants>();
+        var merchantService = reading.ServiceProvider.GetRequiredService<MerchantService>();
 
         // Written without its accents, as a user would type it.
-        var unaccented = await search.Execute("Poslasticarnica");
+        var unaccented = await merchantService.Search("Poslasticarnica");
         Assert.Contains(unaccented, match => match.Merchant?.TaxId == "09910001");
 
         // And with a character-level slip in the middle of the word.
-        var mistyped = await search.Execute("Njegos");
+        var mistyped = await merchantService.Search("Njegos");
         Assert.Contains(mistyped, match => match.Merchant?.TaxId == "09910001");
     }
 
@@ -142,8 +140,8 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         var branch = await Execute(Purchase(9.00m, new MerchantCommand("Voli 034", "09930002")));
 
         using var scope = _services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<SetMerchantParent>()
-            .Execute(branch.Purchase.MerchantId!.Value, chain.Purchase.MerchantId!.Value);
+        await scope.ServiceProvider.GetRequiredService<MerchantService>()
+            .SetParent(branch.Purchase.MerchantId!.Value, chain.Purchase.MerchantId!.Value);
 
         var context = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
 
@@ -168,27 +166,26 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         await using var services = postgres.Services(("Extraction:Placeholder:Outcome", "Reconciling"));
         using var scope = services.CreateScope();
 
-        var captured = await scope.ServiceProvider.GetRequiredService<CaptureReceipt>().Execute(
+        var captured = await scope.ServiceProvider.GetRequiredService<ReceiptService>().Capture(
             QrReceipt("https://mapr.tax.gov.me/ic/#/verify?iic=DECODED-FROM-IMAGE"),
             new FiscalIdentifiers("SUPPLIED-AT-UPLOAD"));
 
-        var purchase = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
-            new RecordPurchaseCommand(
-                Next(),
-                10.00m,
-                [new ExpenseCommand("Line", 10.00m)],
-                Capture: new CapturedReceiptCommand(
-                    captured.TempKey,
-                    captured.State,
-                    captured.FailureReason,
-                    captured.Supplied.Ikof,
-                    captured.Supplied.Jikr,
-                    captured.Extracted.Ikof,
-                    captured.Extracted.Jikr,
-                    captured.FiscalSource)));
+        var purchase = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
+            Next(),
+            10.00m,
+            [new ExpenseCommand("Line", 10.00m)],
+            capture: new CapturedReceiptCommand(
+                captured.TempKey,
+                captured.State,
+                captured.FailureReason,
+                captured.Supplied.Ikof,
+                captured.Supplied.Jikr,
+                captured.Extracted.Ikof,
+                captured.Extracted.Jikr,
+                captured.FiscalSource));
 
         long purchaseId = purchase.Purchase.Id;
-        var view = await scope.ServiceProvider.GetRequiredService<GetExtractionCandidates>().Execute(purchaseId);
+        var view = await scope.ServiceProvider.GetRequiredService<ReceiptService>().GetExtractionCandidates(purchaseId);
 
         Assert.Equal("SUPPLIED-AT-UPLOAD", view.Receipt.FiscalIkofSupplied);
         Assert.Equal("DECODED-FROM-IMAGE", view.Receipt.FiscalIkofExtracted);
@@ -211,32 +208,42 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         await categories.Add(Category.Create(code, "To be retired"));
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChanges();
 
-        var recorded = await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
-            new RecordPurchaseCommand(Next(), 1.50m, [new ExpenseCommand("Ticket", 1.50m, CategoryCode: code)]));
+        var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
+            Next(), 1.50m, [new ExpenseCommand("Ticket", 1.50m, CategoryCode: code)]);
 
-        await scope.ServiceProvider.GetRequiredService<Application.ReferenceData.DeactivateCategory>()
-            .Execute(code);
+        await scope.ServiceProvider.GetRequiredService<CategoryService>().Deactivate(code);
 
         var refused = await Assert.ThrowsAsync<ExpensesException>(() =>
-            scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(
-                new RecordPurchaseCommand(Next(), 1.50m, [new ExpenseCommand("Ticket", 1.50m, CategoryCode: code)])));
+            scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
+                Next(), 1.50m, [new ExpenseCommand("Ticket", 1.50m, CategoryCode: code)]));
 
         Assert.Equal(ApplicationErrors.CategoryInactive, refused.Error.Code);
 
         // History is untouched: the expense recorded before the category was retired still reports it.
-        var stored = await scope.ServiceProvider.GetRequiredService<GetPurchase>().Execute(recorded.Purchase.Id);
+        var stored = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Get(recorded.Purchase.Id);
         Assert.NotNull(stored.Expenses[0].CategoryId);
     }
 
-    private async Task<RecordPurchaseResult> Execute(RecordPurchaseCommand command)
+    private async Task<RecordPurchaseResult> Execute(
+        DateTime occurredAt,
+        decimal amount,
+        IReadOnlyList<ExpenseCommand> expenses,
+        MerchantCommand? merchant = null,
+        CapturedReceiptCommand? capture = null)
     {
         using var scope = _services.CreateScope();
 
-        return await scope.ServiceProvider.GetRequiredService<RecordPurchase>().Execute(command);
+        return await scope.ServiceProvider.GetRequiredService<PurchaseService>()
+            .Record(occurredAt, amount, expenses, merchant, capture);
     }
 
-    private static RecordPurchaseCommand Purchase(decimal amount, MerchantCommand? merchant = null)
-        => new(Next(), amount, [new ExpenseCommand("Line", amount)], merchant);
+    private Task<RecordPurchaseResult> Execute(
+        (DateTime OccurredAt, decimal Amount, IReadOnlyList<ExpenseCommand> Expenses, MerchantCommand? Merchant) command)
+        => Execute(command.OccurredAt, command.Amount, command.Expenses, command.Merchant);
+
+    private static (DateTime OccurredAt, decimal Amount, IReadOnlyList<ExpenseCommand> Expenses, MerchantCommand? Merchant) Purchase(
+        decimal amount, MerchantCommand? merchant = null)
+        => (Next(), amount, [new ExpenseCommand("Line", amount)], merchant);
 
     /// <summary>A PNG carrying a QR code, so the decode stage has something real to read.</summary>
     private static byte[] QrReceipt(string payload) => QrImage.Png(payload);

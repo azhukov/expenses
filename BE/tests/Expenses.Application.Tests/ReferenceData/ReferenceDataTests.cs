@@ -1,5 +1,5 @@
 ﻿using Expenses.Application.Errors;
-using Expenses.Application.ReferenceData;
+using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain.Entities;
 
@@ -14,11 +14,14 @@ public sealed class ReferenceDataTests
 {
     private readonly InMemoryLedger _ledger = new();
 
+    private CategoryService Categories => new(_ledger, _ledger);
+
+    private UnitService Units => new(_ledger);
+
     [Fact]
     public async Task Create_a_category()
     {
-        var created = await new CreateCategory(_ledger, _ledger)
-            .Execute(new CreateCategoryCommand("GROCERIES", "Groceries"));
+        var created = await Categories.Create("GROCERIES", "Groceries");
 
         Assert.Equal("GROCERIES", created.Code);
         Assert.False(created.IsSystem);
@@ -31,8 +34,7 @@ public sealed class ReferenceDataTests
     {
         _ledger.Given(Category.Create("GROCERIES", "Groceries"));
 
-        var produce = await new CreateCategory(_ledger, _ledger)
-            .Execute(new CreateCategoryCommand("PRODUCE", "Produce", "GROCERIES"));
+        var produce = await Categories.Create("PRODUCE", "Produce", "GROCERIES");
 
         Assert.Equal("GROCERIES", produce.ParentCode);
     }
@@ -42,8 +44,8 @@ public sealed class ReferenceDataTests
     {
         _ledger.Given(Category.Create("GROCERIES", "Groceries"));
 
-        var error = await Assert.ThrowsAsync<ExpensesException>(() => new CreateCategory(_ledger, _ledger)
-            .Execute(new CreateCategoryCommand("GROCERIES", "Food and Drink")));
+        var error = await Assert.ThrowsAsync<ExpensesException>(() =>
+            Categories.Create("GROCERIES", "Food and Drink"));
 
         Assert.Equal(ApplicationErrors.CategoryDuplicateCode, error.Error.Code);
         Assert.Single(_ledger.Categories);
@@ -54,8 +56,7 @@ public sealed class ReferenceDataTests
     {
         var groceries = _ledger.Given(Category.Create("GROCERIES", "Groceries", isSystem: true));
 
-        var renamed = await new RenameCategory(_ledger, _ledger)
-            .Execute(new RenameCategoryCommand("GROCERIES", "Food and Drink"));
+        var renamed = await Categories.Rename("GROCERIES", "Food and Drink");
 
         Assert.Equal("Food and Drink", renamed.Name);
         Assert.Equal("GROCERIES", renamed.Code);
@@ -67,8 +68,8 @@ public sealed class ReferenceDataTests
     {
         _ledger.Given(Category.Create("GROCERIES", "Groceries"));
 
-        var error = await Assert.ThrowsAsync<ExpensesException>(() => new RenameCategory(_ledger, _ledger)
-            .Execute(new RenameCategoryCommand("GROCERIES", "Groceries", RequestedCode: "FOOD")));
+        var error = await Assert.ThrowsAsync<ExpensesException>(() =>
+            Categories.Rename("GROCERIES", "Groceries", requestedCode: "FOOD"));
 
         Assert.Equal(ApplicationErrors.CategoryCodeImmutable, error.Error.Code);
         Assert.Equal("GROCERIES", _ledger.Categories[0].Code);
@@ -80,7 +81,7 @@ public sealed class ReferenceDataTests
         _ledger.Given(Category.Create("GROCERIES", "Groceries", isSystem: true));
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            new DeleteCategory(_ledger, _ledger).Execute("GROCERIES"));
+            Categories.Delete("GROCERIES"));
 
         Assert.Equal(ApplicationErrors.CategorySystemUndeletable, error.Error.Code);
         Assert.Single(_ledger.Categories);
@@ -92,7 +93,7 @@ public sealed class ReferenceDataTests
     {
         _ledger.Given(Category.Create("HOBBY", "Hobby"));
 
-        await new DeleteCategory(_ledger, _ledger).Execute("HOBBY");
+        await Categories.Delete("HOBBY");
 
         Assert.Empty(_ledger.Categories);
         Assert.Single(_ledger.RemovedCategories);
@@ -104,8 +105,8 @@ public sealed class ReferenceDataTests
         _ledger.Given(Category.Create("COMMUTING", "Commuting"));
         _ledger.Given(Category.Create("GROCERIES", "Groceries"));
 
-        await new DeactivateCategory(_ledger, _ledger).Execute("COMMUTING");
-        var offered = await new ListCategories(_ledger).Execute();
+        await Categories.Deactivate("COMMUTING");
+        var offered = await Categories.List();
 
         Assert.Equal(["GROCERIES"], offered.Select(category => category.Code));
     }
@@ -117,7 +118,7 @@ public sealed class ReferenceDataTests
         _ledger.Given(Category.Create("PRODUCE", "Produce", groceries));
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            new DeactivateCategory(_ledger, _ledger).Execute("GROCERIES"));
+            Categories.Deactivate("GROCERIES"));
 
         Assert.Equal(ApplicationErrors.CategoryHasActiveChildren, error.Error.Code);
         Assert.Equal("PRODUCE", Assert.IsType<IEnumerable<string>>(error.Error.Fields["children"], exactMatch: false).Single());
@@ -131,7 +132,7 @@ public sealed class ReferenceDataTests
         var produce = _ledger.Given(Category.Create("PRODUCE", "Produce", groceries));
         produce.Deactivate();
 
-        var deactivated = await new DeactivateCategory(_ledger, _ledger).Execute("GROCERIES");
+        var deactivated = await Categories.Deactivate("GROCERIES");
 
         Assert.False(deactivated.IsActive);
     }
@@ -140,7 +141,7 @@ public sealed class ReferenceDataTests
     public async Task Deactivating_a_category_that_does_not_exist_is_reported()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            new DeactivateCategory(_ledger, _ledger).Execute("NOPE"));
+            Categories.Deactivate("NOPE"));
 
         Assert.Equal(ApplicationErrors.CategoryNotFound, error.Error.Code);
     }
@@ -152,7 +153,7 @@ public sealed class ReferenceDataTests
         var commuting = _ledger.Given(Category.Create("COMMUTING", "Commuting"));
         commuting.Deactivate();
 
-        var listed = await new ListCategories(_ledger).Execute(includeInactive: true);
+        var listed = await Categories.List(includeInactive: true);
 
         Assert.Equal(2, listed.Count);
         Assert.Contains(listed, category => !category.IsActive);
@@ -165,8 +166,8 @@ public sealed class ReferenceDataTests
         _ledger.Given(Category.Create("GROCERIES", "Groceries"));
         _ledger.Given(Category.Create("HOUSEHOLD", "Household"));
 
-        var first = await new ListCategories(_ledger).Execute();
-        var second = await new ListCategories(_ledger).Execute();
+        var first = await Categories.List();
+        var second = await Categories.List();
 
         Assert.Equal(["GROCERIES", "HOUSEHOLD", "TRANSPORT"], first.Select(category => category.Code));
         Assert.Equal(first.Select(category => category.Code), second.Select(category => category.Code));
@@ -177,7 +178,7 @@ public sealed class ReferenceDataTests
     {
         _ledger.Given(Unit.Create("KG", "Kilogram", "kg", Unit.UnitKind.Mass));
 
-        var listed = await new ListUnits(_ledger).Execute();
+        var listed = await Units.List();
 
         var kilogram = Assert.Single(listed);
         Assert.Equal("kg", kilogram.Symbol);
@@ -191,8 +192,8 @@ public sealed class ReferenceDataTests
         var retired = _ledger.Given(Unit.Create("BUNCH", "Bunch", "bund", Unit.UnitKind.Count));
         retired.Deactivate();
 
-        var listed = await new ListUnits(_ledger).Execute();
-        var withInactive = await new ListUnits(_ledger).Execute(includeInactive: true);
+        var listed = await Units.List();
+        var withInactive = await Units.List(includeInactive: true);
 
         Assert.Equal(["KG"], listed.Select(unit => unit.Code));
         Assert.Equal(["BUNCH", "KG"], withInactive.Select(unit => unit.Code));

@@ -1,4 +1,5 @@
-﻿using Expenses.Application.Merchants;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Expenses.Api.Controllers;
@@ -14,8 +15,8 @@ public sealed class MerchantsController : ControllerBase
     [EndpointName("ListMerchants")]
     public async Task<ActionResult<IReadOnlyList<MerchantView>>> List(
         [FromQuery] bool? includeInactive,
-        [FromServices] ListMerchants merchants,
-        CancellationToken cancellationToken) => Ok(await merchants.Execute(
+        [FromServices] MerchantService merchants,
+        CancellationToken cancellationToken) => Ok(await merchants.List(
             includeInactive ?? false,
             cancellationToken));
 
@@ -24,8 +25,8 @@ public sealed class MerchantsController : ControllerBase
     [EndpointName("SearchMerchants")]
     public async Task<ActionResult<IReadOnlyList<MerchantMatchView>>> Search(
         [FromQuery] string term,
-        [FromServices] SearchMerchants search,
-        CancellationToken cancellationToken) => Ok(await search.Execute(term, cancellationToken));
+        [FromServices] MerchantService merchants,
+        CancellationToken cancellationToken) => Ok(await merchants.Search(term, cancellationToken));
 
     /// <summary>Renames a merchant; purchases continue to reference it.</summary>
     [HttpPut("{id:long}")]
@@ -33,8 +34,8 @@ public sealed class MerchantsController : ControllerBase
     public async Task<ActionResult<MerchantView>> Rename(
         long id,
         RenameMerchantRequest request,
-        [FromServices] RenameMerchant rename,
-        CancellationToken cancellationToken) => Ok(await rename.Execute(id, request.Name, cancellationToken));
+        [FromServices] MerchantService merchants,
+        CancellationToken cancellationToken) => Ok(await merchants.Rename(id, request.Name, cancellationToken));
 
     /// <summary>Records a branch beneath the chain it belongs to.</summary>
     [HttpPut("{id:long}/parent")]
@@ -42,14 +43,14 @@ public sealed class MerchantsController : ControllerBase
     public async Task<ActionResult<MerchantView>> SetParent(
         long id,
         SetMerchantParentRequest request,
-        [FromServices] SetMerchantParent setParent,
-        CancellationToken cancellationToken) => Ok(await setParent.Execute(id, request.ParentId, cancellationToken));
+        [FromServices] MerchantService merchants,
+        CancellationToken cancellationToken) => Ok(await merchants.SetParent(id, request.ParentId, cancellationToken));
 
     /// <summary>Retires a merchant, leaving purchases that reference it unchanged.</summary>
     [HttpPost("{id:long}/deactivate")]
     [EndpointName("DeactivateMerchant")]
     public async Task<ActionResult<MerchantView>> Deactivate(
         long id,
-        [FromServices] DeactivateMerchant deactivate,
-        CancellationToken cancellationToken) => Ok(await deactivate.Execute(id, cancellationToken));
+        [FromServices] MerchantService merchants,
+        CancellationToken cancellationToken) => Ok(await merchants.Deactivate(id, cancellationToken));
 }

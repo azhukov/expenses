@@ -1,4 +1,5 @@
-﻿using Expenses.Application.Receipts;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
@@ -153,7 +154,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     {
         using var scope = services.CreateScope();
 
-        return await scope.ServiceProvider.GetRequiredService<CaptureReceipt>().Execute(content);
+        return await scope.ServiceProvider.GetRequiredService<ReceiptService>().Capture(content);
     }
 
     private static byte[] Jpeg(byte seed)

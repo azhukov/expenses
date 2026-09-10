@@ -1,5 +1,6 @@
-﻿using Expenses.Application.Errors;
-using Expenses.Application.Merchants;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Errors;
+using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain.Entities;
 
@@ -15,12 +16,12 @@ public sealed class MerchantUseCaseTests
 {
     private readonly InMemoryLedger _ledger = new();
 
-    private ResolveMerchant Resolve => new(_ledger, _ledger);
+    private MerchantService Subject => new(_ledger, _ledger);
 
     [Fact]
     public async Task An_unknown_merchant_is_added()
     {
-        var resolution = await Resolve.Execute("AROMA", "02440261");
+        var resolution = await Subject.Resolve("AROMA", "02440261");
         await _ledger.SaveChanges();
 
         Assert.Equal(MerchantMatchKind.Created, resolution.Kind);
@@ -33,7 +34,7 @@ public sealed class MerchantUseCaseTests
     {
         _ledger.Given(Merchant.Create("AROMA", "02440261"));
 
-        var resolution = await Resolve.Execute("DOMACA TRGOVINA doo", "02440261");
+        var resolution = await Subject.Resolve("DOMACA TRGOVINA doo", "02440261");
 
         Assert.Equal(MerchantMatchKind.MatchedByTaxId, resolution.Kind);
         Assert.Single(_ledger.Merchants);
@@ -47,7 +48,7 @@ public sealed class MerchantUseCaseTests
     {
         _ledger.Given(Merchant.Create("MARKET", "02440261"));
 
-        var resolution = await Resolve.Execute("MARKET", "03001234");
+        var resolution = await Subject.Resolve("MARKET", "03001234");
         await _ledger.SaveChanges();
 
         Assert.Equal(MerchantMatchKind.Created, resolution.Kind);
@@ -59,7 +60,7 @@ public sealed class MerchantUseCaseTests
     {
         _ledger.Given(Merchant.Create("Pijaca Stall 12"));
 
-        var resolution = await Resolve.Execute("Pijaca Stall 12");
+        var resolution = await Subject.Resolve("Pijaca Stall 12");
 
         Assert.Equal(MerchantMatchKind.MatchedByName, resolution.Kind);
         Assert.Single(_ledger.Merchants);
@@ -72,7 +73,7 @@ public sealed class MerchantUseCaseTests
         // (D18). A name-only entry must not absorb a receipt that carried a tax number.
         _ledger.Given(Merchant.Create("AROMA"));
 
-        var resolution = await Resolve.Execute("AROMA", "02440261");
+        var resolution = await Subject.Resolve("AROMA", "02440261");
         await _ledger.SaveChanges();
 
         Assert.Equal(MerchantMatchKind.Created, resolution.Kind);
@@ -84,7 +85,7 @@ public sealed class MerchantUseCaseTests
     {
         var merchant = _ledger.Given(Merchant.Create("AROMA d.o.o."));
 
-        var renamed = await new RenameMerchant(_ledger, _ledger).Execute(merchant.Id, "AROMA");
+        var renamed = await Subject.Rename(merchant.Id, "AROMA");
 
         Assert.Equal("AROMA", renamed.Name);
         Assert.Equal(merchant.Id, renamed.Id);
@@ -96,7 +97,7 @@ public sealed class MerchantUseCaseTests
         var chain = _ledger.Given(Merchant.Create("AROMA", "02440261"));
         var branch = _ledger.Given(Merchant.Create("Aroma 034"));
 
-        var updated = await new SetMerchantParent(_ledger, _ledger).Execute(branch.Id, chain.Id);
+        var updated = await Subject.SetParent(branch.Id, chain.Id);
 
         Assert.Equal(chain.Id, updated.ParentId);
         Assert.Equal("Aroma 034", Assert.Single(chain.Children).Name);
@@ -107,10 +108,10 @@ public sealed class MerchantUseCaseTests
     {
         var chain = _ledger.Given(Merchant.Create("AROMA"));
         var branch = _ledger.Given(Merchant.Create("Aroma 034"));
-        await new SetMerchantParent(_ledger, _ledger).Execute(branch.Id, chain.Id);
+        await Subject.SetParent(branch.Id, chain.Id);
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            new SetMerchantParent(_ledger, _ledger).Execute(chain.Id, branch.Id));
+            Subject.SetParent(chain.Id, branch.Id));
 
         Assert.Equal(ApplicationErrors.MerchantParentCycle, error.Error.Code);
     }
@@ -120,10 +121,10 @@ public sealed class MerchantUseCaseTests
     {
         var chain = _ledger.Given(Merchant.Create("AROMA"));
         var branch = _ledger.Given(Merchant.Create("Aroma 034"));
-        await new SetMerchantParent(_ledger, _ledger).Execute(branch.Id, chain.Id);
+        await Subject.SetParent(branch.Id, chain.Id);
 
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            new DeactivateMerchant(_ledger, _ledger).Execute(chain.Id));
+            Subject.Deactivate(chain.Id));
 
         Assert.Equal(ApplicationErrors.MerchantHasActiveChildren, error.Error.Code);
         Assert.Equal("Aroma 034", Assert.IsType<IEnumerable<string>>(error.Error.Fields["children"], exactMatch: false).Single());
@@ -136,11 +137,11 @@ public sealed class MerchantUseCaseTests
         var voli = _ledger.Given(Merchant.Create("VOLI"));
         _ledger.Given(Merchant.Create("AROMA"));
 
-        await new DeactivateMerchant(_ledger, _ledger).Execute(voli.Id);
-        var offered = await new ListMerchants(_ledger).Execute();
+        await Subject.Deactivate(voli.Id);
+        var offered = await Subject.List();
 
         Assert.Equal(["AROMA"], offered.Select(merchant => merchant.Name));
-        Assert.Equal(2, (await new ListMerchants(_ledger).Execute(includeInactive: true)).Count);
+        Assert.Equal(2, (await Subject.List(includeInactive: true)).Count);
     }
 
     [Fact]
@@ -148,7 +149,7 @@ public sealed class MerchantUseCaseTests
     {
         _ledger.Given(Merchant.Create("AROMA"));
 
-        var matches = await new SearchMerchants(_ledger).Execute("arom");
+        var matches = await Subject.Search("arom");
 
         Assert.Equal("AROMA", Assert.Single(matches).Merchant?.Name);
     }
@@ -162,7 +163,7 @@ public sealed class MerchantUseCaseTests
             [Expense.Record("Groceries", 8.48m)],
             merchantRaw: "PIJACA STALL 12"));
 
-        var matches = await new SearchMerchants(_ledger).Execute("stall");
+        var matches = await Subject.Search("stall");
 
         var match = Assert.Single(matches);
         Assert.Null(match.Merchant);
@@ -173,7 +174,7 @@ public sealed class MerchantUseCaseTests
     public async Task Searching_for_nothing_is_rejected()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            new SearchMerchants(_ledger).Execute("  "));
+            Subject.Search("  "));
 
         Assert.Equal(ApplicationErrors.MerchantSearchTermRequired, error.Error.Code);
     }
@@ -182,7 +183,7 @@ public sealed class MerchantUseCaseTests
     public async Task Renaming_a_merchant_that_does_not_exist_is_reported()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            new RenameMerchant(_ledger, _ledger).Execute(4711, "AROMA"));
+            Subject.Rename(4711, "AROMA"));
 
         Assert.Equal(ApplicationErrors.MerchantNotFound, error.Error.Code);
     }

@@ -1,22 +1,13 @@
-﻿using Expenses.Application.Abstractions;
+﻿using Expenses.Application.Interfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Expenses.Infrastructure.Receipts;
 
-internal sealed class OrphanCaptureSweepOptions
-{
-    /// <summary>How often the sweep runs.</summary>
-    public TimeSpan Interval { get; set; } = TimeSpan.FromDays(1);
-
-    /// <summary>How old an unconfirmed capture must be before the sweep removes it.</summary>
-    public TimeSpan MaxAge { get; set; } = TimeSpan.FromDays(1);
-}
-
 /// <summary>
 /// Removes temporary captures nobody confirmed within a day. The one piece of background
 /// processing this change keeps: unlike the extraction queue it replaces, there is no per-item
-/// retry or ordering to get right, only "old enough, so gone" (D-none — new for this change).
+/// retry or ordering to get right, only "old enough, so gone" (D-none вЂ” new for this change).
 /// </summary>
 internal sealed class OrphanCaptureSweep(
     ITemporaryReceiptStore tempStore,
@@ -37,7 +28,7 @@ internal sealed class OrphanCaptureSweep(
     /// <summary>
     /// One run of the sweep, callable directly so a test can exercise it without waiting on the
     /// timer. Confirming a key the sweep already removed is reported the same as any unknown key
-    /// (D-none) — nothing here needs to know about confirmation at all.
+    /// (D-none) вЂ” nothing here needs to know about confirmation at all.
     /// </summary>
     public async Task SweepOnce(CancellationToken cancellationToken)
     {

@@ -1,5 +1,5 @@
 ﻿using Expenses.Application.Errors;
-using Expenses.Application.Purchases;
+using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain.Entities;
 
@@ -10,9 +10,8 @@ public sealed class PurchaseQueryTests
 {
     private readonly InMemoryLedger _ledger = new();
 
-    private GetPurchase Get => new(_ledger);
-
-    private ListPurchases ListAll => new(_ledger);
+    private PurchaseService Subject
+        => new(_ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger);
 
     [Fact]
     public async Task Retrieve_a_purchase()
@@ -22,7 +21,7 @@ public sealed class PurchaseQueryTests
             12.40m,
             [Expense.Record("Lunch", 12.40m)]));
 
-        var purchase = await Get.Execute(stored.Id);
+        var purchase = await Subject.Get(stored.Id);
 
         Assert.Equal(stored.Id, purchase.Id);
         Assert.Single(purchase.Expenses);
@@ -31,7 +30,7 @@ public sealed class PurchaseQueryTests
     [Fact]
     public async Task Retrieve_a_purchase_that_does_not_exist()
     {
-        var error = await Assert.ThrowsAsync<ExpensesException>(() => Get.Execute(4711));
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Get(4711));
 
         Assert.Equal(ApplicationErrors.PurchaseNotFound, error.Error.Code);
         Assert.Equal(4711L, error.Error.Fields["id"]);
@@ -46,9 +45,7 @@ public sealed class PurchaseQueryTests
         GivenPurchaseOn(new DateTime(2026, 8, 31, 23, 0, 0, DateTimeKind.Unspecified), 4.00m);
         GivenPurchaseOn(new DateTime(2026, 9, 1, 0, 1, 0, DateTimeKind.Unspecified), 5.00m);
 
-        var listed = await ListAll.Execute(new ListPurchasesQuery(
-            new DateOnly(2026, 8, 1),
-            new DateOnly(2026, 8, 31)));
+        var listed = await Subject.List(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31));
 
         Assert.Equal([4.00m, 3.00m, 2.00m], listed.Select(purchase => purchase.Amount));
     }
@@ -61,8 +58,8 @@ public sealed class PurchaseQueryTests
             GivenPurchaseOn(new DateTime(2026, 8, day, 12, 0, 0, DateTimeKind.Unspecified), day);
         }
 
-        var firstPage = await ListAll.Execute(new ListPurchasesQuery(Take: 2));
-        var secondPage = await ListAll.Execute(new ListPurchasesQuery(Skip: 2, Take: 2));
+        var firstPage = await Subject.List(take: 2);
+        var secondPage = await Subject.List(skip: 2, take: 2);
 
         Assert.Equal([5m, 4m], firstPage.Select(purchase => purchase.Amount));
         Assert.Equal([3m, 2m], secondPage.Select(purchase => purchase.Amount));
@@ -72,7 +69,7 @@ public sealed class PurchaseQueryTests
     public async Task A_page_size_beyond_the_maximum_is_rejected()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() =>
-            ListAll.Execute(new ListPurchasesQuery(Take: ListPurchases.MaxPageSize + 1)));
+            Subject.List(take: PurchaseService.MaxPageSize + 1));
 
         Assert.Equal(ApplicationErrors.ListingPageSizeInvalid, error.Error.Code);
     }
@@ -80,8 +77,8 @@ public sealed class PurchaseQueryTests
     [Fact]
     public async Task A_range_that_ends_before_it_starts_is_rejected()
     {
-        var error = await Assert.ThrowsAsync<ExpensesException>(() => ListAll.Execute(
-            new ListPurchasesQuery(new DateOnly(2026, 8, 31), new DateOnly(2026, 8, 1))));
+        var error = await Assert.ThrowsAsync<ExpensesException>(() =>
+            Subject.List(new DateOnly(2026, 8, 31), new DateOnly(2026, 8, 1)));
 
         Assert.Equal(ApplicationErrors.ListingRangeInvalid, error.Error.Code);
     }

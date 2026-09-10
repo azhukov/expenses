@@ -1,16 +1,8 @@
 ﻿using System.Security.Cryptography;
-using Expenses.Application.Abstractions;
+using Expenses.Application.Dtos;
+using Expenses.Application.Interfaces;
 
 namespace Expenses.Infrastructure.Receipts;
-
-internal sealed class ReceiptStoreOptions
-{
-    /// <summary>
-    /// Where receipt files live. Configured rather than derived, because it is a backup boundary:
-    /// the database dump alone is not a complete backup of the ledger any more (D11).
-    /// </summary>
-    public string RootPath { get; set; } = Path.Combine(AppContext.BaseDirectory, "receipts");
-}
 
 /// <summary>
 /// Receipt bytes in files, referenced from the purchase (D11). Content-addressed:
@@ -18,7 +10,7 @@ internal sealed class ReceiptStoreOptions
 /// so no directory grows unbounded, with the extension taken from the sniffed content type rather
 /// than from anything the uploader claimed.
 ///
-/// Identical bytes therefore resolve to one path and the second write is a no-op — deduplication is
+/// Identical bytes therefore resolve to one path and the second write is a no-op вЂ” deduplication is
 /// a property of the naming rather than of a database index, which is why two purchases may share
 /// one file and why deleting one of them must ask whether the other is still there.
 /// </summary>
@@ -45,7 +37,7 @@ internal sealed class ReceiptFileStore(ReceiptStoreOptions options) : IReceiptIm
         {
             Directory.CreateDirectory(root);
 
-            // Creating the directory proves nothing about being able to write into it — a
+            // Creating the directory proves nothing about being able to write into it вЂ” a
             // read-only mount answers the first and refuses the second.
             string probe = Path.Combine(root, $".write-probe-{Environment.ProcessId}");
             File.WriteAllBytes(probe, []);

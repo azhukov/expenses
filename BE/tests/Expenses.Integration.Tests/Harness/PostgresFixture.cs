@@ -97,13 +97,3 @@ public sealed class PostgresFixture : IAsyncLifetime
         return await File.ReadAllTextAsync(Path.Combine(repository.FullName, "db", "init", "01-create-database.sql"));
     }
 }
-
-/// <summary>
-/// One container for the whole suite. Starting a database per test class would multiply a
-/// multi-second cost by every class for no isolation the schema does not already give.
-/// </summary>
-[CollectionDefinition(Name)]
-public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
-{
-    public const string Name = "postgres";
-}

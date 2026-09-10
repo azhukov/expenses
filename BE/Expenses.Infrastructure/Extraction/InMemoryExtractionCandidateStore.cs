@@ -1,5 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using Expenses.Application.Abstractions;
+using Expenses.Application.Interfaces;
 using Expenses.Domain.Extraction;
 
 namespace Expenses.Infrastructure.Extraction;

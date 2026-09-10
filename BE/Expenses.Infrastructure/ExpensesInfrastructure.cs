@@ -1,9 +1,6 @@
-﻿using Expenses.Application.Abstractions;
-using Expenses.Application.Extraction;
-using Expenses.Application.Merchants;
-using Expenses.Application.Purchases;
-using Expenses.Application.Receipts;
-using Expenses.Application.ReferenceData;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Infrastructure.Extraction;
 using Expenses.Infrastructure.Persistence;
 using Expenses.Infrastructure.Persistence.Configurations;
@@ -133,35 +130,17 @@ public static class ExpensesInfrastructure
     }
 
     /// <summary>
-    /// The use cases both adapters call. They are registered here because the composition root is
-    /// here: an adapter reaches this project for one method and nothing else (D1).
+    /// The application services both adapters call. They are registered here because the
+    /// composition root is here: an adapter reaches this project for one method and nothing else
+    /// (D1).
     /// </summary>
     private static void AddUseCases(IServiceCollection services)
     {
-        services.AddScoped<RecordPurchase>();
-        services.AddScoped<GetPurchase>();
-        services.AddScoped<ListPurchases>();
-
-        services.AddScoped<ListCategories>();
-        services.AddScoped<CreateCategory>();
-        services.AddScoped<RenameCategory>();
-        services.AddScoped<DeactivateCategory>();
-        services.AddScoped<DeleteCategory>();
-        services.AddScoped<ListUnits>();
-
-        services.AddScoped<ResolveMerchant>();
-        services.AddScoped<ListMerchants>();
-        services.AddScoped<SearchMerchants>();
-        services.AddScoped<RenameMerchant>();
-        services.AddScoped<SetMerchantParent>();
-        services.AddScoped<DeactivateMerchant>();
-
-        services.AddScoped<CaptureReceipt>();
-        services.AddScoped<DeleteReceipt>();
-        services.AddScoped<GetExtractionCandidates>();
-        services.AddScoped<ConfirmCandidates>();
-        services.AddScoped<DiscardCandidates>();
-        services.AddScoped<RerunExtraction>();
+        services.AddScoped<MerchantService>();
+        services.AddScoped<PurchaseService>();
+        services.AddScoped<CategoryService>();
+        services.AddScoped<UnitService>();
+        services.AddScoped<ReceiptService>();
     }
 
     private static TOptions Bind<TOptions>(IConfiguration configuration, string section)

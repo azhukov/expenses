@@ -1,6 +1,6 @@
-﻿using Expenses.Application.Abstractions;
-using Expenses.Application.Extraction;
-using Expenses.Application.Receipts;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,8 +65,8 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
         await using var services = postgres.Services();
         using var scope = services.CreateScope();
 
-        var result = await scope.ServiceProvider.GetRequiredService<CaptureReceipt>()
-            .Execute(Photograph(UndecodableReceipt).Content);
+        var result = await scope.ServiceProvider.GetRequiredService<ReceiptService>()
+            .Capture(Photograph(UndecodableReceipt).Content);
 
         // Reported no differently from a receipt carrying no code at all: the stage ran, decoded
         // nothing, recorded nothing, and every later stage behaved as it always does.

@@ -1,5 +1,6 @@
-﻿using Expenses.Application.Extraction;
-using Expenses.Application.Receipts;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain.Entities;
 
@@ -19,7 +20,7 @@ public sealed class CaptureReceiptTests
     {
         var result = await Subject(FakeStage.Producing(
             "vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
-            .Execute(Jpeg(1));
+            .Capture(Jpeg(1));
 
         Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
         Assert.Empty(_ledger.Purchases);
@@ -31,8 +32,8 @@ public sealed class CaptureReceiptTests
         var subject = Subject(FakeStage.Producing(
             "vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")));
 
-        var first = await subject.Execute(Jpeg(1));
-        var second = await subject.Execute(Jpeg(1));
+        var first = await subject.Capture(Jpeg(1));
+        var second = await subject.Capture(Jpeg(1));
 
         Assert.NotEqual(first.TempKey, second.TempKey);
     }
@@ -42,7 +43,7 @@ public sealed class CaptureReceiptTests
     {
         var result = await Subject(FakeStage.Producing(
             "vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
-            .Execute(Jpeg(1));
+            .Capture(Jpeg(1));
 
         Assert.Contains(
             result.State,
@@ -59,7 +60,7 @@ public sealed class CaptureReceiptTests
     {
         var result = await Subject(FakeStage.Producing(
             "vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
-            .Execute(Jpeg(1));
+            .Capture(Jpeg(1));
 
         Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
         Assert.Equal(2, result.Result?.Candidates.Count);
@@ -70,7 +71,7 @@ public sealed class CaptureReceiptTests
     {
         var result = await Subject(FakeStage.Producing(
             "vision-cheap", ExtractionStageRole.Primary, Results.Failing("vision-cheap")))
-            .Execute(Jpeg(1));
+            .Capture(Jpeg(1));
 
         Assert.Equal(Receipt.ExtractionState.NeedsReview, result.State);
         Assert.NotNull(result.Result);
@@ -80,7 +81,7 @@ public sealed class CaptureReceiptTests
     public async Task Failed_extraction()
     {
         var result = await Subject(FakeStage.Silent("vision-cheap", ExtractionStageRole.Primary))
-            .Execute(Jpeg(1));
+            .Capture(Jpeg(1));
 
         Assert.Equal(Receipt.ExtractionState.Failed, result.State);
         Assert.NotNull(result.FailureReason);
@@ -93,7 +94,7 @@ public sealed class CaptureReceiptTests
         var result = await Subject(
             FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("d1b2c3", "9f8e7d")),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
-            .Execute(Jpeg(1));
+            .Capture(Jpeg(1));
 
         Assert.Equal("d1b2c3", result.Extracted.Ikof);
         Assert.Equal("9f8e7d", result.Extracted.Jikr);
@@ -106,15 +107,15 @@ public sealed class CaptureReceiptTests
         var result = await Subject(
             FakeStage.Decoding("fiscal-qr", new FiscalIdentifiers("ffffff")),
             FakeStage.Producing("vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
-            .Execute(Jpeg(1), new FiscalIdentifiers("d1b2c3"));
+            .Capture(Jpeg(1), new FiscalIdentifiers("d1b2c3"));
 
         Assert.Equal(Receipt.ExtractionState.NeedsReview, result.State);
         Assert.Equal("d1b2c3", result.Supplied.Ikof);
         Assert.Equal("ffffff", result.Extracted.Ikof);
     }
 
-    private CaptureReceipt Subject(params IExtractionStage[] stages)
-        => new(_ledger, new ExtractionCascade(stages));
+    private ReceiptService Subject(params IExtractionStage[] stages)
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade(stages), _ledger);
 
     private static byte[] Jpeg(byte seed) => [0xFF, 0xD8, 0xFF, seed, 0x01, 0x02];
 }

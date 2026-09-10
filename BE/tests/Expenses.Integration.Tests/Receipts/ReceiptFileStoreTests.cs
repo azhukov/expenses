@@ -1,7 +1,7 @@
 ﻿using System.Security.Cryptography;
-using Expenses.Application.Abstractions;
+using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
-using Expenses.Domain.Entities;
+using Expenses.Application.Interfaces;
 using Expenses.Infrastructure.Persistence;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.EntityFrameworkCore;

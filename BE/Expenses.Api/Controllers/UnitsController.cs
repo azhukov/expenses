@@ -1,4 +1,5 @@
-﻿using Expenses.Application.ReferenceData;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Expenses.Api.Controllers;
@@ -14,8 +15,8 @@ public sealed class UnitsController : ControllerBase
     [EndpointName("ListUnits")]
     public async Task<ActionResult<IReadOnlyList<UnitView>>> List(
         [FromQuery] bool? includeInactive,
-        [FromServices] ListUnits units,
-        CancellationToken cancellationToken) => Ok(await units.Execute(
+        [FromServices] UnitService units,
+        CancellationToken cancellationToken) => Ok(await units.List(
             includeInactive ?? false,
             cancellationToken));
 }

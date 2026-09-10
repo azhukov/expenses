@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
-using Expenses.Application.Purchases;
-using Expenses.Application.Receipts;
+using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
 
 namespace Expenses.Integration.Tests.Mcp;
@@ -228,16 +228,16 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<long> GivenExtractedReceipt()
     {
-        var captured = await _mcp.Resolve<CaptureReceipt>().Execute(
+        var captured = await _mcp.Resolve<ReceiptService>().Capture(
             [0xFF, 0xD8, 0xFF, 0xE0, (byte)s_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x04],
-            new Application.Extraction.FiscalIdentifiers("MCP-IKOF-1"));
+            new FiscalIdentifiers("MCP-IKOF-1"));
 
         // A receipt is addressed by its purchase; there is no image identifier anywhere (D11).
-        var recorded = await _mcp.Resolve<RecordPurchase>().Execute(new RecordPurchaseCommand(
+        var recorded = await _mcp.Resolve<PurchaseService>().Record(
             Next(),
             10.00m,
             [new ExpenseCommand("Placeholder", 10.00m)],
-            Capture: new CapturedReceiptCommand(
+            capture: new CapturedReceiptCommand(
                 captured.TempKey,
                 captured.State,
                 captured.FailureReason,
@@ -245,7 +245,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
                 captured.Supplied.Jikr,
                 captured.Extracted.Ikof,
                 captured.Extracted.Jikr,
-                captured.FiscalSource)));
+                captured.FiscalSource));
 
         return recorded.Purchase.Id;
     }

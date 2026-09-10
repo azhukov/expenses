@@ -17,4 +17,10 @@
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Only SA1402 (one type per file) is turned on, via .editorconfig; every other StyleCop rule
+         is silenced there so pulling in the analyzer doesn't also enable its style opinions. -->
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" PrivateAssets="all" />
+  </ItemGroup>
+
 </Project>

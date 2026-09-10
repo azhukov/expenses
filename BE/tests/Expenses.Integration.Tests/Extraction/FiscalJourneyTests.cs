@@ -1,4 +1,5 @@
-﻿using Expenses.Application.Receipts;
+﻿using Expenses.Application.Dtos;
+using Expenses.Application.Services;
 using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,6 +79,6 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
     }
 
     private static async Task<CaptureResult> Extract(IServiceScope scope, string fixture)
-        => await scope.ServiceProvider.GetRequiredService<CaptureReceipt>()
-            .Execute(DecoderRegressionTests.Photograph(fixture).Content);
+        => await scope.ServiceProvider.GetRequiredService<ReceiptService>()
+            .Capture(DecoderRegressionTests.Photograph(fixture).Content);
 }
