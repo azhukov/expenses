@@ -202,10 +202,57 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Fiscal_identifiers_are_readable_in_the_capture_response_before_confirmation()
     {
-        var captured = await Capture(Jpeg(0x92), ikof: "A1B2C3", jikr: "9F8E7D");
+        var response = await CaptureRaw(
+            Jpeg(0x92),
+            fiscalQr: "https://mapr.tax.gov.me/ic/#/verify?iic=A1B2C3&tin=02365928");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var captured = await ExpensesApi.Read<JsonElement>(response);
 
         Assert.Equal("A1B2C3", captured.GetProperty("supplied").GetProperty("ikof").GetString());
-        Assert.Equal("9F8E7D", captured.GetProperty("supplied").GetProperty("jikr").GetString());
+        Assert.Equal("02365928", captured.GetProperty("supplied").GetProperty("issuerTaxNumber").GetString());
+    }
+
+    /// <summary>Scenario from api-surface: "Capture carrying a fiscal QR payload".</summary>
+    [Fact]
+    public async Task Capture_carrying_a_fiscal_qr_payload()
+    {
+        var response = await CaptureRaw(
+            Jpeg(0x94),
+            fiscalQr: "https://mapr.tax.gov.me/ic/#/verify?iic=32AA324CFF5030271E16D59F7F8EF636"
+                + "&tin=02365928&crtd=2026-08-29T14:59:22+02:00&prc=59.65");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var captured = await ExpensesApi.Read<JsonElement>(response);
+
+        // Parsed server-side, so the client hands over what it read rather than what it understood
+        // of it (D30). The tax number and total come free with the payload and could not be sent
+        // at all under the field-by-field contract this replaces.
+        var supplied = captured.GetProperty("supplied");
+        Assert.Equal("32AA324CFF5030271E16D59F7F8EF636", supplied.GetProperty("ikof").GetString());
+        Assert.Equal("02365928", supplied.GetProperty("issuerTaxNumber").GetString());
+        Assert.Equal("2026-08-29T14:59:22+02:00", supplied.GetProperty("createdAt").GetString());
+        Assert.Equal(59.65m, supplied.GetProperty("total").GetDecimal());
+    }
+
+    /// <summary>Scenario from api-surface: "Capture carrying an unparseable payload".</summary>
+    [Fact]
+    public async Task Capture_carrying_an_unparseable_payload()
+    {
+        var response = await CaptureRaw(Jpeg(0x95), fiscalQr: "*not a verification address*");
+
+        // An ordinary capture, not a bad request: the payload is untrusted input and a shape this
+        // parser does not recognise says nothing about whether the image is a receipt (D30).
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>Scenario from api-surface: "Capture carrying an oversized payload".</summary>
+    [Fact]
+    public async Task Capture_carrying_an_oversized_payload()
+    {
+        var response = await CaptureRaw(Jpeg(0x96), fiscalQr: new string('x', 4096));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -216,9 +263,9 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         var result = captured.GetProperty("result");
         Assert.Equal("placeholder", result.GetProperty("engineName").GetString());
         Assert.Contains(
-            "vision-cheap",
-            result.GetProperty("stagesRun").EnumerateArray().Select(stage => stage.GetString()));
-        Assert.Equal("vision-cheap", result.GetProperty("provenance").GetProperty("total").GetString());
+            "vision",
+            result.GetProperty("stepsRun").EnumerateArray().Select(stage => stage.GetString()));
+        Assert.Equal("vision", result.GetProperty("provenance").GetProperty("total").GetString());
 
         var checks = captured.GetProperty("validation").GetProperty("checks").EnumerateArray().ToList();
         Assert.Contains(checks, check => check.GetProperty("name").GetString() == "line_sum");
@@ -351,6 +398,18 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<JsonElement> Capture(byte[] content, string? ikof = null, string? jikr = null)
     {
+        var response = await CaptureRaw(content, ikof, jikr);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return await ExpensesApi.Read<JsonElement>(response);
+    }
+
+    private async Task<HttpResponseMessage> CaptureRaw(
+        byte[] content,
+        string? ikof = null,
+        string? jikr = null,
+        string? fiscalQr = null)
+    {
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(content);
         file.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
@@ -366,10 +425,12 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             form.Add(new StringContent(jikr), "fiscalJikr");
         }
 
-        var response = await _client.PostAsync("/receipts/capture", form);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        if (fiscalQr is not null)
+        {
+            form.Add(new StringContent(fiscalQr), "fiscalQr");
+        }
 
-        return await ExpensesApi.Read<JsonElement>(response);
+        return await _client.PostAsync("/receipts/capture", form);
     }
 
     private static object NewPurchase(decimal amount, object[] expenses, DateTime? occurredAt = null)

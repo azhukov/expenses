@@ -201,8 +201,8 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal("Extracted", extraction.GetProperty("state").GetString());
         Assert.Equal("placeholder", extraction.GetProperty("engineName").GetString());
         Assert.Contains(
-            "vision-cheap",
-            extraction.GetProperty("stagesRun").EnumerateArray().Select(stage => stage.GetString()));
+            "vision",
+            extraction.GetProperty("stepsRun").EnumerateArray().Select(stage => stage.GetString()));
 
         var checks = extraction.GetProperty("checks").EnumerateArray().ToList();
         Assert.Contains(checks, check => check.GetProperty("check").GetString() == "line_sum");
@@ -230,7 +230,8 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     {
         var captured = await _mcp.Resolve<ReceiptService>().Capture(
             [0xFF, 0xD8, 0xFF, 0xE0, (byte)s_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x04],
-            new FiscalIdentifiers("MCP-IKOF-1"));
+            new FiscalIdentifiers("MCP-IKOF-1"),
+            "https://mapr.tax.gov.me/ic/#/verify?iic=MCP-IKOF-1");
 
         // A receipt is addressed by its purchase; there is no image identifier anywhere (D11).
         var recorded = await _mcp.Resolve<PurchaseService>().Record(
@@ -241,11 +242,9 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
                 captured.TempKey,
                 captured.State,
                 captured.FailureReason,
-                captured.Supplied.Ikof,
-                captured.Supplied.Jikr,
-                captured.Extracted.Ikof,
-                captured.Extracted.Jikr,
-                captured.FiscalSource));
+                captured.Extracted.Jikr ?? captured.Supplied.Jikr,
+                captured.FiscalSource,
+                captured.FiscalPayload));
 
         return recorded.Purchase.Id;
     }

@@ -19,14 +19,11 @@ public sealed class RerunExtractionTests
     {
         var purchase = GivenPurchaseWithReceipt(Receipt.ExtractionState.NeedsReview);
 
-        var extracted = await Subject(FakeStage.Producing(
-            "vision-expensive",
-            ExtractionStageRole.Primary,
-            Results.Reconciling("vision-expensive"))).RerunExtraction(purchase.Id);
+        var extracted = await Subject(FakeStep.Producing("vision", Results.Reconciling("vision"))).RerunExtraction(purchase.Id);
 
         var stored = await _ledger.FindLatest(purchase.Id);
         Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
-        Assert.Equal("vision-expensive", stored?.Provenance["total"]);
+        Assert.Equal("vision", stored?.Provenance["total"]);
         Assert.Equal(2, stored?.Candidates.Count);
     }
 
@@ -36,8 +33,8 @@ public sealed class RerunExtractionTests
         var purchase = GivenPurchaseWithReceipt(Receipt.ExtractionState.Extracted);
         await Subject().ConfirmCandidates(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m)]);
 
-        var extracted = await Subject(FakeStage.Producing(
-            "vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
+        var extracted = await Subject(FakeStep.Producing(
+            "vision", Results.Reconciling("vision")))
             .RerunExtraction(purchase.Id);
 
         Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
@@ -49,8 +46,8 @@ public sealed class RerunExtractionTests
     {
         var purchase = GivenPurchaseWithReceipt(Receipt.ExtractionState.Failed, "engine returned no result");
 
-        var extracted = await Subject(FakeStage.Producing(
-            "vision-cheap", ExtractionStageRole.Primary, Results.Reconciling("vision-cheap")))
+        var extracted = await Subject(FakeStep.Producing(
+            "vision", Results.Reconciling("vision")))
             .RerunExtraction(purchase.Id);
 
         Assert.Equal(Receipt.ExtractionState.Extracted, extracted.State);
@@ -76,8 +73,8 @@ public sealed class RerunExtractionTests
         Assert.Equal(ApplicationErrors.PurchaseNotFound, error.Error.Code);
     }
 
-    private ReceiptService Subject(params IExtractionStage[] stages)
-        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade(stages), _ledger);
+    private ReceiptService Subject(params IExtractionStep[] steps)
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade(steps), _ledger);
 
     private Purchase GivenPurchaseWithReceipt(Receipt.ExtractionState state, string? failureReason = null)
     {

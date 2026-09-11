@@ -35,6 +35,28 @@ If the hit rate proves too low in use, the next thing to try is OpenCV's `WeChat
 detector with a super-resolution model — not more preprocessing. It needs a native OpenCV dependency
 and separately distributed model files, which is why it was not the first move.
 
+## How a payload reaches the server
+
+Two routes, one parser. A client that read the code at capture sends the payload verbatim as the
+`fiscalQr` form field on `POST /receipts/capture`; where it sends none, the server decodes one from
+the stored image. Either way `FiscalIdentity.From` reads it, so a client and the server cannot drift
+about a format with two traps in it (D30). The endpoint bounds the field at 2048 characters, and an
+unrecognised payload is an ordinary capture carrying no identifiers rather than a bad request.
+
+**The payload is parsed and never dereferenced.** It is a URL; it is not fetched. The verification
+service is addressed from `PortalOptions`, and only the payload's parameters are read.
+
+**It is retained on the receipt**, verbatim, whether or not anything could be parsed out of it
+(D32). That is for re-runs above all: decoding a stored photograph reads one symbol in three, so a
+receipt whose code a client read at capture would lose that reading on every later extraction if
+only the parsed identifiers survived. It also leaves an unrecognised format recoverable — the
+response shape below was observed from exactly one invoice, so learning a field later is expected,
+and a discarded payload cannot be re-read.
+
+Because the payload states the invoice code, the issuer tax number, the creation timestamp and the
+total, the capture-to-confirm round trip carries three fiscal members rather than six: the payload,
+the JIKR — which only the portal knows — and how the identity was established.
+
 ## What the QR carries
 
 The payload is a verification URL, and its parameters live after the `#`, so the fragment is what

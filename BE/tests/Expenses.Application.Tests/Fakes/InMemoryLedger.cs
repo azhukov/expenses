@@ -34,7 +34,7 @@ internal sealed class InMemoryLedger :
     private readonly Dictionary<string, byte[]> _files = [];
     private readonly Dictionary<Guid, (byte[] Content, DateTimeOffset WrittenAt)> _tempFiles = [];
 
-    private readonly Dictionary<long, ExtractionResult> _results = [];
+    private readonly Dictionary<long, ExtractionStepResult> _results = [];
     private readonly List<Category> _removedCategories = [];
 
     private long _nextId;
@@ -82,7 +82,7 @@ internal sealed class InMemoryLedger :
         return purchase;
     }
 
-    public ExtractionResult Given(long purchaseId, ExtractionResult result)
+    public ExtractionStepResult Given(long purchaseId, ExtractionStepResult result)
     {
         _results[purchaseId] = result;
         return result;
@@ -313,10 +313,10 @@ internal sealed class InMemoryLedger :
 
     // ---- IExtractionCandidateStore ----------------------------------------
 
-    public Task<ExtractionResult?> FindLatest(long purchaseId, CancellationToken cancellationToken = default)
+    public Task<ExtractionStepResult?> FindLatest(long purchaseId, CancellationToken cancellationToken = default)
         => Task.FromResult(_results.GetValueOrDefault(purchaseId));
 
-    public Task Replace(long purchaseId, ExtractionResult result, CancellationToken cancellationToken = default)
+    public Task Replace(long purchaseId, ExtractionStepResult result, CancellationToken cancellationToken = default)
     {
         _results[purchaseId] = result;
         return Task.CompletedTask;

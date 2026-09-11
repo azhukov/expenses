@@ -1,14 +1,24 @@
 ﻿using System.Globalization;
 using Expenses.Application.Dtos;
 
-namespace Expenses.Infrastructure.Extraction;
+namespace Expenses.Application.Services;
 
 /// <summary>
 /// Reads the identifiers out of what a fiscal QR carries. The payload is a verification URL whose
 /// parameters name them; anything else is kept as it stands, because no format is
 /// imposed on a fiscal identifier anywhere in this design (D10).
+///
+/// One implementation, reachable from every layer that handles a payload, because a payload now
+/// arrives by two routes — supplied by a client at capture, or decoded from the stored image — and
+/// two parsers would drift about a format with two traps in it: the parameters live in the URL
+/// fragment rather than the query, and the creation timestamp carries a '+' that any form decoder
+/// turns into a space (D30).
+///
+/// **The payload is parsed and never dereferenced.** It looks exactly like something to fetch; it
+/// is not. The verification service is addressed from configuration, and only this payload's
+/// parameters are read. Nothing here performs I/O of any kind.
 /// </summary>
-internal static class FiscalIdentity
+public static class FiscalIdentity
 {
     public static FiscalIdentifiers From(string payload)
     {

@@ -23,13 +23,14 @@ internal sealed class PlaceholderReceiptExtractor(PlaceholderOptions options, st
 
     public string EngineVersion => "1.0";
 
-    public Task<ExtractionResult?> Extract(
+    public Task<ExtractionStepResult?> Extract(
         ReceiptImageContent image,
+        FiscalIdentifiers known,
         CancellationToken cancellationToken = default)
     {
         if (options.Outcome == PlaceholderOutcome.Failure)
         {
-            return Task.FromResult<ExtractionResult?>(null);
+            return Task.FromResult<ExtractionStepResult?>(null);
         }
 
         // Derived from the bytes rather than invented, so the same image is the same result on
@@ -65,7 +66,7 @@ internal sealed class PlaceholderReceiptExtractor(PlaceholderOptions options, st
         // simulated confidence would exercise the fallback for a reason no real engine has (D20).
         decimal reportedTotal = options.Outcome == PlaceholderOutcome.NonReconciling ? total + 0.50m : total;
 
-        return Task.FromResult<ExtractionResult?>(ExtractionResult.From(
+        return Task.FromResult<ExtractionStepResult?>(ExtractionStepResult.From(
             image.PurchaseId,
             EngineName,
             EngineVersion,

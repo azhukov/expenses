@@ -21,7 +21,7 @@ namespace Expenses.Infrastructure.Extraction;
 /// </summary>
 internal sealed class FiscalCodeDecoder : IFiscalCodeDecoder
 {
-    public Task<FiscalIdentifiers?> Decode(
+    public Task<string?> Decode(
         ReceiptImageContent image,
         CancellationToken cancellationToken = default)
     {
@@ -29,7 +29,7 @@ internal sealed class FiscalCodeDecoder : IFiscalCodeDecoder
         // already treats as ordinary.
         if (image.ContentType is ReceiptContent.Pdf or ReceiptContent.Heic)
         {
-            return Task.FromResult<FiscalIdentifiers?>(null);
+            return Task.FromResult<string?>(null);
         }
 
         // zxing-cpp reads luminance. Decoding straight to L8 is both what it wants and less
@@ -51,6 +51,8 @@ internal sealed class FiscalCodeDecoder : IFiscalCodeDecoder
             .From(new ImageView(pixels, luminance.Width, luminance.Height, ImageFormat.Lum, 0, 0))
             .FirstOrDefault(barcode => barcode.IsValid && barcode.Text.Length > 0);
 
-        return Task.FromResult(decoded is null ? null : FiscalIdentity.From(decoded.Text));
+        // The payload as the symbol carries it. Reading identifiers out of it happens in one place,
+        // shared with the payloads a client supplies (D30).
+        return Task.FromResult(decoded?.Text);
     }
 }

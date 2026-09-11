@@ -140,7 +140,7 @@ export interface ExtractionCandidateView {
 export interface ExtractionResultView {
   engineName: string
   engineVersion: string
-  stagesRun: string[]
+  stepsRun: string[]
   candidates: ExtractionCandidateView[]
   total: number | null
   taxRatePercent: number | null
@@ -166,6 +166,7 @@ export interface CaptureResult {
   supplied: FiscalIdentifiers
   extracted: FiscalIdentifiers
   fiscalSource: FiscalSource
+  fiscalPayload: string | null
 }
 
 /** What a unit is measured in. Like a category, it is addressed by code rather than by name. */

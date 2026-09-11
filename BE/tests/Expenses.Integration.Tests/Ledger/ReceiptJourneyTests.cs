@@ -72,28 +72,33 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
     }
 
     [Fact]
-    public async Task The_cascade_end_to_end_when_validation_passes()
+    public async Task The_run_end_to_end_when_validation_passes()
     {
         var captured = await Capture(("Extraction:Placeholder:Outcome", "Reconciling"));
 
+        // The fiscal step reads nothing from these bytes, so the run reaches vision and its result
+        // reconciles. Validation labels it; it did not route it here (D28).
         Assert.Equal("Extracted", captured.GetProperty("state").GetString());
-        Assert.DoesNotContain(
-            "vision-expensive",
-            captured.GetProperty("result").GetProperty("stagesRun").EnumerateArray()
-                .Select(stage => stage.GetString()));
+        Assert.Equal(
+            ["fiscal", "vision"],
+            captured.GetProperty("result").GetProperty("stepsRun").EnumerateArray()
+                .Select(step => step.GetString()));
     }
 
+    /// <summary>
+    /// Replaces "…when validation fails and the fallback runs". There is no fallback to run: a
+    /// result that does not reconcile is put in front of a human with its report, and no second
+    /// engine is asked for a different answer (D28).
+    /// </summary>
     [Fact]
-    public async Task The_cascade_end_to_end_when_validation_fails_and_the_fallback_runs()
+    public async Task The_run_end_to_end_when_validation_fails()
     {
         var captured = await Capture(("Extraction:Placeholder:Outcome", "NonReconciling"));
 
-        // Both tiers are the same placeholder here, so both fail; the result kept is the one that
-        // failed fewer checks, and the image is put in front of a human (D20).
         Assert.Equal("NeedsReview", captured.GetProperty("state").GetString());
         Assert.Contains(
-            "vision-expensive",
-            captured.GetProperty("result").GetProperty("stagesRun").EnumerateArray()
+            "vision",
+            captured.GetProperty("result").GetProperty("stepsRun").EnumerateArray()
                 .Select(stage => stage.GetString()));
 
         var failed = captured.GetProperty("validation").GetProperty("checks").EnumerateArray()

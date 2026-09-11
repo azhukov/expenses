@@ -57,22 +57,24 @@ describe('Capturing a receipt image', () => {
     await expect(captureReceipt(image())).resolves.toEqual(captured)
   })
 
-  it('sends fiscal identifiers decoded at capture when there are any', async () => {
+  it('sends the fiscal QR payload read at capture when there is one', async () => {
     respondWith(captured, { ok: true, status: 200 })
 
-    await captureReceipt(image(), { ikof: 'abc', jikr: 'def' })
+    await captureReceipt(image(), 'https://mapr.tax.gov.me/ic/#/verify?iic=abc&tin=02365928')
 
-    expect(sentForm().get('fiscalIkof')).toBe('abc')
-    expect(sentForm().get('fiscalJikr')).toBe('def')
+    // The payload verbatim, not fields parsed out of it: the server parses this format, so a
+    // client and the server cannot drift about what it means (D30).
+    expect(sentForm().get('fiscalQr')).toBe(
+      'https://mapr.tax.gov.me/ic/#/verify?iic=abc&tin=02365928',
+    )
   })
 
-  it('sends no fiscal fields when none were decoded', async () => {
+  it('sends no fiscal field when nothing was read', async () => {
     respondWith(captured, { ok: true, status: 200 })
 
     await captureReceipt(image())
 
-    expect(sentForm().has('fiscalIkof')).toBe(false)
-    expect(sentForm().has('fiscalJikr')).toBe(false)
+    expect(sentForm().has('fiscalQr')).toBe(false)
   })
 
   it('surfaces a rejected upload in the ledger error the rest of the client uses', async () => {

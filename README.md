@@ -42,12 +42,17 @@ Locally:
 ./test-fe.sh               # the client unit suite, nothing running required
 ./test-e2e.sh              # the end-to-end suite, stack and all
 ./test-be.sh               # every BE suite, with merged coverage in the console
-./act-fe.sh                # the FE jobs, in act's containers
-./act-be.sh                # the BE jobs
-./act-all.sh               # everything the gate runs
 ```
+
+`./up.sh` brings up the local stack — postgres, api, mcp — waits for every healthcheck, then runs
+and opens the browser client. Run with `NO_FE=1` for the containers alone, `COMPOSE_BUILD=1` to
+rebuild the api and mcp images first, or `FE_HOST=1` to expose the client on the LAN.
 
 `docker compose up -d postgres` brings up just the database, which is all the test suite and a
 locally-run host need. See [BE/README.md](BE/README.md) for what each service does and why the MCP
 container waits on the API's healthcheck, and
 [BE/Expenses.Mcp/README.md](BE/Expenses.Mcp/README.md) for the MCP tool surface.
+
+Every script prints its own options in a header comment — read the top of the file for the full
+list of environment variables it accepts (`UNIT`, `DETAIL`, `WATCH`, `KEEP`, `HEADED`,
+`SKIP_BUILD`, `NO_FE`, `COMPOSE_BUILD`, `FE_HOST`). On Windows, run them from a Git Bash terminal.

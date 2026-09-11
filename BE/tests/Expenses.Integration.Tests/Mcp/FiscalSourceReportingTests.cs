@@ -50,7 +50,7 @@ public sealed class FiscalSourceReportingTests(PostgresFixture postgres) : IAsyn
         Assert.Equal(FiscalPortalTests.Stage, extraction.GetProperty("engineName").GetString());
         Assert.Contains(
             FiscalPortalTests.Stage,
-            extraction.GetProperty("stagesRun").EnumerateArray().Select(stage => stage.GetString()));
+            extraction.GetProperty("stepsRun").EnumerateArray().Select(stage => stage.GetString()));
 
         // Said in words, not only in a stage name: an assistant relaying this should not have to
         // know that "fiscal-portal" is the tax authority and "placeholder" is a guess.

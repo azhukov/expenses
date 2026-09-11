@@ -1,5 +1,6 @@
 ﻿using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
 using SixLabors.ImageSharp;
@@ -31,7 +32,8 @@ public sealed class FiscalDecodingTests(PostgresFixture postgres)
         await using var services = postgres.Services();
         var decoder = services.GetRequiredService<IFiscalCodeDecoder>();
 
-        var decoded = await decoder.Decode(new ReceiptImageContent(1, "image/png", QrCode(VerificationUrl)));
+        string? payload = await decoder.Decode(new ReceiptImageContent(1, "image/png", QrCode(VerificationUrl)));
+        var decoded = payload is null ? null : FiscalIdentity.From(payload);
 
         // The identifiers a fiscal code carries, marked by the caller as decoded rather than read
         // as text, because a decode is exact where reading printed text is not.
@@ -71,16 +73,15 @@ public sealed class FiscalDecodingTests(PostgresFixture postgres)
     public async Task A_decoder_that_throws_is_a_decoder_that_missed()
     {
         await using var services = postgres.Services();
-        var stages = services.GetServices<IExtractionStage>();
-        var stage = stages.Single(candidate => candidate.Role == ExtractionStageRole.Opportunistic);
+        var step = services.GetServices<IExtractionStep>().First();
 
         // Bytes that are not an image at all: the decoder cannot even load them. Nothing depends
-        // on this stage hitting, so its failure must not become the extraction's (D20).
-        var outcome = await stage.Run(new ExtractionStageRequest(
+        // on this step hitting, so its failure must not become the extraction's (D20).
+        var outcome = await step.Run(new ExtractionStepRequest(
             new ReceiptImageContent(1, "image/png", [0x01, 0x02, 0x03]),
             FiscalIdentifiers.None));
 
-        Assert.True(outcome.ProducedNothing);
+        Assert.Null(outcome);
     }
 
     /// <summary>

@@ -473,7 +473,7 @@ public sealed class RecordPurchaseTests
             capture: new CapturedReceiptCommand(
                 tempKey,
                 Receipt.ExtractionState.Extracted,
-                FiscalCreatedAt: "2026-08-24T12:50:08+02:00"));
+                FiscalPayload: "https://mapr.tax.gov.me/ic/#/verify?iic=A1B2C3&crtd=2026-08-24T12:50:08+02:00"));
 
         Assert.Equal(new DateTime(2026, 8, 24, 12, 50, 8), result.Purchase.OccurredAt);
     }
@@ -490,7 +490,7 @@ public sealed class RecordPurchaseTests
             capture: new CapturedReceiptCommand(
                 tempKey,
                 Receipt.ExtractionState.Extracted,
-                FiscalCreatedAt: "2026-08-24T12:50:08+02:00"));
+                FiscalPayload: "https://mapr.tax.gov.me/ic/#/verify?iic=A1B2C3&crtd=2026-08-24T12:50:08+02:00"));
 
         Assert.Equal(new DateTime(2026, 8, 25, 9, 0, 0), result.Purchase.OccurredAt);
     }

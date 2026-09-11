@@ -46,7 +46,7 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
 
         // Not one placeholder line, and not one placeholder stage: a probabilistic stage is never
         // asked for a value a deterministic one has already established (D22).
-        Assert.Equal(["fiscal-qr", FiscalPortalTests.Stage], result.Result?.StagesRun);
+        Assert.Equal(["fiscal", FiscalPortalTests.Stage], result.Result?.StepsRun);
         Assert.All(
             result.Result!.Candidates,
             candidate => Assert.Equal(FiscalPortalTests.Stage, candidate.Provenance["amount"]));
@@ -70,7 +70,7 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
         // and the portal never asked about an invoice nobody could name.
         Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
         Assert.Equal("placeholder", result.Result?.EngineName);
-        Assert.Contains("vision-cheap", result.Result!.StagesRun);
+        Assert.Contains("vision", result.Result!.StepsRun);
         Assert.Empty(portal.Requests);
 
         Assert.Null(result.Extracted.Ikof);

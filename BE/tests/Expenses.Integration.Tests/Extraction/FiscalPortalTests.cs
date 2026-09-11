@@ -37,13 +37,13 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
 
         Assert.NotNull(invoice);
-        Assert.Equal(7, invoice.Result.PurchaseId);
-        Assert.Equal(14, invoice.Result.Candidates.Count);
-        Assert.Equal(59.65m, invoice.Result.Total);
+        Assert.Equal(7, invoice.PurchaseId);
+        Assert.Equal(14, invoice.Candidates.Count);
+        Assert.Equal(59.65m, invoice.Total);
 
         // Verbatim, all of it: the tax authority has already stated these and nothing here is
         // entitled to a second opinion (D27).
-        var wine = invoice.Result.Candidates[0];
+        var wine = invoice.Candidates[0];
         Assert.Equal("CABERNET SYRAH 0.75L", wine.Description);
         Assert.Equal(1m, wine.Quantity);
         Assert.Equal("KOM", wine.UnitRaw);
@@ -52,15 +52,15 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
 
         // A line priced by weight: the quantity is not a whole number and the amount is not the
         // unit price, which is exactly the case a mapping is most likely to get wrong.
-        var poultry = invoice.Result.Candidates[3];
+        var poultry = invoice.Candidates[3];
         Assert.Equal("CURECI FILE svjezi", poultry.Description);
         Assert.Equal(0.548m, poultry.Quantity);
         Assert.Equal("KG", poultry.UnitRaw);
         Assert.Equal(8.22m, poultry.Amount);
 
-        Assert.Equal("MEGAPROMET d.o.o", invoice.Result.MerchantName);
-        Assert.Equal("02365928", invoice.Result.MerchantTaxId);
-        Assert.Equal(Stage, invoice.Result.Provenance[ExtractedValues.MerchantName]);
+        Assert.Equal("MEGAPROMET d.o.o", invoice.MerchantName);
+        Assert.Equal("02365928", invoice.MerchantTaxId);
+        Assert.Equal(Stage, invoice.Provenance[ExtractedValues.MerchantName]);
 
         // The request the portal was asked, on the wire: form-encoded, and with the timestamp's
         // offset intact rather than turned into a space by a form encoder.
@@ -81,12 +81,13 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         // `unitPriceAfterVat` is a unit price and the check it feeds is a line-level one, so it
         // arrives extended by the quantity: 15.00 per kilogram over 0.548 kg is a list price of
         // 8.22 against an amount of 8.22, and the check the design promised keeps working (D27).
-        var poultry = invoice!.Result.Candidates[3];
+        Assert.NotNull(invoice);
+        var poultry = invoice.Candidates[3];
         Assert.Equal(15.00m, poultry.UnitPrice);
         Assert.Equal(8.22m, poultry.ListUnitPrice);
         Assert.Equal(0m, poultry.DiscountAmount);
 
-        var report = ArithmeticValidator.Validate(ExtractionArithmetic.From(invoice.Result));
+        var report = ArithmeticValidator.Validate(ExtractionArithmetic.From(invoice));
         Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
     }
 
@@ -100,8 +101,8 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
 
         // The JIKR the fiscal code does not carry. It is the portal's `fic`, and this is the only
         // place it is ever known from (D24).
-        Assert.Equal("d2857c6a-a363-4173-bf9c-dff37f77741a", invoice?.Identifiers.Jikr);
-        Assert.Equal(DecoderRegressionTests.Ikof, invoice?.Identifiers.Ikof);
+        Assert.Equal("d2857c6a-a363-4173-bf9c-dff37f77741a", invoice?.Fiscal.Jikr);
+        Assert.Equal(DecoderRegressionTests.Ikof, invoice?.Fiscal.Ikof);
     }
 
     [Fact]

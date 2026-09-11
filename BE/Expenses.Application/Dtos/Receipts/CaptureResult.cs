@@ -15,4 +15,11 @@ public sealed record CaptureResult(
     ArithmeticValidationReport? Validation,
     FiscalIdentifiers Supplied,
     FiscalIdentifiers Extracted,
-    Receipt.FiscalSource FiscalSource);
+    Receipt.FiscalSource FiscalSource,
+
+    /// <summary>
+    /// The receipt's fiscal QR payload, verbatim, as supplied or as decoded during this capture.
+    /// Carried back for the caller to resubmit at confirmation, which is where a receipt first
+    /// exists to retain it (D32).
+    /// </summary>
+    string? FiscalPayload = null);

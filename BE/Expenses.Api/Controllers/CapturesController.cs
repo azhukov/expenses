@@ -17,6 +17,13 @@ public sealed class CapturesController : ControllerBase
     public const long MaximumUploadBytes = 15 * 1024 * 1024;
 
     /// <summary>
+    /// A fiscal QR payload is a verification address of roughly two hundred characters. The bound
+    /// is generous against that and still keeps a hostile form field away from the parser: the
+    /// payload is untrusted input from here on, and the parser is what reads it (D30).
+    /// </summary>
+    public const int MaximumFiscalPayloadLength = 2048;
+
+    /// <summary>
     /// Stores an image temporarily and runs extraction against it synchronously, with no purchase
     /// referenced. The response identifies the capture by its temporary key, never by a purchase or
     /// image identifier.
@@ -48,10 +55,30 @@ public sealed class CapturesController : ControllerBase
         using var buffer = new MemoryStream();
         await file.CopyToAsync(buffer, cancellationToken);
 
-        // Identifiers a client decoded at capture, accepted without extraction having run (D20).
-        var supplied = new FiscalIdentifiers(form["fiscalIkof"], form["fiscalJikr"]);
+        // What a client read from the receipt's fiscal QR, accepted without extraction having run.
+        // The raw payload rather than parsed fields, because the verification service needs the
+        // issuer tax number and the creation timestamp as well as the invoice code, and a contract
+        // of parsed fields could carry only the last of those (D30).
+        string? payload = form["fiscalQr"];
 
-        var result = await receipts.Capture(buffer.ToArray(), supplied, cancellationToken);
+        if (payload is { Length: > MaximumFiscalPayloadLength })
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.ReceiptFiscalPayloadTooLong,
+                $"A fiscal QR payload may be at most {MaximumFiscalPayloadLength} characters.",
+                ("length", payload.Length),
+                ("maximumLength", MaximumFiscalPayloadLength));
+        }
+
+        // Parsed at the edge, by the one parser that reads this format, so the pipeline behind it
+        // never handles a raw string and a client never has to know what a fiscal identifier is.
+        // An unrecognised payload yields no identifiers rather than an error: it is untrusted input
+        // and says nothing about whether the image is a receipt.
+        var supplied = string.IsNullOrWhiteSpace(payload)
+            ? FiscalIdentifiers.None
+            : FiscalIdentity.From(payload);
+
+        var result = await receipts.Capture(buffer.ToArray(), supplied, payload, cancellationToken);
 
         return Ok(result);
     }

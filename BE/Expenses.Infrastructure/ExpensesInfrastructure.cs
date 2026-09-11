@@ -69,9 +69,9 @@ public static class ExpensesInfrastructure
     }
 
     /// <summary>
-    /// The cascade (D20), wired cheapest-first. The two vision tiers are two configured instances
-    /// of the same placeholder in this change and two instances of a real engine later; nothing
-    /// about the shape changes when they become real, which is why it is built now.
+    /// The two extraction steps, in run order: the deterministic one, then vision (D28). The vision
+    /// step is a placeholder here and a real engine later; nothing about the shape changes when it
+    /// becomes real, which is why it is built now.
     /// </summary>
     private static void AddExtraction(IServiceCollection services, IConfiguration configuration)
     {
@@ -94,34 +94,24 @@ public static class ExpensesInfrastructure
             provider.GetRequiredService<PortalOptions>(),
             provider.GetRequiredService<ILogger<FiscalPortalClient>>()));
 
-        services.AddSingleton<IExtractionStage>(provider => new FiscalDecodeStage(
+        // Registration order is run order, and there is nothing else to it (D28). The deterministic
+        // step first: where it answers, the tax authority has stated the invoice and nothing behind
+        // it is asked for a second opinion (D22).
+        services.AddSingleton<IExtractionStep>(provider => new FiscalStep(
             provider.GetRequiredService<IFiscalCodeDecoder>(),
-            provider.GetRequiredService<ILogger<FiscalDecodeStage>>()));
-
-        services.AddSingleton<IExtractionStage>(provider => new FiscalInvoiceStage(
             provider.GetRequiredService<IFiscalInvoiceRetrieval>(),
-            provider.GetRequiredService<ILogger<FiscalInvoiceStage>>()));
+            provider.GetRequiredService<ILogger<FiscalStep>>()));
 
-        // Both vision tiers are the fallback now: they answer for the receipts the deterministic
-        // path cannot serve, in registration order, and neither runs behind an invoice the tax
-        // authority stated and the arithmetic confirmed (D22).
-        services.AddSingleton<IExtractionStage>(provider => new VisionStage(
+        // One vision tier, not two. Both were configured instances of the same placeholder, so the
+        // escalation between them never chose between two real engines, and at personal-ledger
+        // volume the ladder saved single-digit dollars a year.
+        services.AddSingleton<IExtractionStep>(provider => new VisionStep(
             new PlaceholderReceiptExtractor(
                 provider.GetRequiredService<PlaceholderOptions>(),
-                VisionStage.CheapTier),
-            VisionStage.CheapTier,
-            ExtractionStageRole.Fallback));
-
-        services.AddSingleton<IExtractionStage>(provider => new VisionStage(
-            new PlaceholderReceiptExtractor(
-                provider.GetRequiredService<PlaceholderOptions>(),
-                VisionStage.ExpensiveTier),
-            VisionStage.ExpensiveTier,
-            ExtractionStageRole.Fallback));
+                VisionStep.StepName)));
 
         services.AddSingleton(provider => new ExtractionCascade(
-            provider.GetServices<IExtractionStage>(),
-            provider.GetRequiredService<ExtractionOptions>()));
+            provider.GetServices<IExtractionStep>()));
 
         // The one piece of background processing this change keeps, unrelated to extraction:
         // extraction itself always runs synchronously in the request from here on.

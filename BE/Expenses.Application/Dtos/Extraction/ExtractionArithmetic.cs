@@ -10,7 +10,7 @@ public sealed record ExtractionArithmetic(
     decimal? TaxAmount = null)
 {
     /// <summary>Reduces an extraction result to the numbers the oracle can decide (D20).</summary>
-    public static ExtractionArithmetic From(ExtractionResult result) => new(
+    public static ExtractionArithmetic From(ExtractionStepResult result) => new(
         [.. result.Candidates.Select(ExtractedLineAmounts.From)],
         result.Total,
         result.TaxRatePercent,

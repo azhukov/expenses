@@ -206,21 +206,34 @@ public sealed class PurchaseService(
             throw DomainErrorTranslation.Receipt(exception);
         }
 
-        if (capture.SuppliedIkof is not null || capture.SuppliedJikr is not null)
+        var identifiers = Identifiers(capture);
+
+        // How the identity was established says which slot it belongs in. A payload the client read
+        // is supplied; anything a step established is extracted (D31, D32). No step establishing
+        // anything leaves the payload as the client's own reading, which is the ordinary case for a
+        // capture that arrived with one.
+        if (capture.FiscalSource is Receipt.FiscalSource.None or Receipt.FiscalSource.SuppliedAtUpload)
         {
-            receipt.SupplyFiscalIdentifiers(capture.SuppliedIkof, capture.SuppliedJikr);
+            receipt.SupplyFiscalIdentifiers(identifiers.Ikof, capture.Jikr);
+        }
+        else if (identifiers.Ikof is not null || capture.Jikr is not null)
+        {
+            receipt.RecordExtractedFiscalIdentifiers(identifiers.Ikof, capture.Jikr, capture.FiscalSource);
         }
 
-        if (capture.ExtractedIkof is not null || capture.ExtractedJikr is not null)
-        {
-            receipt.RecordExtractedFiscalIdentifiers(
-                capture.ExtractedIkof,
-                capture.ExtractedJikr,
-                capture.FiscalExtractedSource);
-        }
+        // Retained whether or not anything could be read from it: the unparseable payload is
+        // precisely the one a later parser would want back, and it is gone for good once dropped
+        // (D32). Confirmation is the first moment a receipt exists to hold it.
+        receipt.RecordFiscalPayload(capture.FiscalPayload, capture.FiscalSource);
 
         return receipt;
     }
+
+    /// <summary>What the capture's fiscal QR payload states, or nothing where it carried none.</summary>
+    private static FiscalIdentifiers Identifiers(CapturedReceiptCommand? capture)
+        => capture?.FiscalPayload is { Length: > 0 } payload
+            ? FiscalIdentity.From(payload)
+            : FiscalIdentifiers.None;
 
     /// <summary>
     /// The caller's own date, else the invoice creation timestamp a fiscal QR decoded at capture,
@@ -233,7 +246,9 @@ public sealed class PurchaseService(
             return DateTime.SpecifyKind(supplied, DateTimeKind.Unspecified);
         }
 
-        if (capture?.FiscalCreatedAt is { Length: > 0 } fiscal
+        // Read from the payload rather than sent as a field of its own: the payload states it, and
+        // one parser reads this format (D30).
+        if (Identifiers(capture).CreatedAt is { Length: > 0 } fiscal
             && DateTimeOffset.TryParse(fiscal, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
         {
             // No conversion is applied: the wall-clock component the receipt printed is what is

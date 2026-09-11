@@ -173,7 +173,7 @@ function extracted(overrides: Record<string, unknown> = {}) {
     result: {
       engineName: 'test',
       engineVersion: '1',
-      stagesRun: ['vision'],
+      stepsRun: ['vision'],
       candidates: [candidate(), candidate({ lineNumber: 2, description: 'Milk', amount: 1.5 })],
       total: 4,
       taxRatePercent: null,
@@ -187,6 +187,7 @@ function extracted(overrides: Record<string, unknown> = {}) {
     supplied: noFiscal,
     extracted: { ...noFiscal, createdAt: '2026-09-01T10:15:00' },
     fiscalSource: 'DecodedFromCode',
+    fiscalPayload: 'https://mapr.tax.gov.me/ic/#/verify?iic=abc&crtd=2026-09-01T10:15:00',
     ...overrides,
   }
 }
@@ -275,9 +276,11 @@ describe('The capture result is not re-requested', () => {
     const confirm = await reviewOf(
       extracted({
         state: 'NeedsReview',
-        supplied: { ...noFiscal, ikof: 'supplied-ikof' },
-        extracted: { ...noFiscal, ikof: 'extracted-ikof', createdAt: '2026-09-01T10:15:00' },
+        supplied: noFiscal,
+        extracted: { ...noFiscal, ikof: 'extracted-ikof', jikr: 'extracted-jikr' },
         fiscalSource: 'DecodedFromCode',
+        fiscalPayload:
+          'https://mapr.tax.gov.me/ic/#/verify?iic=extracted-ikof&crtd=2026-09-01T10:15:00',
       }),
     )
 
@@ -290,12 +293,13 @@ describe('The capture result is not re-requested', () => {
       tempKey: '0f2b0a3c-0000-4000-8000-000000000001',
       state: 'NeedsReview',
       failureReason: null,
-      suppliedIkof: 'supplied-ikof',
-      suppliedJikr: null,
-      extractedIkof: 'extracted-ikof',
-      extractedJikr: null,
-      fiscalExtractedSource: 'DecodedFromCode',
-      fiscalCreatedAt: '2026-09-01T10:15:00',
+
+      // Three members where there were six: the payload states the invoice code and the creation
+      // timestamp, so neither is sent as a field of its own (D30, D32).
+      jikr: 'extracted-jikr',
+      fiscalSource: 'DecodedFromCode',
+      fiscalPayload:
+        'https://mapr.tax.gov.me/ic/#/verify?iic=extracted-ikof&crtd=2026-09-01T10:15:00',
     })
     expect(capture).toHaveBeenCalledTimes(1)
   })
@@ -375,21 +379,10 @@ describe('Extraction problems are surfaced before confirmation', () => {
     expect(screen.getByTestId('review-reasons')).toHaveTextContent(/merchant name/i)
   })
 
-  it('states a disagreement between the supplied and extracted fiscal identifiers', async () => {
-    await reviewOf(
-      extracted({
-        state: 'NeedsReview',
-        supplied: { ...noFiscal, ikof: 'supplied-ikof' },
-        extracted: { ...noFiscal, ikof: 'extracted-ikof' },
-      }),
-    )
+  // The disagreement reason is gone with the cross-check that produced it: a payload supplied at
+  // capture is preferred outright and the image is never read for a second opinion (D31).
 
-    expect(screen.getByTestId('review-reasons')).toHaveTextContent(/fiscal/i)
-    expect(screen.getByTestId('review-reasons')).toHaveTextContent(/supplied-ikof/)
-    expect(screen.getByTestId('review-reasons')).toHaveTextContent(/extracted-ikof/)
-  })
-
-  it('does not block confirmation on a fiscal disagreement', async () => {
+  it('does not block confirmation when two fiscal readings differ', async () => {
     const confirm = await reviewOf(
       extracted({
         state: 'NeedsReview',
@@ -515,7 +508,7 @@ describe('The date defaults from the receipt', () => {
 
     await waitFor(() => expect(record).toHaveBeenCalledTimes(1))
     expect(record.mock.calls[0][0].occurredAt).toBeUndefined()
-    expect(record.mock.calls[0][0].capture?.fiscalCreatedAt).toBe('2026-09-01T10:15:00')
+    expect(record.mock.calls[0][0].capture?.fiscalPayload).toContain('crtd=2026-09-01T10:15:00')
   })
 
   it('sends the date the user entered when they overrode it', async () => {

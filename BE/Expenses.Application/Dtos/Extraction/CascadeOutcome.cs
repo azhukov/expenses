@@ -1,15 +1,22 @@
 ﻿using Expenses.Domain.Entities;
-using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Dtos;
 
-/// <summary>What one run of the cascade decided, and why.</summary>
+/// <summary>
+/// What one run of extraction produced. It reports and does not judge: whether this is
+/// <c>Extracted</c> or <c>NeedsReview</c> is decided once, afterwards, by the caller that validates
+/// it (D28). The one verdict here is <see cref="FailureReason"/>, which is set when no step read
+/// anything at all — the only outcome that is a failure rather than a matter for review.
+/// </summary>
 public sealed record CascadeOutcome(
-    ExtractionResult? Result,
-    Receipt.ExtractionState State,
-    ArithmeticValidationReport? Validation,
-    IReadOnlyList<string> StagesRun,
+    ExtractionStepResult? Result,
+    IReadOnlyList<string> StepsRun,
     FiscalIdentifiers Extracted,
     Receipt.FiscalSource FiscalSource,
     string? FailureReason = null,
-    IReadOnlyList<string>? LowConfidenceValues = null);
+
+    /// <summary>
+    /// The fiscal QR payload the run holds — supplied with the capture, or decoded during it. Null
+    /// where none was obtained (D32).
+    /// </summary>
+    string? Payload = null);

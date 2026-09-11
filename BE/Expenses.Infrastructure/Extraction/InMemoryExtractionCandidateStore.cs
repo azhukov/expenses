@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using Expenses.Application.Interfaces;
-using Expenses.Domain.Extraction;
+using Expenses.Application.Dtos;
 
 namespace Expenses.Infrastructure.Extraction;
 
@@ -18,16 +18,16 @@ namespace Expenses.Infrastructure.Extraction;
 /// </summary>
 internal sealed class InMemoryExtractionCandidateStore : IExtractionCandidateStore
 {
-    private readonly ConcurrentDictionary<long, ExtractionResult> _held = new();
+    private readonly ConcurrentDictionary<long, ExtractionStepResult> _held = new();
 
-    public Task<ExtractionResult?> FindLatest(long purchaseId, CancellationToken cancellationToken = default)
+    public Task<ExtractionStepResult?> FindLatest(long purchaseId, CancellationToken cancellationToken = default)
         => Task.FromResult(_held.GetValueOrDefault(purchaseId));
 
     /// <summary>
     /// A re-run supersedes its predecessor rather than accumulating beside it, and touches no
     /// expense that was already confirmed.
     /// </summary>
-    public Task Replace(long purchaseId, ExtractionResult result, CancellationToken cancellationToken = default)
+    public Task Replace(long purchaseId, ExtractionStepResult result, CancellationToken cancellationToken = default)
     {
         _held[purchaseId] = result;
 

@@ -5,7 +5,7 @@ which are adapter hosts (D1). Dependencies point inward only.
 
 This file is a **rendering, not an authority**: every decision it shows is decided in
 [`openspec/changes/add-personal-expense-ledger/design.md`](../openspec/changes/add-personal-expense-ledger/design.md)
-and cited here as `D1`–`D22`. Where the two disagree, the design document wins and this file is
+and cited here as `D1`–`D34`. Where the two disagree, the design document wins and this file is
 wrong. [CLAUDE.md](CLAUDE.md) states the working rules the shape implies.
 
 The ring rules are not a convention to be reviewed — they are asserted by
@@ -58,7 +58,7 @@ so a `ProjectReference` or `PackageReference` that breaks a ring fails the build
      │                  OrphanCaptureSweep (daily hosted job)           │
      │  Extraction/     InMemoryExtractionCandidateStore (transient)    │
      │                  FiscalCodeDecoder, PlaceholderReceiptExtractor  │
-     │                  Stages: FiscalDecodeStage, VisionStage          │
+     │                  Steps: FiscalStep, VisionStep                   │
      │  ExpensesInfrastructure.cs   ← the single DI wiring point        │
      └───────────────────────────────┬──────────────────────────────────┘
                                      ▼  EF Core / Npgsql
@@ -71,7 +71,7 @@ so a `ProjectReference` or `PackageReference` that breaks a ring fails the build
      ┌──────────────────────────────────────────────────────────────────┐
      │  Expenses.Domain    ── zero dependencies, not even NuGet         │
      │  Purchase · Expense · Merchant · Category · Unit                 │
-     │  Receipt (a value on Purchase) · Extraction/ExtractionResult     │
+     │  Receipt (a value on Purchase) · Extraction/ExtractionCandidate  │
      │  Entities only (D22): no validators, no exceptions, no records   │
      └──────────────────────────────────────────────────────────────────┘
 ```
@@ -88,18 +88,19 @@ Expenses.Mcp             -> Application, Infrastructure (composition only)
 
 ## The capture-and-confirm path — extraction is synchronous
 
-Capture and re-run both call the cascade directly, in the request — an ordered cascade, cheapest
-stage first (D20), with no queue and no `Pending`/`Extracting` state observable between requests:
+Capture and re-run both call the pipeline directly, in the request — **two ordered steps** (D28),
+with no queue and no `Pending`/`Extracting` state observable between requests:
 
 ```
   POST /receipts/capture ──► ITemporaryReceiptStore   ──► ExtractionCascade ──► response
    (Api only, no purchase)    GUID-keyed staging file        (synchronous, in this request)
                                                                     │
-        stage 1  FiscalDecodeStage    free    │  opportunistic — a miss is normal
-        stage 2  FiscalInvoiceStage   free    │  the authoritative invoice, where it decoded
-        stage 3  ArithmeticValidation free    │  ◄── decides the outcome
-        stage 4  VisionStage cheap    paid    │  placeholder today; runs only if 2 produced nothing
-        stage 5  VisionStage expensive paid   │            or if validation failed
+        step 1  FiscalStep   free  │  decode the QR (or use the supplied payload),
+                                   │  then ask the verification service for the invoice
+        step 2  VisionStep   paid  │  placeholder today; runs only if step 1 read no lines
+                                              │
+                                              ▼
+                            ArithmeticValidation  ◄── runs ONCE, here, and only labels
                                               ▼
                               Extracted │ NeedsReview │ Failed
                                               │
@@ -110,13 +111,22 @@ stage first (D20), with no queue and no `Pending`/`Extracting` state observable 
                                     ITemporaryReceiptStore.Delete
 ```
 
-Validation runs after every producing stage, and the first result that reconciles ends the cascade.
-That is what keeps a probabilistic stage from ever being asked for a value a deterministic one has
-already established (D22).
+**A step advances the run only by reading no lines.** Arithmetic does not route anything: it is a
+pure function applied once, by `ReceiptService`, to whatever the run produced, and it decides only
+`Extracted` versus `NeedsReview`. A result that does not reconcile is surfaced for review with its
+report — it is never handed to another engine to be re-guessed, which is what keeps an invoice the
+tax authority itself stated from being second-guessed over a rounding difference (D22, D28).
 
-Stage 0 — fiscal QR decode in the browser, at capture — is the intended primary path and belongs to
-`FE/`. The backend contract is already shaped for it: fiscal identifiers are accepted alongside a
-capture, not only discovered from one.
+`Failed` means one thing only: no step read any lines at all.
+
+Fiscal identity threads forward as an optional parameter. A step that establishes it without reading
+lines passes it on, so the vision step receives a known-true total and issuer identity even where the
+verification service could not be reached (D23, D29). The payload behind it is retained on the
+receipt, so a re-run reads it rather than decoding the photograph again (D32).
+
+Fiscal QR decode in the browser, at capture, is the intended primary path and belongs to `FE/`. The
+backend contract is shaped for it: `POST /receipts/capture` accepts the raw payload as `fiscalQr`,
+parsed server-side by the one parser that reads this format (D30).
 
 Capture's candidates are never held server-side at all: they travel in the capture response, and
 the caller resubmits what it needs — verbatim or edited — to confirm. `RerunExtraction`, for a

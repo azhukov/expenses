@@ -10,11 +10,13 @@ import type {
 /** The dev proxy and a same-origin deployment both put the API here (D9). */
 const BASE = '/api'
 
-/** Identifiers a client decoded from a receipt's fiscal QR before uploading it. */
-export interface SuppliedFiscalIdentifiers {
-  ikof?: string | null
-  jikr?: string | null
-}
+/**
+ * What a client read from a receipt's fiscal QR before uploading it: the payload verbatim, not the
+ * identifiers parsed out of it. The server parses it, so this format's two traps — parameters in
+ * the URL fragment, and a '+' in the timestamp's offset that any form decoder eats — are handled in
+ * one place rather than two (D30).
+ */
+export type SuppliedFiscalPayload = string
 
 /**
  * Uploads one image and waits for extraction, which the endpoint runs before it answers. It does
@@ -23,18 +25,14 @@ export interface SuppliedFiscalIdentifiers {
  */
 export async function captureReceipt(
   file: File,
-  fiscal?: SuppliedFiscalIdentifiers,
+  fiscalQr?: SuppliedFiscalPayload,
 ): Promise<CaptureResult> {
   const form = new FormData()
   form.append('file', file)
 
-  // Absent rather than empty: an empty form field would assert an identifier that was never read.
-  if (fiscal?.ikof) {
-    form.append('fiscalIkof', fiscal.ikof)
-  }
-
-  if (fiscal?.jikr) {
-    form.append('fiscalJikr', fiscal.jikr)
+  // Absent rather than empty: an empty form field would assert a payload that was never read.
+  if (fiscalQr) {
+    form.append('fiscalQr', fiscalQr)
   }
 
   let response: Response
@@ -88,12 +86,17 @@ export interface CapturedReceiptRequest {
   tempKey: string
   state: ExtractionState
   failureReason?: string | null
-  suppliedIkof?: string | null
-  suppliedJikr?: string | null
-  extractedIkof?: string | null
-  extractedJikr?: string | null
-  fiscalExtractedSource?: FiscalSource
-  fiscalCreatedAt?: string | null
+
+  /** Absent from the fiscal code and printed nowhere the server can read it (D24). */
+  jikr?: string | null
+
+  fiscalSource?: FiscalSource
+
+  /**
+   * The payload verbatim. The server parses the invoice code, issuer tax number, creation timestamp
+   * and total out of it, so none of those is sent as a field of its own (D30, D32).
+   */
+  fiscalPayload?: string | null
 }
 
 /**

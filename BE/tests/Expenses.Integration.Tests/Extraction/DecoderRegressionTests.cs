@@ -41,9 +41,9 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
         // The 4000x3000 photograph exactly as the camera wrote it: no crop, no rectification, no
         // rescale. Cropping to a perfectly framed symbol was measured and bought nothing, so
         // nothing here may come to depend on it (D21).
-        var decoded = await decoder.Decode(Photograph(DecodableReceipt));
+        string? payload = await decoder.Decode(Photograph(DecodableReceipt));
 
-        Assert.Equal(Ikof, decoded?.Ikof);
+        Assert.Equal(Ikof, payload is null ? null : FiscalIdentity.From(payload).Ikof);
     }
 
     [Theory]
@@ -70,7 +70,7 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
 
         // Reported no differently from a receipt carrying no code at all: the stage ran, decoded
         // nothing, recorded nothing, and every later stage behaved as it always does.
-        Assert.Contains("fiscal-qr", result.Result!.StagesRun);
+        Assert.Contains("fiscal", result.Result!.StepsRun);
         Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
         Assert.NotEmpty(result.Result.Candidates);
         Assert.Null(result.FailureReason);

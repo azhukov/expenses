@@ -146,6 +146,16 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
                 .HasColumnName("fiscal_extracted_source")
                 .HasConversion<int>();
 
+            // The payload verbatim, unbounded in the column because no format is imposed on it and
+            // the length bound belongs at the trust boundary that accepts it, not here (D30, D32).
+            receipt.Property(value => value.FiscalPayload)
+                .HasColumnName("fiscal_payload")
+                .HasColumnType("text");
+
+            receipt.Property(value => value.FiscalPayloadSource)
+                .HasColumnName("fiscal_payload_source")
+                .HasConversion<int>();
+
             // Derived from the four values above; storing it would be a second source of truth.
             receipt.Ignore(value => value.Corroboration);
 

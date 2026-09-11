@@ -9,7 +9,7 @@ namespace Expenses.Application.Dtos;
 public sealed record ExtractionResultView(
     string EngineName,
     string EngineVersion,
-    IReadOnlyList<string> StagesRun,
+    IReadOnlyList<string> StepsRun,
     IReadOnlyList<ExtractionCandidateView> Candidates,
     decimal? Total,
     decimal? TaxRatePercent,
@@ -19,10 +19,10 @@ public sealed record ExtractionResultView(
     IReadOnlyDictionary<string, string> Provenance,
     IReadOnlyDictionary<string, decimal> ReportedConfidence)
 {
-    public static ExtractionResultView Of(ExtractionResult result) => new(
+    public static ExtractionResultView Of(ExtractionStepResult result) => new(
         result.EngineName,
         result.EngineVersion,
-        result.StagesRun,
+        result.StepsRun,
         [.. result.Candidates.Select(ExtractionCandidateView.Of)],
         result.Total,
         result.TaxRatePercent,

@@ -105,6 +105,20 @@ public sealed class Receipt
     /// <summary>How the extracted identifiers were obtained — decoded exactly, or read as text.</summary>
     public FiscalSource FiscalExtractedSource { get; private set; }
 
+    /// <summary>
+    /// What the receipt's fiscal QR carries, verbatim, however it was obtained. Retained whether or
+    /// not any identifier could be read from it: the unparseable payload is precisely the one a
+    /// later parser would want back, and it cannot be recovered once discarded (D32).
+    ///
+    /// It is retained for re-runs above all. Decoding the stored image reads one symbol in three,
+    /// so a receipt whose code a client read at capture would lose that reading on every later run
+    /// if only the parsed identifiers survived.
+    /// </summary>
+    public string? FiscalPayload { get; private set; }
+
+    /// <summary>How the payload was obtained. <see cref="FiscalSource.None"/> where none is held.</summary>
+    public FiscalSource FiscalPayloadSource { get; private set; }
+
     /// <summary>Derived; never stored, because it follows from the four values above.</summary>
     public FiscalCorroboration Corroboration
     {
@@ -174,6 +188,23 @@ public sealed class Receipt
         FiscalIkofExtracted = normalisedIkof ?? FiscalIkofExtracted;
         FiscalJikrExtracted = normalisedJikr ?? FiscalJikrExtracted;
         FiscalExtractedSource = source;
+    }
+
+    /// <summary>
+    /// The payload a fiscal QR carried, kept as it was read. The first payload obtained is the one
+    /// retained: a payload supplied at capture is preferred outright over a later reading of the
+    /// same image, because a client reading a live camera has focus and retries available to it
+    /// that a single stored frame does not (D31).
+    /// </summary>
+    public void RecordFiscalPayload(string? payload, FiscalSource source)
+    {
+        if (Normalise(payload) is not { } recorded || FiscalPayload is not null)
+        {
+            return;
+        }
+
+        FiscalPayload = recorded;
+        FiscalPayloadSource = source;
     }
 
     private static string? Normalise(string? value)

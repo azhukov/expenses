@@ -67,10 +67,10 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         var view = await Captured(services, Jpeg(0x75));
 
         // Which stages ran, and which stage produced each value (D20).
-        Assert.Equal(["fiscal-qr", "fiscal-portal", "vision-cheap"], view.Result!.StagesRun);
-        Assert.Equal("vision-cheap", view.Result.Provenance["total"]);
+        Assert.Equal(["fiscal", "vision"], view.Result!.StepsRun);
+        Assert.Equal("vision", view.Result.Provenance["total"]);
         Assert.All(view.Result.Candidates, candidate =>
-            Assert.Equal("vision-cheap", candidate.Provenance["amount"]));
+            Assert.Equal("vision", candidate.Provenance["amount"]));
     }
 
     [Fact]
@@ -84,18 +84,22 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         Assert.True(view.Validation!.Passed);
     }
 
+    /// <summary>
+    /// Replaces "A non-reconciling result fails validation and runs the fallback", whose scenario
+    /// the specs no longer carry. Arithmetic no longer decides which steps run, and there is no
+    /// second tier to escalate to: a result that does not reconcile is surfaced for review with its
+    /// report, and the run ends where it ended (D28).
+    /// </summary>
     [Fact]
-    public async Task A_non_reconciling_result_fails_validation_and_runs_the_fallback()
+    public async Task A_non_reconciling_result_is_reviewed_rather_than_escalated()
     {
         await using var services = postgres.Services(("Extraction:Placeholder:Outcome", "NonReconciling"));
 
         var view = await Captured(services, Jpeg(0x77));
 
-        // Both tiers are the same placeholder here, so the fallback fails in the same way: the
-        // point is that a real arithmetic failure drove it, not a simulated score (D20).
         Assert.Equal(Receipt.ExtractionState.NeedsReview, view.State);
         Assert.False(view.Validation!.Passed);
-        Assert.Equal(["fiscal-qr", "fiscal-portal", "vision-cheap", "vision-expensive"], view.Result!.StagesRun);
+        Assert.Equal(["fiscal", "vision"], view.Result!.StepsRun);
     }
 
     [Fact]
@@ -147,7 +151,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         Assert.Equal(Receipt.ExtractionState.Extracted, view.State);
         Assert.Null(view.Extracted.Ikof);
         Assert.Equal(Receipt.FiscalSource.None, view.FiscalSource);
-        Assert.Contains("fiscal-qr", view.Result!.StagesRun);
+        Assert.Contains("fiscal", view.Result!.StepsRun);
     }
 
     private static async Task<CaptureResult> Captured(IServiceProvider services, byte[] content)

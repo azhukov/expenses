@@ -202,7 +202,7 @@ public sealed class CandidateTests
     {
         var purchase = GivenPurchaseWithReceipt();
 
-        _ledger.Given(purchase.Id, ExtractionResult.From(
+        _ledger.Given(purchase.Id, ExtractionStepResult.From(
             purchase.Id,
             "placeholder",
             "1.0",

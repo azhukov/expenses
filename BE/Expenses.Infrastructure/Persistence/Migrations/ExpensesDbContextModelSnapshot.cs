@@ -243,7 +243,7 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_purchases_merchant_raw_length", "merchant_raw IS NULL OR length(merchant_raw) <= 512");
 
-                            t.HasCheckConstraint("ck_purchases_receipt_all_or_nothing", "(receipt_storage_key IS NULL AND receipt_content_type IS NULL\r\n    AND receipt_size_in_bytes IS NULL AND receipt_state IS NULL)\r\nOR (receipt_storage_key IS NOT NULL AND receipt_content_type IS NOT NULL\r\n    AND receipt_size_in_bytes IS NOT NULL AND receipt_state IS NOT NULL)");
+                            t.HasCheckConstraint("ck_purchases_receipt_all_or_nothing", "(receipt_storage_key IS NULL AND receipt_content_type IS NULL\n    AND receipt_size_in_bytes IS NULL AND receipt_state IS NULL)\nOR (receipt_storage_key IS NOT NULL AND receipt_content_type IS NOT NULL\n    AND receipt_size_in_bytes IS NOT NULL AND receipt_state IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_purchases_receipt_storage_key_length", "receipt_storage_key IS NULL OR length(receipt_storage_key) <= 256");
                         });
@@ -442,6 +442,14 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                             b1.Property<string>("FiscalJikrSupplied")
                                 .HasColumnType("text")
                                 .HasColumnName("fiscal_jikr_supplied");
+
+                            b1.Property<string>("FiscalPayload")
+                                .HasColumnType("text")
+                                .HasColumnName("fiscal_payload");
+
+                            b1.Property<int>("FiscalPayloadSource")
+                                .HasColumnType("integer")
+                                .HasColumnName("fiscal_payload_source");
 
                             b1.Property<long>("SizeInBytes")
                                 .HasColumnType("bigint")

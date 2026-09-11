@@ -160,45 +160,6 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     }
 
     [Fact]
-    public async Task Fiscal_identifiers_that_disagree_are_both_retained_and_the_image_needs_review()
-    {
-        // Configured so the decode stage produces an identifier that contradicts the upload.
-        await using var services = postgres.Services(("Extraction:Placeholder:Outcome", "Reconciling"));
-        using var scope = services.CreateScope();
-
-        var captured = await scope.ServiceProvider.GetRequiredService<ReceiptService>().Capture(
-            QrReceipt("https://mapr.tax.gov.me/ic/#/verify?iic=DECODED-FROM-IMAGE"),
-            new FiscalIdentifiers("SUPPLIED-AT-UPLOAD"));
-
-        var purchase = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
-            Next(),
-            10.00m,
-            [new ExpenseCommand("Line", 10.00m)],
-            capture: new CapturedReceiptCommand(
-                captured.TempKey,
-                captured.State,
-                captured.FailureReason,
-                captured.Supplied.Ikof,
-                captured.Supplied.Jikr,
-                captured.Extracted.Ikof,
-                captured.Extracted.Jikr,
-                captured.FiscalSource));
-
-        long purchaseId = purchase.Purchase.Id;
-        var view = await scope.ServiceProvider.GetRequiredService<ReceiptService>().GetExtractionCandidates(purchaseId);
-
-        Assert.Equal("SUPPLIED-AT-UPLOAD", view.Receipt.FiscalIkofSupplied);
-        Assert.Equal("DECODED-FROM-IMAGE", view.Receipt.FiscalIkofExtracted);
-        Assert.Equal(Receipt.FiscalCorroboration.Disagreed, view.Receipt.Corroboration);
-        Assert.Equal(Receipt.ExtractionState.NeedsReview, view.Receipt.State);
-
-        // The numbers were fine; it is the disagreement alone that put it in front of a human. The
-        // capture's own validation is what proves that, since a freshly confirmed receipt holds no
-        // candidates server-side to recompute it from.
-        Assert.True(captured.Validation?.Passed);
-    }
-
-    [Fact]
     public async Task A_purchase_with_a_deactivated_category_is_refused_but_history_keeps_it()
     {
         string code = $"RETIRE_{Interlocked.Increment(ref s_sequence)}";
@@ -244,9 +205,6 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     private static (DateTime OccurredAt, decimal Amount, IReadOnlyList<ExpenseCommand> Expenses, MerchantCommand? Merchant) Purchase(
         decimal amount, MerchantCommand? merchant = null)
         => (Next(), amount, [new ExpenseCommand("Line", amount)], merchant);
-
-    /// <summary>A PNG carrying a QR code, so the decode stage has something real to read.</summary>
-    private static byte[] QrReceipt(string payload) => QrImage.Png(payload);
 
     private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 }

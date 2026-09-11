@@ -1,4 +1,5 @@
-﻿using Expenses.Domain.Extraction;
+﻿using Expenses.Application.Dtos;
+using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Tests.Fakes;
 
@@ -6,12 +7,12 @@ namespace Expenses.Application.Tests.Fakes;
 internal static class Results
 {
     /// <summary>The worked example from D20: two discounted lines that reconcile with the total.</summary>
-    public static ExtractionResult Reconciling(
+    public static ExtractionStepResult Reconciling(
         string stage,
         long receiptImageId = 1,
         string engine = "placeholder",
         IReadOnlyDictionary<string, decimal>? reportedConfidence = null)
-        => ExtractionResult.From(
+        => ExtractionStepResult.From(
             receiptImageId,
             engine,
             "1.0",
@@ -41,11 +42,11 @@ internal static class Results
     /// A result whose lines do not sum to its total. <paramref name="alsoBreakDiscount"/> breaks a
     /// second check as well, which is what makes two failed results comparable (D20).
     /// </summary>
-    public static ExtractionResult Failing(
+    public static ExtractionStepResult Failing(
         string stage,
         bool alsoBreakDiscount = false,
         long receiptImageId = 1)
-        => ExtractionResult.From(
+        => ExtractionStepResult.From(
             receiptImageId,
             "placeholder",
             "1.0",

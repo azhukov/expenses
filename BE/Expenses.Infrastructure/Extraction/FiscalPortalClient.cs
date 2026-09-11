@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
+using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
 using Microsoft.Extensions.Logging;
 
@@ -35,7 +36,7 @@ internal sealed class FiscalPortalClient(
     /// </summary>
     private readonly ConcurrentDictionary<string, VerifiedInvoice> _retrieved = new(StringComparer.Ordinal);
 
-    public async Task<RetrievedInvoice?> Retrieve(
+    public async Task<ExtractionStepResult?> Retrieve(
         long purchaseId,
         FiscalIdentifiers decoded,
         CancellationToken cancellationToken = default)
@@ -124,7 +125,7 @@ internal sealed class FiscalPortalClient(
     /// per unit while the check it feeds is a line-level one, so it is extended by the quantity вЂ”
     /// a kilogram price of 15.00 over 0.548 kg lists at 8.22, against a line amount of 8.22.
     /// </summary>
-    private static RetrievedInvoice? Map(long purchaseId, FiscalIdentifiers decoded, VerifiedInvoice invoice)
+    private static ExtractionStepResult? Map(long purchaseId, FiscalIdentifiers decoded, VerifiedInvoice invoice)
     {
         if (invoice.Items is not { Count: > 0 } items)
         {
@@ -151,7 +152,7 @@ internal sealed class FiscalPortalClient(
                 ExtractedValues.UnitGuess,
                 ExtractedValues.TaxRatePercent)));
 
-        var result = ExtractionResult.From(
+        return ExtractionStepResult.From(
             purchaseId,
             Stage,
             "1.0",
@@ -169,11 +170,12 @@ internal sealed class FiscalPortalClient(
                 ExtractedValues.Total,
                 ExtractedValues.TaxAmount,
                 ExtractedValues.TaxRatePercent,
-                ExtractedValues.MerchantName));
+                ExtractedValues.MerchantName),
 
-        // The JIKR arrives here and nowhere else. Everything else the code already carried is
-        // carried through unchanged, so nothing decoded is lost by having asked.
-        return new RetrievedInvoice(result, decoded with { Jikr = invoice.Fic });
+            // The JIKR arrives here and nowhere else. Everything else the code already carried is
+            // carried through unchanged, so nothing decoded is lost by having asked (D24).
+            fiscal: decoded with { Jikr = invoice.Fic },
+            fiscalSource: Receipt.FiscalSource.RetrievedFromService);
     }
 
     private static IReadOnlyDictionary<string, string> Provenance(params string[] values)

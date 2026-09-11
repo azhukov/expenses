@@ -122,19 +122,9 @@ export function reviewReasons(capture: CaptureResult): string[] {
     reasons.push(`Extraction was unsure of ${value}.`)
   }
 
-  // Both values are kept rather than one preferred: the API reports the disagreement instead of
-  // resolving it, and so does the screen.
-  for (const [name, supplied, extracted] of [
-    ['IKOF', capture.supplied.ikof, capture.extracted.ikof],
-    ['JIKR', capture.supplied.jikr, capture.extracted.jikr],
-  ] as const) {
-    if (supplied && extracted && supplied !== extracted) {
-      reasons.push(
-        `The fiscal ${name} supplied at capture (${supplied}) disagrees with the one read from the image (${extracted}).`,
-      )
-    }
-  }
-
+  // There is no disagreement to report any more. A payload supplied at capture is preferred
+  // outright and the image is never read for a second opinion, so the two readings that used to be
+  // compared here are now one reading (D31).
   return reasons
 }
 
@@ -191,12 +181,12 @@ export function confirmationOf(capture: CaptureResult, edits: Edits): RecordPurc
       tempKey: capture.tempKey,
       state: capture.state,
       failureReason: capture.failureReason,
-      suppliedIkof: capture.supplied.ikof,
-      suppliedJikr: capture.supplied.jikr,
-      extractedIkof: capture.extracted.ikof,
-      extractedJikr: capture.extracted.jikr,
-      fiscalExtractedSource: capture.fiscalSource,
-      fiscalCreatedAt: fiscalDate,
+      // Three members where there were six: the payload states the invoice code, the issuer tax
+      // number, the creation timestamp and the total, so the client hands back the string it was
+      // given rather than fields parsed out of it (D30, D32).
+      jikr: capture.extracted.jikr ?? capture.supplied.jikr,
+      fiscalSource: capture.fiscalSource,
+      fiscalPayload: capture.fiscalPayload,
     },
   }
 }

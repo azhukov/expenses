@@ -1,6 +1,7 @@
 ﻿using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Interfaces;
+using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Services;
@@ -18,8 +19,59 @@ public sealed class ReceiptService(
     ICategoryRepository categories,
     IUnitRepository units,
     ExtractionCascade cascade,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ExtractionOptions? options = null)
 {
+    /// <summary>
+    /// The values no arithmetic can decide, and therefore the only ones a reported confidence is
+    /// consulted for (D20). Everything numeric is proved instead.
+    /// </summary>
+    private static readonly string[] s_unverifiable =
+    [
+        ExtractedValues.Description,
+        ExtractedValues.MerchantName,
+        ExtractedValues.CategoryGuess,
+        ExtractedValues.UnitGuess,
+    ];
+
+    private readonly ExtractionOptions _options = options ?? new ExtractionOptions();
+
+    /// <summary>
+    /// What a run of extraction amounts to, decided here rather than inside the pipeline: the
+    /// arithmetic oracle is a pure function of a result, so it is applied once to whatever the run
+    /// produced and only labels it (D28). Two independent reasons put a result in front of a
+    /// person, and each is recorded as itself rather than collapsed into one number (D20).
+    /// </summary>
+    private (Receipt.ExtractionState State, ArithmeticValidationReport? Validation,
+        IReadOnlyList<string> LowConfidence) Judge(ExtractionStepResult? result)
+    {
+        if (result is null)
+        {
+            return (Receipt.ExtractionState.Failed, null, []);
+        }
+
+        var validation = ArithmeticValidator.Validate(ExtractionArithmetic.From(result));
+
+        var reported = result.ReportedConfidence
+            .Concat(result.Candidates.SelectMany(candidate => candidate.ReportedConfidence));
+
+        IReadOnlyList<string> lowConfidence =
+        [
+            .. reported
+                .Where(value => s_unverifiable.Contains(value.Key)
+                    && value.Value < _options.ConfidenceThreshold)
+                .Select(value => value.Key)
+                .Distinct(StringComparer.Ordinal),
+        ];
+
+        return (
+            validation.Passed && lowConfidence.Count == 0
+                ? Receipt.ExtractionState.Extracted
+                : Receipt.ExtractionState.NeedsReview,
+            validation,
+            lowConfidence);
+    }
+
     /// <summary>
     /// Captures an image with no purchase behind it: stores it temporarily and runs extraction
     /// synchronously against it. Persists nothing to the database вЂ” not even the temporary key, which
@@ -28,6 +80,7 @@ public sealed class ReceiptService(
     public async Task<CaptureResult> Capture(
         byte[] content,
         FiscalIdentifiers? suppliedFiscalIdentifiers = null,
+        string? fiscalPayload = null,
         CancellationToken cancellationToken = default)
     {
         // Rejected before anything is written, even temporarily: the same format/size checks the
@@ -39,17 +92,22 @@ public sealed class ReceiptService(
         var image = new ReceiptImageContent(PurchaseId: 0, capture.ContentType, content);
         var supplied = suppliedFiscalIdentifiers ?? FiscalIdentifiers.None;
 
-        var outcome = await cascade.Run(image, supplied, cancellationToken);
+        var outcome = await cascade.Run(image, supplied, fiscalPayload, cancellationToken);
+        var (state, validation, _) = Judge(outcome.Result);
 
         return new CaptureResult(
             capture.Key,
-            outcome.State,
+            state,
             outcome.FailureReason,
             outcome.Result is null ? null : ExtractionResultView.Of(outcome.Result),
-            outcome.Validation,
+            validation,
             supplied,
             outcome.Extracted,
-            outcome.FiscalSource);
+            outcome.FiscalSource,
+
+            // Handed back so the caller can resubmit it at confirmation, which is the only point at
+            // which a receipt exists to retain it (D32). Nothing is held server-side meanwhile.
+            fiscalPayload ?? outcome.Payload);
     }
 
     /// <summary>
@@ -181,15 +239,25 @@ public sealed class ReceiptService(
                 ("storageKey", receipt.StorageKey));
 
         var content = new ReceiptImageContent(purchase.Id, receipt.ContentType, bytes);
-        var supplied = new FiscalIdentifiers(receipt.FiscalIkofSupplied, receipt.FiscalJikrSupplied);
-        var outcome = await cascade.Run(content, supplied, cancellationToken);
 
-        // Recorded before the state transition, because a disagreement between the two sources is
-        // one of the things that decides the state (D20).
+        // The payload the receipt already holds, rather than the photograph it came from. Decoding
+        // a stored image reads one symbol in three, so re-running from the image would lose a
+        // reading the receipt already has — every time (D32).
+        string? payload = receipt.FiscalPayload;
+        var supplied = payload is null
+            ? new FiscalIdentifiers(receipt.FiscalIkofSupplied, receipt.FiscalJikrSupplied)
+            : FiscalIdentity.From(payload);
+
+        var outcome = await cascade.Run(content, supplied, payload, cancellationToken);
+        var (state, _, _) = Judge(outcome.Result);
+
         receipt.RecordExtractedFiscalIdentifiers(
             outcome.Extracted.Ikof,
             outcome.Extracted.Jikr,
             outcome.FiscalSource);
+
+        // A payload decoded by this run is retained, so the next one need not decode again.
+        receipt.RecordFiscalPayload(outcome.Payload, outcome.FiscalSource);
 
         if (outcome.Result is { } result)
         {
@@ -198,7 +266,7 @@ public sealed class ReceiptService(
             await candidates.Replace(purchase.Id, result, cancellationToken);
         }
 
-        receipt.TransitionTo(outcome.State, outcome.FailureReason);
+        receipt.TransitionTo(state, outcome.FailureReason);
         await unitOfWork.SaveChanges(cancellationToken);
 
         return ReceiptView.Of(receipt);
