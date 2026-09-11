@@ -1,4 +1,4 @@
-namespace Expenses.Application.Dtos;
+﻿namespace Expenses.Application.Dtos;
 
 /// <summary>
 /// What every extraction step is given: the image, and the fiscal identity the run has established
