@@ -62,7 +62,9 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
     [Fact]
     public async Task A_miss_does_not_degrade_the_receipt()
     {
-        await using var services = postgres.Services();
+        // The placeholder path being reached is what this scenario is about, not the real vision
+        // engine's own behaviour (D33).
+        await using var services = postgres.Services(("Extraction:Vision:Engine", "placeholder"));
         using var scope = services.CreateScope();
 
         var result = await scope.ServiceProvider.GetRequiredService<ReceiptService>()

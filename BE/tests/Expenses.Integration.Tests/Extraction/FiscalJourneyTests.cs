@@ -61,7 +61,12 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
     public async Task A_miss_is_reported_no_differently_from_a_receipt_carrying_no_code()
     {
         await using var portal = await FiscalPortalStub.Answering();
-        await using var services = postgres.Services(("Extraction:Portal:BaseAddress", portal.BaseAddress));
+        await using var services = postgres.Services(
+            ("Extraction:Portal:BaseAddress", portal.BaseAddress),
+
+            // This scenario is about the placeholder path being reached, not the real vision
+            // engine's own behaviour (D33).
+            ("Extraction:Vision:Engine", "placeholder"));
         using var scope = services.CreateScope();
 
         var result = await Extract(scope, DecoderRegressionTests.UndecodableReceipt);
