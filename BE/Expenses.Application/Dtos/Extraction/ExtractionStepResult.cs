@@ -138,9 +138,13 @@ public sealed record ExtractionStepResult
             Payload = payload,
         };
 
-    /// <summary>The steps the run had taken by the time this result was produced.</summary>
+    /// <summary>
+    /// The steps the run had taken by the time this result was produced, alongside whatever this
+    /// result already named itself: a step that delegated to a named source of its own (the
+    /// verification service, behind the fiscal step) is still one of the names a re-run should see.
+    /// </summary>
     public ExtractionStepResult RunningSteps(IEnumerable<string> steps)
-        => this with { StepsRun = Distinct(steps) };
+        => this with { StepsRun = Distinct(steps.Concat(StepsRun)) };
 
     /// <summary>The payload the identity behind this result was read from (D32).</summary>
     public ExtractionStepResult WithPayload(string? payload)

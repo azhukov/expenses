@@ -164,8 +164,8 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
         await using (var writing = postgres.Context())
         {
             writing.Merchants.Add(Merchant.Create("AROMA", "02440261"));
-            writing.Merchants.Add(Merchant.Create("Pijaca Stall 12"));
-            writing.Merchants.Add(Merchant.Create("Pijaca Stall 13"));
+            writing.Merchants.Add(Merchant.Create("Schema Test Stall A"));
+            writing.Merchants.Add(Merchant.Create("Schema Test Stall B"));
             await writing.SaveChangesAsync();
         }
 

@@ -157,6 +157,7 @@ internal sealed class FiscalPortalClient(
             Stage,
             "1.0",
             candidates,
+            stepsRun: [Stage],
             total: invoice.TotalPrice,
 
             // A rate only where the invoice has one. This receipt carries lines at 21% and at 7%,
