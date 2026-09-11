@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
 using Expenses.Integration.Tests.Harness;
