@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Dtos;
+using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 
 namespace Expenses.Application.Tests.Extraction;

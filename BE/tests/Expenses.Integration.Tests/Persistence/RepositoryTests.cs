@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Errors;
+using Expenses.Application.Errors;
 using Expenses.Application.Interfaces;
 using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;

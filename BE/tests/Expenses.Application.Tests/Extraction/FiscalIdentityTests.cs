@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Expenses.Application.Services;
 
 namespace Expenses.Application.Tests.Extraction;

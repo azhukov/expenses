@@ -1,4 +1,4 @@
-﻿namespace Expenses.Domain.Entities;
+namespace Expenses.Domain.Entities;
 
 /// <summary>
 /// The only aggregate root (D2). A single act of paying, containing one or more expenses.

@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Interfaces;

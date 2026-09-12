@@ -1,4 +1,4 @@
-﻿namespace Expenses.Integration.Tests.Harness;
+namespace Expenses.Integration.Tests.Harness;
 
 /// <summary>
 /// One container for the whole suite. Starting a database per test class would multiply a

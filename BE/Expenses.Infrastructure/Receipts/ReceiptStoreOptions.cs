@@ -1,4 +1,4 @@
-﻿namespace Expenses.Infrastructure.Receipts;
+namespace Expenses.Infrastructure.Receipts;
 
 internal sealed class ReceiptStoreOptions
 {

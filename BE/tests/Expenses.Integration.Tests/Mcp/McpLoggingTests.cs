@@ -1,4 +1,4 @@
-﻿using Expenses.Integration.Tests.Harness;
+using Expenses.Integration.Tests.Harness;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 

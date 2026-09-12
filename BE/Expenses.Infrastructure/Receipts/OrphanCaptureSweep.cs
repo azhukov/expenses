@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Interfaces;
+using Expenses.Application.Interfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 

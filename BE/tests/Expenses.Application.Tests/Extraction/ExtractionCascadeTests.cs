@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Dtos;
+using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
 using Expenses.Domain.Entities;
