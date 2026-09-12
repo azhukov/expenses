@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Interfaces;
+namespace Expenses.Application.Interfaces;
 
 /// <summary>
 /// Where a captured image waits until it is confirmed into a purchase or swept away unconfirmed.

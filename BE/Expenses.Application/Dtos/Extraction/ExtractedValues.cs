@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>
 /// Names of the values a stage can produce, used as provenance and confidence keys.

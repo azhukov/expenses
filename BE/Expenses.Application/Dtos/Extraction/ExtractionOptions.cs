@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>
 /// The threshold for values arithmetic cannot decide — descriptions, merchant names, category and

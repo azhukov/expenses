@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>Names of the checks, stable because they are reported to both adapters.</summary>
 public static class ArithmeticChecks

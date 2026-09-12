@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>A line as submitted. Reference data is addressed by <c>code</c> (D8).</summary>
 public sealed record ExpenseCommand(

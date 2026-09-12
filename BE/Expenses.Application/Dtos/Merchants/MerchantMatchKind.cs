@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>
 /// How an incoming merchant was reconciled with the dictionary, reported rather than inferred:

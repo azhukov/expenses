@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Interfaces;
+namespace Expenses.Application.Interfaces;
 
 /// <summary>
 /// One transaction per use case; the aggregate is saved whole (D16).

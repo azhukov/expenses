@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Errors;
+namespace Expenses.Application.Errors;
 
 /// <summary>
 /// Every stable error code in the system, including the ones raised by a domain rule. Part of the

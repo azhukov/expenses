@@ -1,4 +1,4 @@
-﻿using Expenses.Domain.Entities;
+using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Dtos;

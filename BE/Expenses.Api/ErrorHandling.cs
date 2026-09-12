@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Errors;
+using Expenses.Application.Errors;
 using Microsoft.AspNetCore.Diagnostics;
 
 namespace Expenses.Api;

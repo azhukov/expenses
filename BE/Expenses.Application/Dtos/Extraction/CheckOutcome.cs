@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>The outcome of one arithmetic check. "Not applicable" is not a failure (D20).</summary>
 public enum CheckOutcome

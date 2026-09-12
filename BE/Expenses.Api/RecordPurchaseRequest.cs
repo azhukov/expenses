@@ -1,4 +1,4 @@
-﻿namespace Expenses.Api;
+namespace Expenses.Api;
 
 /// <summary>
 /// <see cref="OccurredAt"/> may be omitted only when <see cref="Capture"/> is supplied and its

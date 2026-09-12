@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>
 /// A receipt together with whatever the cascade has made of it вЂ” including the arithmetic report,

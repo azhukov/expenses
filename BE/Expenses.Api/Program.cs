@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using Expenses.Api;
 using Expenses.Api.Controllers;
 using Expenses.Infrastructure;
