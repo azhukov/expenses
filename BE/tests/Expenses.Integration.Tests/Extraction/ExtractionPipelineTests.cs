@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Dtos;
+using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;

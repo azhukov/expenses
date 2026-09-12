@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;

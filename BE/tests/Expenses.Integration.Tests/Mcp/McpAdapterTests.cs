@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;

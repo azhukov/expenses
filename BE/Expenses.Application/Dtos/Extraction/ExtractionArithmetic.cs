@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>The numeric content of an extraction result, and nothing else.</summary>
 public sealed record ExtractionArithmetic(
