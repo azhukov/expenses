@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Integration.Tests.Extraction;
@@ -29,9 +29,12 @@ public sealed class FiscalSourceReportingTests(PostgresFixture postgres) : IAsyn
     {
         await postgres.Migrate();
         _portal = await FiscalPortalStub.Answering();
+        // The placeholder path being reached is what these scenarios are about, not the real vision
+        // engine's own behaviour (D33).
         _mcp = await ExpensesMcp.Start(
             postgres.ConnectionString,
-            ("Extraction:Portal:BaseAddress", _portal.BaseAddress));
+            ("Extraction:Portal:BaseAddress", _portal.BaseAddress),
+            ("Extraction:Vision:Engine", "placeholder"));
     }
 
     public async Task DisposeAsync()

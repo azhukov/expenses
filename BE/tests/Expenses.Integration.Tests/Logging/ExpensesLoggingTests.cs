@@ -1,4 +1,4 @@
-﻿using Expenses.Infrastructure.Logging;
+using Expenses.Infrastructure.Logging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

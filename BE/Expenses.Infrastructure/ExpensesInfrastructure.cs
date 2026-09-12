@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Dtos;
+using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
 using Expenses.Application.Services;
 using Expenses.Infrastructure.Extraction;
@@ -94,6 +94,30 @@ public static class ExpensesInfrastructure
             provider.GetRequiredService<PortalOptions>(),
             provider.GetRequiredService<ILogger<FiscalPortalClient>>()));
 
+        // The real vision engine (D28). Registered behind the port so it can be resolved and
+        // exercised on its own, the same way FiscalPortalClient is above.
+        services.AddSingleton(Bind<VisionOptions>(configuration, "Extraction:Vision"));
+        services.AddHttpClient(ClaudeVisionReceiptExtractor.ClientName);
+
+        // "Extraction:Vision:Engine" is a test-only lever, undocumented in appsettings.json, exactly
+        // like "Extraction:Placeholder:Outcome": a suite that needs a free, deterministic engine asks
+        // for the placeholder by name rather than the real adapter being made internals-visible to it
+        // (D33).
+        bool usePlaceholder = string.Equals(
+            configuration["Extraction:Vision:Engine"],
+            "placeholder",
+            StringComparison.OrdinalIgnoreCase);
+
+        services.AddSingleton<IReceiptExtractor>(provider => usePlaceholder
+            ? new PlaceholderReceiptExtractor(
+                provider.GetRequiredService<PlaceholderOptions>(),
+                VisionStep.StepName)
+            : new ClaudeVisionReceiptExtractor(
+                provider.GetRequiredService<IHttpClientFactory>(),
+                provider.GetRequiredService<VisionOptions>(),
+                VisionStep.StepName,
+                provider.GetRequiredService<ILogger<ClaudeVisionReceiptExtractor>>()));
+
         // Registration order is run order, and there is nothing else to it (D28). The deterministic
         // step first: where it answers, the tax authority has stated the invoice and nothing behind
         // it is asked for a second opinion (D22).
@@ -106,9 +130,7 @@ public static class ExpensesInfrastructure
         // escalation between them never chose between two real engines, and at personal-ledger
         // volume the ladder saved single-digit dollars a year.
         services.AddSingleton<IExtractionStep>(provider => new VisionStep(
-            new PlaceholderReceiptExtractor(
-                provider.GetRequiredService<PlaceholderOptions>(),
-                VisionStep.StepName)));
+            provider.GetRequiredService<IReceiptExtractor>()));
 
         services.AddSingleton(provider => new ExtractionCascade(
             provider.GetServices<IExtractionStep>()));

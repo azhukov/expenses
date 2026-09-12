@@ -1,4 +1,4 @@
-﻿namespace Expenses.Infrastructure.Extraction;
+namespace Expenses.Infrastructure.Extraction;
 
 internal sealed class PlaceholderOptions
 {

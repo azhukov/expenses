@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Errors;
+namespace Expenses.Application.Errors;
 
 /// <summary>
 /// Names the stable code for a rule the domain signalled with a framework exception (D22). There is

@@ -1,4 +1,4 @@
-﻿namespace Expenses.Api;
+namespace Expenses.Api;
 
 /// <summary>
 /// The single error shape, for every failure the interface can produce. A generic failure carries

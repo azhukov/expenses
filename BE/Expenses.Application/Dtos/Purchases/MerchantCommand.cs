@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>
 /// Where the purchase was made, as printed. <paramref name="TaxId"/> is the authoritative match

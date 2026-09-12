@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>
 /// What a fiscal code carries, exactly as read, with no format imposed (D10). Held per source so a

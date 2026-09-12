@@ -1,0 +1,17 @@
+{
+  "id": "msg_01ClaudeVisionFixture",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"merchant_name\":\"Vision Fixture Market\",\"merchant_name_confidence\":0.92,\"total\":17.50,\"tax_rate_percent\":21,\"tax_amount\":3.04,\"lines\":[{\"description\":\"Sparkling water 1.5L\",\"description_confidence\":0.95,\"quantity\":2,\"unit\":\"kom\",\"unit_confidence\":0.88,\"unit_price\":2.50,\"list_unit_price\":2.50,\"discount_amount\":0,\"tax_rate_percent\":21,\"amount\":5.00},{\"description\":\"Whole grain bread\",\"description_confidence\":0.81,\"quantity\":1,\"unit\":\"kom\",\"unit_confidence\":0.75,\"unit_price\":2.50,\"list_unit_price\":3.00,\"discount_amount\":0.50,\"tax_rate_percent\":21,\"amount\":2.50},{\"description\":\"Local cheese, sliced\",\"description_confidence\":0.7,\"quantity\":0.6,\"unit\":\"kg\",\"unit_confidence\":0.65,\"unit_price\":16.67,\"list_unit_price\":16.67,\"discount_amount\":0,\"tax_rate_percent\":21,\"amount\":10.00}]}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1834,
+    "output_tokens": 212
+  }
+}

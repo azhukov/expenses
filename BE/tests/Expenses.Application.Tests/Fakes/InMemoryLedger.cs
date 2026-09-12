@@ -1,9 +1,8 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Interfaces;
 using Expenses.Domain.Entities;
-using Expenses.Domain.Extraction;
 
 namespace Expenses.Application.Tests.Fakes;
 

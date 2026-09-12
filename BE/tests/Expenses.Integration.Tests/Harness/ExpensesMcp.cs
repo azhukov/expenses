@@ -1,4 +1,4 @@
-﻿using System.IO.Pipelines;
+using System.IO.Pipelines;
 using Expenses.Infrastructure;
 using Expenses.Mcp;
 using Microsoft.Extensions.Configuration;

@@ -1,4 +1,4 @@
-﻿namespace Expenses.Infrastructure.Extraction;
+namespace Expenses.Infrastructure.Extraction;
 
 /// <summary>
 /// What the placeholder is told to produce, so that every terminal state the pipeline can reach is

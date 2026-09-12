@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Errors;
+namespace Expenses.Application.Errors;
 
 /// <summary>
 /// Raised when the unique index on <c>(occurred_at, amount)</c> rejects an insert (D4). The

@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Interfaces;
+using Expenses.Application.Interfaces;
 using Expenses.Domain.Entities;
 using Expenses.Infrastructure;
 using Expenses.Infrastructure.Persistence;

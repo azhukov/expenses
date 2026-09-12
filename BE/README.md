@@ -106,15 +106,12 @@ Extraction is not one engine but an ordered sequence of stages, cheapest first (
   stage 1  fiscal QR decode (server, on the file)  free      real — zxing-cpp
   stage 2  fiscal invoice retrieval                free      real — the national verification portal
   stage 3  arithmetic validation                   free      real; runs after every producing stage
-  stage 4  vision extraction — cheap tier          paid      placeholder in this change
-  stage 5  vision extraction — expensive tier      paid      placeholder in this change
+  stage 4  vision extraction                       paid      real — the Claude API's vision capability
 ```
 
 Stage 2 is the deterministic extractor: where the QR decodes, the whole invoice is retrieved from
-the service that issued it and used verbatim. A result that reconciles ends the cascade, so stages 4
-and 5 run only for a receipt the deterministic path could not serve, or one whose numbers did not
-add up. They are two configured instances of the same placeholder today and two instances of a real
-engine later; the cascade does not change when they become real.
+the service that issued it and used verbatim. A result that reconciles ends the cascade, so stage 4
+runs only for a receipt the deterministic path could not serve, or one whose numbers did not add up.
 
 Two of the three sample receipts do not decode at all, so the deterministic path is a partial
 solution by measurement rather than by hope, and a miss is reported no differently from a receipt
@@ -137,6 +134,10 @@ Configuration:
 | `Extraction:Placeholder:Outcome` | `Reconciling` | `Reconciling`, `NonReconciling`, `LowConfidence` or `Failure` — see below. |
 | `Extraction:Portal:BaseAddress` | `https://mapr.tax.gov.me` | The fiscal verification service stage 2 asks. |
 | `Extraction:Portal:TimeoutMilliseconds` | `5000` | Past this, retrieval produced nothing and the cascade goes on. |
+| `Extraction:Vision:ModelId` | `claude-sonnet-5` | The Claude model asked to read the receipt image. |
+| `Extraction:Vision:ApiKey` | *(none)* | Never committed — supplied via environment or user-secrets. Empty means the stage produces nothing, not a startup failure. |
+| `Extraction:Vision:BaseAddress` | `https://api.anthropic.com` | Where the Messages API request (`/v1/messages`) is sent. |
+| `Extraction:Vision:TimeoutMilliseconds` | `30000` | Past this, extraction produced nothing and the cascade goes on. |
 | `TemporaryReceipts:RootPath` | `<app dir>/receipts-temp` | Where captures wait to be confirmed, distinct from the permanent receipt store. |
 | `TemporaryReceipts:Sweep:Interval` | `1.00:00:00` | How often the orphan-capture sweep runs. |
 | `TemporaryReceipts:Sweep:MaxAge` | `1.00:00:00` | How old an unconfirmed capture must be before the sweep removes it. |
@@ -144,28 +145,33 @@ Configuration:
 Extraction is synchronous now: a capture or a re-run runs the cascade directly in the request, so
 there is no queue and nothing to configure about draining one.
 
-### The placeholder extractor
+### The vision engine
 
-`PlaceholderReceiptExtractor` performs **no image analysis**. Its output is derived from the content
-hash, so the same image always produces the same lines and a different image produces different
-ones. Every result records the engine name and version, so placeholder output stays tellable apart from
-a real engine's forever.
+`ClaudeVisionReceiptExtractor` sends the receipt image to a Claude model over the Messages API
+(`/v1/messages`) as inline base64 content, with a prompt asking for one JSON object shaped like the
+cascade's own candidates — line items, quantities, units, tax rate, total, merchant name, plus a
+per-field confidence for the values arithmetic cannot check. A missing `Extraction:Vision:ApiKey` is
+not a startup failure: the stage simply produces nothing, exactly like every other optional stage
+(`Extraction:Portal:BaseAddress` being unreachable, say). Every result records the engine name and
+version (the configured model id), so results from different engines, or from a fixture used in
+tests, stay identifiable from one another.
 
-Simulate each terminal state with `Extraction:Placeholder:Outcome`:
+`PlaceholderReceiptExtractor` performs **no image analysis** and is kept for tests that need a free,
+deterministic engine: its output is derived from the content hash, so the same image always produces
+the same lines and a different image produces different ones. Production wiring never selects it;
+tests opt into it with the `Extraction:Vision:Engine` switch (`"placeholder"` — anything else, or
+leaving it unset, resolves the real adapter).
+
+Simulate each terminal state with `Extraction:Placeholder:Outcome` (only meaningful alongside
+`Extraction:Vision:Engine: placeholder`):
 
 - `Reconciling` — numbers that add up; the image ends `Extracted`.
 - `NonReconciling` — numbers that do not add up. The failure is **real arithmetic**, not a simulated
-  score, so it drives the fallback for the reason a real engine would.
+  score, so it is reported for the reason a real engine's bad answer would be.
 - `LowConfidence` — sound numbers with a description the engine is unsure of; the image ends
   `NeedsReview` with the value marked.
 - `Failure` — no result at all; the image ends `Failed` with a reason, and the purchase and its
   image remain so lines can be entered by hand.
-
-**What changes when a real engine replaces it:** one registration. `IReceiptExtractor` is
-implemented by the new engine, `VisionStage` is configured with it for the cheap and expensive
-tiers, and nothing above the port moves — not the lifecycle, not where candidates are held, not
-validation, not re-extraction, not the queue. Results produced by the placeholder stay identifiable
-by the engine name they carry.
 
 ### Fiscal QR decoding: what was measured
 

@@ -1,4 +1,4 @@
-﻿namespace Expenses.Api;
+namespace Expenses.Api;
 
 /// <summary>
 /// <see cref="Code"/> is carried so that an attempt to change it can be refused rather than

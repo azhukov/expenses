@@ -4,7 +4,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Project files first, so a source-only change does not re-run restore.
-COPY global.json Directory.Build.props ./
+COPY global.json Directory.Build.props .editorconfig ./
 COPY Expenses.Domain/Expenses.Domain.csproj Expenses.Domain/
 COPY Expenses.Application/Expenses.Application.csproj Expenses.Application/
 COPY Expenses.Infrastructure/Expenses.Infrastructure.csproj Expenses.Infrastructure/

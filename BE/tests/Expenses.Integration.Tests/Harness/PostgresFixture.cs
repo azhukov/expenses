@@ -1,4 +1,4 @@
-﻿using Npgsql;
+using Npgsql;
 using Testcontainers.PostgreSql;
 
 namespace Expenses.Integration.Tests.Harness;

@@ -1,4 +1,4 @@
-﻿using Expenses.Infrastructure;
+using Expenses.Infrastructure;
 using Expenses.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

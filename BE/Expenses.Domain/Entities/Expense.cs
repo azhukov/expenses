@@ -1,4 +1,4 @@
-﻿namespace Expenses.Domain.Entities;
+namespace Expenses.Domain.Entities;
 
 /// <summary>
 /// A line within a <see cref="Purchase"/>. Has no repository and no independent lifecycle (D2).

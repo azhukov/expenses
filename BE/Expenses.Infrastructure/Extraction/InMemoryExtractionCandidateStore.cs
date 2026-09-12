@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using Expenses.Application.Interfaces;
 using Expenses.Application.Dtos;
 

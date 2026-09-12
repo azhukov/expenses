@@ -1,5 +1,3 @@
-﻿using Expenses.Domain.Extraction;
-
 namespace Expenses.Application.Dtos;
 
 /// <summary>

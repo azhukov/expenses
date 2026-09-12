@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
@@ -24,7 +24,9 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await postgres.Migrate();
-        _mcp = await ExpensesMcp.Start(postgres.ConnectionString);
+        // The placeholder path being reached is what these scenarios are about, not the real vision
+        // engine's own behaviour (D33).
+        _mcp = await ExpensesMcp.Start(postgres.ConnectionString, ("Extraction:Vision:Engine", "placeholder"));
     }
 
     public ValueTask DisposeAsync() => _mcp.DisposeAsync();

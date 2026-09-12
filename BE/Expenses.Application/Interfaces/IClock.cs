@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Interfaces;
+namespace Expenses.Application.Interfaces;
 
 /// <summary>
 /// Wall-clock time, never converted (D5). Every value it yields has

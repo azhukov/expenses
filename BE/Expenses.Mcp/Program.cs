@@ -1,4 +1,4 @@
-﻿using Expenses.Infrastructure;
+using Expenses.Infrastructure;
 using Expenses.Infrastructure.Logging;
 using Expenses.Infrastructure.Persistence;
 using Expenses.Mcp;

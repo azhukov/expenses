@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>
 /// Distinguishes a newly created purchase from one that was already recorded (D3). Both are

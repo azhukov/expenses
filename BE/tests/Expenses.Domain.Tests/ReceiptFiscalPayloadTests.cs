@@ -1,4 +1,4 @@
-﻿using Expenses.Domain.Entities;
+using Expenses.Domain.Entities;
 using ExtractionState = Expenses.Domain.Entities.Receipt.ExtractionState;
 using FiscalSource = Expenses.Domain.Entities.Receipt.FiscalSource;
 

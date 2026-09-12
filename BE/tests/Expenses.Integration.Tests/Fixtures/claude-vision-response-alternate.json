@@ -1,0 +1,17 @@
+{
+  "id": "msg_01ClaudeVisionFixtureAlternate",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"merchant_name\":\"Alternate Fixture Bakery\",\"merchant_name_confidence\":0.9,\"total\":6.30,\"tax_rate_percent\":21,\"tax_amount\":1.09,\"lines\":[{\"description\":\"Croissant\",\"description_confidence\":0.9,\"quantity\":3,\"unit\":\"kom\",\"unit_confidence\":0.85,\"unit_price\":1.10,\"list_unit_price\":1.10,\"discount_amount\":0,\"tax_rate_percent\":21,\"amount\":3.30},{\"description\":\"Espresso\",\"description_confidence\":0.8,\"quantity\":2,\"unit\":\"kom\",\"unit_confidence\":0.7,\"unit_price\":1.50,\"list_unit_price\":1.50,\"discount_amount\":0,\"tax_rate_percent\":21,\"amount\":3.00}]}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1521,
+    "output_tokens": 168
+  }
+}

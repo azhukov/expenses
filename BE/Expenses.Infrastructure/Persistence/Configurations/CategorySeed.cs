@@ -1,4 +1,4 @@
-﻿using Expenses.Domain.Entities;
+using Expenses.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Expenses.Infrastructure.Persistence.Configurations;

@@ -1,4 +1,4 @@
-﻿namespace Expenses.Application.Dtos;
+namespace Expenses.Application.Dtos;
 
 /// <summary>The full report. Failing fewer checks is what makes two failed results comparable (D20).</summary>
 public sealed record ArithmeticValidationReport(IReadOnlyList<ArithmeticCheck> Checks)

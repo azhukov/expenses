@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -25,7 +25,9 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
     [Fact]
     public async Task The_full_receipt_path_through_the_http_adapter()
     {
-        await using var api = new ExpensesApi(postgres.ConnectionString);
+        // The placeholder path being reached is what this journey is about, not the real vision
+        // engine's own behaviour (D33).
+        await using var api = new ExpensesApi(postgres.ConnectionString, ("Extraction:Vision:Engine", "placeholder"));
         using var client = api.CreateClient();
 
         // Captured with no purchase behind it: extraction runs synchronously, in this same request.
@@ -122,7 +124,11 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
 
     private async Task<JsonElement> Capture(params (string Key, string Value)[] settings)
     {
-        await using var api = new ExpensesApi(postgres.ConnectionString, settings);
+        // The placeholder path being reached is what these journeys are about, not the real vision
+        // engine's own behaviour (D33).
+        await using var api = new ExpensesApi(
+            postgres.ConnectionString,
+            [("Extraction:Vision:Engine", "placeholder"), .. settings]);
         using var client = api.CreateClient();
 
         return await Capture(client);

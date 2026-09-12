@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -27,7 +27,10 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await postgres.Migrate();
-        _api = new ExpensesApi(postgres.ConnectionString);
+
+        // The placeholder path being reached is what these scenarios are about, not the real vision
+        // engine's own behaviour (D33).
+        _api = new ExpensesApi(postgres.ConnectionString, ("Extraction:Vision:Engine", "placeholder"));
         _client = _api.CreateClient();
     }
 

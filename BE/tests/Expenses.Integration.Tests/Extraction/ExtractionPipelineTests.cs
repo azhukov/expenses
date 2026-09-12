@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Dtos;
+using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Domain.Entities;
 using Expenses.Integration.Tests.Harness;
@@ -22,7 +22,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task Placeholder_produces_deterministic_candidates()
     {
-        await using var services = postgres.Services();
+        await using var services = Services();
         byte[] content = Jpeg(0x71);
 
         var first = await Captured(services, content);
@@ -38,7 +38,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task A_different_image_produces_different_candidates()
     {
-        await using var services = postgres.Services();
+        await using var services = Services();
 
         var first = await Captured(services, Jpeg(0x72));
         var second = await Captured(services, Jpeg(0x73));
@@ -51,7 +51,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task Placeholder_results_are_identified()
     {
-        await using var services = postgres.Services();
+        await using var services = Services();
 
         var view = await Captured(services, Jpeg(0x74));
 
@@ -62,7 +62,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task Stage_provenance_is_recorded()
     {
-        await using var services = postgres.Services();
+        await using var services = Services();
 
         var view = await Captured(services, Jpeg(0x75));
 
@@ -76,7 +76,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task Successful_extraction()
     {
-        await using var services = postgres.Services();
+        await using var services = Services();
 
         var view = await Captured(services, Jpeg(0x76));
 
@@ -93,7 +93,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task A_non_reconciling_result_is_reviewed_rather_than_escalated()
     {
-        await using var services = postgres.Services(("Extraction:Placeholder:Outcome", "NonReconciling"));
+        await using var services = Services(("Extraction:Placeholder:Outcome", "NonReconciling"));
 
         var view = await Captured(services, Jpeg(0x77));
 
@@ -105,7 +105,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task Low_confidence_on_a_value_arithmetic_cannot_check()
     {
-        await using var services = postgres.Services(("Extraction:Placeholder:Outcome", "LowConfidence"));
+        await using var services = Services(("Extraction:Placeholder:Outcome", "LowConfidence"));
 
         var view = await Captured(services, Jpeg(0x78));
 
@@ -116,7 +116,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task A_configured_confidence_threshold_decides_what_counts_as_low()
     {
-        await using var services = postgres.Services(
+        await using var services = Services(
             ("Extraction:Placeholder:Outcome", "LowConfidence"),
             ("Extraction:ConfidenceThreshold", "0.10"));
 
@@ -129,7 +129,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task Failed_extraction()
     {
-        await using var services = postgres.Services(("Extraction:Placeholder:Outcome", "Failure"));
+        await using var services = Services(("Extraction:Placeholder:Outcome", "Failure"));
 
         var view = await Captured(services, Jpeg(0x7A));
 
@@ -141,7 +141,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
     [Fact]
     public async Task Decoding_fails_and_the_outcome_is_unchanged_by_it()
     {
-        await using var services = postgres.Services();
+        await using var services = Services();
 
         // Nothing in these bytes is a QR code, so the decoder misses — the expected case on a
         // photographed thermal receipt (D20). Extraction must be indistinguishable from a run
@@ -153,6 +153,13 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         Assert.Equal(Receipt.FiscalSource.None, view.FiscalSource);
         Assert.Contains("fiscal", view.Result!.StepsRun);
     }
+
+    /// <summary>
+    /// The placeholder, deterministic and free, is what these scenarios are about — not the real
+    /// vision engine's own behaviour, which `ClaudeVisionExtractorTests` covers on its own (D33).
+    /// </summary>
+    private ServiceProvider Services(params (string Key, string Value)[] settings)
+        => postgres.Services([("Extraction:Vision:Engine", "placeholder"), .. settings]);
 
     private static async Task<CaptureResult> Captured(IServiceProvider services, byte[] content)
     {
