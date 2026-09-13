@@ -288,7 +288,9 @@ Where capture returns Extracted or NeedsReview, the screen SHALL present the ext
 
 ### Requirement: Extraction problems are surfaced before confirmation
 
-Where capture returns NeedsReview, the screen SHALL state why review is needed — an arithmetic mismatch, a low-confidence value, or disagreeing fiscal identifiers — using the reasons the response reported, rather than a generic warning. The user SHALL still be able to correct the affected values and confirm.
+Where capture returns NeedsReview, the screen SHALL state why review is needed — an arithmetic
+mismatch or a low-confidence value — using the reasons the response reported, rather than a generic
+warning. The user SHALL still be able to correct the affected values and confirm.
 
 #### Scenario: An arithmetic mismatch is named
 
@@ -302,11 +304,11 @@ Where capture returns NeedsReview, the screen SHALL state why review is needed �
 - **THEN** that value is marked on the review screen
 - **AND** the user can correct it and still confirm
 
-#### Scenario: Disagreeing fiscal identifiers are shown
+#### Scenario: An authoritative result that does not reconcile is still shown as read
 
-- **WHEN** capture reports that a fiscal identifier supplied at capture disagrees with the one extraction read from the image
-- **THEN** the screen states the disagreement
-- **AND** confirmation is not blocked by it
+- **WHEN** capture returns NeedsReview for an invoice the verification service supplied whose amounts did not reconcile
+- **THEN** the screen states that the amounts did not reconcile
+- **AND** the lines are shown as the service stated them
 
 ### Requirement: A failed extraction still allows manual entry
 

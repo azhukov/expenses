@@ -28,7 +28,7 @@ budgeted for (D28) and was deferred behind — "one registration change" once a 
   `PlaceholderReceiptExtractor` registration for `VisionStep`. The placeholder implementation itself
   is kept for tests that need a deterministic engine (arithmetic-oracle tests, cascade tests already
   built against it).
-- Update the "Vision extraction is pluggable and mocked in this change" requirement in
+- Update the "Vision extraction is pluggable" requirement in
   `receipt-ingestion`, since vision is no longer only mocked once this ships.
 - **BREAKING**: none to the public API surface — `IReceiptExtractor` is unchanged and this is a
   DI-registration swap behind an existing port. Operationally, running vision extraction now costs
@@ -43,7 +43,7 @@ budgeted for (D28) and was deferred behind — "one registration change" once a 
 
 ### Modified Capabilities
 
-- `receipt-ingestion`: the "Vision extraction is pluggable and mocked in this change" requirement
+- `receipt-ingestion`: the "Vision extraction is pluggable" requirement
   changes — vision extraction is no longer a deterministic placeholder in production; it calls a
   real, probabilistic engine, and its failure modes (unreachable API, malformed response, missing
   credentials) must behave like every other optional stage: producing nothing rather than an error.
