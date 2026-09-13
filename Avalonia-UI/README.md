@@ -14,7 +14,7 @@ It talks only to the HTTP interface, and neither references nor is referenced by
 Bring the API up from the repository root, then run the client:
 
 ```bash
-docker compose up -d --build                             # or ./up.sh
+docker compose up -d --build                             # or ./up.sh, which also starts this client
 dotnet run --project Avalonia-UI/src/Expenses.Desktop
 ```
 

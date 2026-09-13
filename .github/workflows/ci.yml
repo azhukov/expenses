@@ -337,8 +337,10 @@ jobs:
           dotnet-version: '10.0.x'
 
       # Brings docker-compose.e2e.yml up on an empty database, runs the suite, and tears it down.
+      # Through bash rather than executed directly: a script committed from Windows arrives without
+      # its executable bit, and a runner then refuses it with "Permission denied".
       - name: Run the suite
-        run: E2E=1 ./test-ui.sh
+        run: E2E=1 bash ./test-ui.sh
 
   # The one required check. It runs whatever the others did, so branch protection always has a
   # verdict to wait on - including on a PR where every suite legitimately skipped.
