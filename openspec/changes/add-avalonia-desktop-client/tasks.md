@@ -58,6 +58,6 @@
 
 ## 8. CI, scripts and docs (no behaviour — exempt from test-first)
 
-- [ ] 8.1 Extend `.github/workflows/ci.yml`: add `ui` to the `changes` outputs (`^Avalonia-UI/`, plus the shared files and `test-ui.sh`), add the `ui-style`, `ui-unit` and `ui-e2e` jobs, and add them to `gate`'s `needs` (D10). Exempt: pipeline configuration; verify by pushing a PR that touches only `Avalonia-UI/` and seeing `gate` wait on the three jobs and skip the others.
+- [x] 8.1 Extend `.github/workflows/ci.yml`: add `ui` to the `changes` outputs (`^Avalonia-UI/`, plus the shared files and `test-ui.sh`), add the `ui-style`, `ui-unit` and `ui-e2e` jobs, and add them to `gate`'s `needs` (D10). Exempt: pipeline configuration; verify by pushing a PR that touches only `Avalonia-UI/` and seeing `gate` wait on the three jobs and skip the others.
 - [x] 8.2 Write `Avalonia-UI/README.md`: running against the local stack, `EXPENSES_API`, the three suites and `test-ui.sh`, and the manual checklist for what headless can't cover (native picker, OS drag source, real keyboard focus on each OS). Exempt: documentation.
 - [x] 8.3 Update the root `README.md`: name the desktop client alongside the browser client, add `test-ui.sh` to the runners, and add the UI half to the tests-and-gate table. Exempt: documentation.
