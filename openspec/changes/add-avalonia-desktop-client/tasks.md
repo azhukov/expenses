@@ -1,0 +1,63 @@
+## 1. Scaffold the half (no behaviour — exempt from test-first)
+
+- [x] 1.1 Create `Avalonia-UI/` with `Expenses.Desktop.sln`, `global.json` (copied from `BE/`), `Directory.Build.props` (copied from `BE/`, plus `AvaloniaUseCompiledBindingsByDefault`), and `.editorconfig` (copied from `BE/`) (D9). Exempt: build configuration only.
+- [x] 1.2 Add `src/Expenses.Desktop.Core` (classlib, `CommunityToolkit.Mvvm`, `Microsoft.Extensions.Http`, no Avalonia reference) and `src/Expenses.Desktop` (Avalonia app, `Avalonia.Desktop`, `Avalonia.Themes.Fluent`, `Microsoft.Extensions.DependencyInjection`) (D1). Exempt: project files and package references.
+- [x] 1.3 Add `tests/Expenses.Desktop.Core.Tests` (xunit v3), `tests/Expenses.Desktop.UI.Tests` and `tests/Expenses.Desktop.E2E.Tests` (xunit v3 + `Avalonia.Headless.XUnit` 12.x — see design Risks, two xunit majors, with an `[assembly: AvaloniaTestApplication]` app builder using the headless platform) (D1, D8). Exempt: project files.
+- [x] 1.4 Analyzer spike: add one `[ObservableProperty]` partial property, one `[RelayCommand]`, one `UserControl` with a compiled binding, and one `[AvaloniaFact]` that opens it. Build with `-warnaserror` and `-p:GenerateDocumentationFile=true`. Decide any generated-code exclusions narrowly in `.editorconfig`, then delete the spike (Risks: analyzer rules on generated code). Exempt: toolchain verification, not behaviour.
+- [x] 1.5 Add `test-ui.sh` at the root: run `Core.Tests` and `UI.Tests` by default; with `E2E=1`, bring `docker-compose.e2e.yml` up on an empty database, run `E2E.Tests` against it, and tear down, honouring `KEEP=1` as `test-e2e.sh` does. Exempt: script.
+
+## 2. Ledger client
+
+- [x] 2.0 Write failing `Core.Tests/Ledger/LedgerClientTests` against a `FakeHttpMessageHandler`: each of `ListPurchases(from, to)`, `ListMerchants`, `ListCategories` and `ListUnits` issues the right GET and deserialises camelCase JSON with enums as names; a non-success response with an `ErrorResponse` body raises `LedgerException` carrying its `message`, `code` and status ("The ledger reports a specific error"); a transport failure raises `LedgerException` with no code ("The ledger cannot be reached"); every request goes to the configured base address ("A configured address is used").
+- [x] 2.1 Add the contract records in `Core/Ledger/` mirroring `FE/src/api/types.ts` and `writes.ts` (D3), and implement `LedgerClient` reads and error mapping (D4).
+- [x] 2.2 Write failing tests for `CaptureReceipt(name, bytes)`: it posts multipart with one `file` part whose bytes equal the input byte for byte ("Original bytes are preserved"), returns the parsed `CaptureResult`, and maps errors the same way as reads ("The ledger's judgement of a file is shown").
+- [x] 2.3 Implement `CaptureReceipt`.
+- [x] 2.4 Write failing tests for `RecordPurchase(request)`: it posts JSON including the `capture` echo to `/purchases` and returns the parsed response for both 200 and 201.
+- [x] 2.5 Implement `RecordPurchase`.
+- [x] 2.6 Write a failing test for base-address resolution: no configuration gives `http://localhost:5082` ("The default address reaches the local stack"); `appsettings.json` overrides the default; `EXPENSES_API` overrides both.
+- [x] 2.7 Implement configuration binding and `AddHttpClient<LedgerClient>` registration.
+
+## 3. Ported rules
+
+- [x] 3.0 Write failing `[Theory]` tests porting every case in `FE/src/month/month.test.ts`, `format/format.test.ts` and `labels/labels.test.ts` (D7): current-month range, "The total reflects the current month", "A purchase late on the last day of the month is counted", "No purchases this month", review count scoped to the month, recent eight sorted newest first, "An amount is formatted", "A recent date is described in relative terms", "An older date is shown as a date", wall-clock parsing with no time-zone conversion, "A known merchant is named", "An unmatched merchant falls back to what was printed", "Neither a merchant nor verbatim text".
+- [x] 3.1 Implement `MonthRules`, `Formatting` and `Labels` as static classes over `decimal`, `string` and `DateTime`, with an injectable clock (`TimeProvider`).
+- [x] 3.2 Write failing `[Theory]` tests porting `FE/src/capture/review.ts` behaviour: review reasons from `validation` ("An arithmetic mismatch is named"), low confidence per line ("A low-confidence value is flagged"), an editable line seeded from a candidate with category and unit resolved to codes and raw text kept, an empty line for Failed, and the confirmation built from the capture echo plus edits, with the date omitted when unedited and the receipt carried a fiscal timestamp ("The date defaults from the receipt", "The capture result is not re-requested").
+- [x] 3.3 Implement `ReviewRules` and the `EditableLine` shape (numeric fields held as typed strings).
+
+## 4. Home view model
+
+- [x] 4.0 Write failing `HomeViewModelTests` with a fake ledger and a fixed clock: "Loading is visible"; "Recent purchases are shown"; "A purchase carrying a receipt is distinguishable"; "An empty ledger"; "An empty ledger is not a failure"; "No purchases this month"; "Purchases needing review exist"; "Nothing needs review"; "The ledger cannot be reached" (failure message set, retry command enabled, capture command still executable); "Retrying succeeds"; "The ledger reports a specific error"; "Reference data cannot be read" (purchases listed with verbatim text, no failure reported); "Identifiers are never displayed" (no row text contains an id).
+- [x] 4.1 Implement `HomeViewModel`: load on activation, `RetryCommand`, `MonthTotal`, `ReviewCount` (null when zero), `Recent` rows as display-ready records, and a `LoadFailure` message.
+- [x] 4.2 Write failing tests for capture entry, using a fake `IImagePicker` and fake `INavigator`: "Choosing a file captures it" (navigates to capture with that image, no confirmation); "Capture is abandoned" (picker returns null, no navigation, no ledger call); "Dropping a file captures it"; "Several files are dropped at once" (no navigation, one-at-a-time message); "Something other than a file is dropped" (no change); "Home does not submit the image" (no ledger write from home in any of these).
+- [x] 4.3 Implement `IImagePicker`, `ReceiptImage`, `INavigator`, `CaptureCommand` and `AcceptDrop(files)` on `HomeViewModel` (D5, D6).
+
+## 5. Capture view model
+
+- [x] 5.0 Write failing `CaptureViewModelTests`: "Upload starts without a further action"; "One capture is one upload" (activating twice still uploads once); "The wait is visible" (busy while outstanding, no review state yet); "The upload cannot be reached" (failure message, retry enabled, retry sends byte-identical content even after the source stream would now return different bytes); "An unusual format is not pre-judged" (non-image bytes are uploaded, no client-side error).
+- [x] 5.1 Implement `CaptureViewModel` upload on activation: read bytes once, an async upload command, a retry, and a `Review` child view model on success (D6).
+- [x] 5.2 Write failing `ReviewViewModelTests`: "Candidates are shown for review"; "Candidates are editable" (change description, amount, quantity, category or unit; add a line; remove a line); "A partly typed number is not lost"; "An authoritative result that does not reconcile is still shown as read"; "Failure is explained"; "A manually entered capture can still be confirmed".
+- [x] 5.3 Implement `ReviewViewModel` and `EditableLineViewModel`, seeded once from the capture and holding the capture result untouched beside the edits, with categories and units read from the ledger.
+- [x] 5.4 Write failing tests for confirm and leave: "Confirmation creates a purchase" (request sent, navigates home, home reloads); "Confirming cannot be repeated while outstanding"; "A reconciliation mismatch is reported" and "A missing date is reported" (message shown, edits unchanged, still on review); "Leaving without confirming changes nothing" (back navigates home, no request after the capture); "Leaving while extraction is running" (back cancels, a late response does not show review).
+- [x] 5.5 Implement `ConfirmCommand` (no concurrent execution) and `BackCommand` with cancellation of the outstanding upload.
+
+## 6. Views and composition
+
+- [x] 6.0 Write failing `UI.Tests` headless tests for wiring, with a fake ledger handler and fake picker: home shows capture, total and recent rows from a canned response; clicking capture with a picked file shows the capture view; the review view's fields edit the view model when typed into with `KeyTextInput`; confirm and back buttons work through `MouseDown` and `KeyPress(Enter)`.
+- [x] 6.1 Implement `App`, the DI composition root, `MainWindow` + `MainWindowViewModel.Current`, the explicit `ViewLocator` (D5), `HomeView`, `CaptureView` and `ReviewView` on the Fluent theme with compiled bindings, and the `StorageProvider`-backed `IImagePicker`.
+- [x] 6.2 Write failing headless tests for "Capture is reachable on arrival" (capture control visible within the window bounds and larger than every other control), "Capture stays reachable while browsing recent purchases" (still visible after scrolling the list), "Capture survives a failure to read the ledger", and "No breakdown accompanies the total" (no chart or category breakdown elements on home).
+- [x] 6.3 Implement the home layout: capture anchored outside the scrolling region, the total in the header, recent purchases in a `ScrollViewer`.
+- [x] 6.4 Write failing headless tests for "The client fits the window it is shown in": "No horizontal scrolling" at the minimum and a wide window size, for home and review; "The minimum window still leads with capture"; "The keyboard reaches everything" (Tab visits every interactive control, focus adorner present); "Controls are named" (every interactive control has `AutomationProperties.Name`); "Entries are not controls" (recent rows are not focusable, not selectable, and nothing happens on click, double-click or keyboard).
+- [x] 6.5 Implement `MinWidth`/`MinHeight` on the window, wrapping and star sizing on review lines, automation names, and non-interactive recent rows (`ItemsControl`, not `ListBox`).
+- [x] 6.6 Write a failing headless test for "Dropping a file captures it" and "Several files are dropped at once" through a synthetic drag-and-drop event on the home view.
+- [x] 6.7 Wire `DragDrop.AllowDrop` and the drop handler on `HomeView` to `HomeViewModel.AcceptDrop`.
+
+## 7. End-to-end
+
+- [x] 7.0 Write failing `E2E.Tests`: against the compose stack, capturing the receipt fixture from `FE/e2e/fixtures` through the fake picker reaches review. Reducing the lines to one and typing a per-run merchant and amount, then confirming, returns home with that purchase listed with its amount and receipt ("Confirmation creates a purchase"). Going back from review leaves the month's purchases unchanged ("Leaving without confirming changes nothing"). Two changes from the first draft of this task: there are no candidates to expect, because the e2e stack's fiscal portal never answers (as in `FE/e2e/capture.spec.ts`); and the "shows the empty ledger" check is dropped, because it only holds on a run's first test against a fresh database. The empty state is covered by the view-model and UI suites.
+- [x] 7.1 Make any fixes the end-to-end run exposes (contract drift in `Core/Ledger` records, configuration of the base address from the environment), each preceded by a failing `Core.Tests` case that reproduces it. None were needed: the suite passed against the real stack on its first run. A deliberately tampered temporary key made it fail as it should. The run did expose a bug in `test-ui.sh`, which passed the `--` separator through so `dotnet test` ignored a `--filter`; that is fixed, and it is a script, exempt from test-first.
+
+## 8. CI, scripts and docs (no behaviour — exempt from test-first)
+
+- [ ] 8.1 Extend `.github/workflows/ci.yml`: add `ui` to the `changes` outputs (`^Avalonia-UI/`, plus the shared files and `test-ui.sh`), add the `ui-style`, `ui-unit` and `ui-e2e` jobs, and add them to `gate`'s `needs` (D10). Exempt: pipeline configuration; verify by pushing a PR that touches only `Avalonia-UI/` and seeing `gate` wait on the three jobs and skip the others.
+- [x] 8.2 Write `Avalonia-UI/README.md`: running against the local stack, `EXPENSES_API`, the three suites and `test-ui.sh`, and the manual checklist for what headless can't cover (native picker, OS drag source, real keyboard focus on each OS). Exempt: documentation.
+- [x] 8.3 Update the root `README.md`: name the desktop client alongside the browser client, add `test-ui.sh` to the runners, and add the UI half to the tests-and-gate table. Exempt: documentation.

@@ -1,0 +1,13 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Expenses.Desktop.Core.Screens"
+        x:Class="Expenses.Desktop.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Expenses"
+        Width="900"
+        Height="700"
+        MinWidth="400"
+        MinHeight="480">
+  <!-- One slot, filled by whichever screen the navigator put there; ViewLocator picks its view (D5). -->
+  <ContentControl x:Name="Screen" Content="{Binding Current}" />
+</Window>
