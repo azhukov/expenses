@@ -1,6 +1,6 @@
 ## MODIFIED Requirements
 
-### Requirement: Vision extraction is pluggable and mocked in this change
+### Requirement: Vision extraction is pluggable
 
 The vision extraction stage SHALL sit behind a boundary so that its engine can be replaced without changing how purchases, images, candidates, validation or the cascade behave. The vision stage SHALL be the fallback for receipts the deterministic path cannot serve, and SHALL NOT run for a receipt whose invoice was retrieved and validated. The stage SHALL analyze the receipt image itself and produce candidate lines, a total, and a merchant name derived from what the image shows, rather than from any property of the image file unrelated to its content. Every result SHALL record the engine name and version that produced it, so results from different engines, or from a fixture used in tests, stay identifiable from one another. The system SHALL make clear, wherever candidates are surfaced, which engine produced them.
 

@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Expenses.Integration.Tests.Extraction;
 
 /// <summary>
-/// Scenarios from receipt-ingestion: "Vision extraction is pluggable and mocked in this change",
+/// Scenarios from receipt-ingestion: "Vision extraction is pluggable",
 /// "Extraction lifecycle", "Extraction runs as an ordered cascade of stages", "Fiscal-code decoding
 /// is opportunistic" — over the real cascade wiring rather than fakes, so the stage registration
 /// itself is exercised (D20). Capture needs no purchase behind it, so these run the cascade directly.

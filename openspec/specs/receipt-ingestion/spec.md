@@ -257,30 +257,31 @@ For every extracted line, the system SHALL retain the category and unit text exa
 - **WHEN** a receipt line containing non-Latin characters is extracted
 - **THEN** the text is retained unchanged, character for character
 
-### Requirement: Vision extraction is pluggable and mocked in this change
+### Requirement: Vision extraction is pluggable
 
-The vision extraction stages SHALL sit behind a boundary so that they can be replaced without changing how purchases, images, candidates, validation or the cascade behave. Vision stages SHALL be the fallback for receipts the deterministic path cannot serve, and SHALL NOT run for a receipt whose invoice was retrieved and validated. Until a real engine is introduced those stages SHALL remain placeholders that produce deterministic results and perform no image analysis. The system SHALL make clear, wherever candidates are surfaced, that they came from a placeholder engine.
+The vision extraction stage SHALL sit behind a boundary so that its engine can be replaced without changing how purchases, images, candidates, validation or the cascade behave. The vision stage SHALL be the fallback for receipts the deterministic path cannot serve, and SHALL NOT run for a receipt whose invoice was retrieved and validated. The stage SHALL analyze the receipt image itself and produce candidate lines, a total, and a merchant name derived from what the image shows, rather than from any property of the image file unrelated to its content. Every result SHALL record the engine name and version that produced it, so results from different engines, or from a fixture used in tests, stay identifiable from one another. The system SHALL make clear, wherever candidates are surfaced, which engine produced them.
 
-#### Scenario: Placeholder produces deterministic candidates
+#### Scenario: The engine reads the image content
 
-- **WHEN** the same receipt image is extracted twice by the placeholder engine
-- **THEN** both runs produce identical candidate lines
+- **WHEN** two different receipt images are extracted by the vision stage
+- **THEN** the candidate lines reported for each reflect what that image shows
+- **AND** two different images do not produce the same candidate lines merely because nothing about the image's content was examined
 
-#### Scenario: Placeholder results are identified
+#### Scenario: Results are identified by engine
 
-- **WHEN** candidate lines produced by the placeholder engine are retrieved
-- **THEN** the response identifies the engine that produced them
+- **WHEN** candidate lines produced by the vision stage are retrieved
+- **THEN** the response identifies the engine name and version that produced them
 
-#### Scenario: Placeholder can produce each terminal state
+#### Scenario: An unverifiable value carries the engine's own confidence
 
-- **WHEN** the placeholder engine is configured to simulate a low-confidence result or a failure
-- **THEN** the image enters NeedsReview or Failed respectively
-- **AND** the behaviour matches what a real engine reaching that state would produce
+- **WHEN** the vision stage extracts a description, merchant name, or category or unit guess
+- **THEN** the value carries the confidence the engine itself reported for it
+- **AND** a value arithmetic can verify carries no reported confidence
 
-#### Scenario: The placeholder does not run behind a retrieved invoice
+#### Scenario: The vision stage does not run behind a retrieved invoice
 
 - **WHEN** a receipt's invoice is retrieved from the verification service and passes validation
-- **THEN** no placeholder candidates are produced for that receipt
+- **THEN** no vision-stage candidates are produced for that receipt
 
 ### Requirement: Extraction can be re-run
 
@@ -318,52 +319,70 @@ The system SHALL allow retrieving the stored bytes of a receipt image attached t
 
 ### Requirement: Extraction runs as an ordered cascade of stages
 
-Extraction SHALL be composed of ordered stages rather than a single engine. Free deterministic stages SHALL run before paid stages, and deterministic stages SHALL be preferred over probabilistic ones for any value both could produce. The system SHALL record, for every extraction result, which stages ran and which stage produced each extracted value. A stage that produces no result SHALL NOT fail the extraction, and every later stage SHALL behave identically whether or not an earlier optional stage produced anything.
+Extraction SHALL be composed of ordered steps rather than a single engine, and each step SHALL take
+the same input — the image, its content type, and the fiscal identity known so far — and SHALL
+produce the same kind of result. A step SHALL run only when every step before it produced no
+candidate lines; a step that produces candidate lines SHALL end the run. Whether a result reconciles
+arithmetically SHALL NOT determine which steps run. Free deterministic steps SHALL run before paid
+steps, and deterministic steps SHALL be preferred over probabilistic ones for any value both could
+produce. Where a step produces no candidate lines but establishes fiscal identity, that identity
+SHALL be passed to the next step. The system SHALL record, for every extraction result, which steps
+ran and which step produced each extracted value. Where no step produces candidate lines, the
+extraction SHALL fail and the reason SHALL be reported to the user.
 
-#### Scenario: Stage provenance is recorded
+#### Scenario: Step provenance is recorded
 
 - **WHEN** an extraction result is retrieved
-- **THEN** it reports which stages ran
-- **AND** each extracted value identifies the stage that produced it
+- **THEN** it reports which steps ran
+- **AND** each extracted value identifies the step that produced it
 
-#### Scenario: Optional stage produces nothing
+#### Scenario: A step that produces lines ends the run
 
-- **WHEN** an optional stage produces no result for an image
-- **THEN** extraction continues with the remaining stages
-- **AND** the outcome is the same as if that stage had not been configured
+- **WHEN** the first step produces candidate lines
+- **THEN** no later step runs
 
-#### Scenario: The expensive stage runs only on demand
+#### Scenario: A step that produces nothing advances the run
 
-- **WHEN** an extraction result passes arithmetic validation
-- **THEN** the fallback extraction stage does not run
+- **WHEN** a step produces no candidate lines
+- **THEN** the next step runs
+- **AND** the outcome is the same as if that step had not been configured
 
-#### Scenario: The expensive stage runs after a failed validation
+#### Scenario: A result that does not reconcile does not advance the run
 
-- **WHEN** an extraction result fails arithmetic validation
-- **THEN** the fallback extraction stage runs
-- **AND** its result is validated in turn
+- **WHEN** a step produces candidate lines whose amounts do not sum to its total
+- **THEN** no later step runs
+- **AND** the result is retained for review
 
-#### Scenario: Fallback also fails
+#### Scenario: Fiscal identity outlives the step that established it
 
-- **WHEN** the fallback stage runs and its result also fails arithmetic validation
-- **THEN** the image enters the NeedsReview state
-- **AND** the result retained is the one that failed fewer checks
-- **AND** both results remain distinguishable by the stage that produced them
+- **WHEN** a step establishes fiscal identity but produces no candidate lines
+- **THEN** that identity is passed to the next step
+- **AND** it is retained on the result the later step produces
 
-#### Scenario: A deterministic result ends the cascade
+#### Scenario: No step produces anything
 
-- **WHEN** the verification service returns an invoice that passes arithmetic validation
-- **THEN** no probabilistic stage runs for that image
-- **AND** the result records that it was produced deterministically
+- **WHEN** no step produces candidate lines for an image
+- **THEN** the extraction state is Failed
+- **AND** the reason is reported to the user
 
-#### Scenario: A failed decode falls through to the probabilistic stages
+#### Scenario: A failed decode falls through to the probabilistic step
 
-- **WHEN** no fiscal code can be decoded from an image
-- **THEN** the probabilistic stages run as they would for a receipt carrying no code
+- **WHEN** no fiscal code can be decoded from an image and none was supplied
+- **THEN** the probabilistic step runs as it would for a receipt carrying no code
 
 ### Requirement: An extraction result is validated arithmetically
 
-The system SHALL check an extraction result against itself before accepting it, using only the values the result contains. The checks SHALL be: that extracted line amounts sum to the extracted total; that for any line carrying a list price and a discount, the list price less the discount equals the line amount; and that where a tax rate and tax amount were extracted, the total implies the extracted tax amount. Amounts SHALL be compared at the precision the ledger records them in, rounding each side to two decimal places before comparison, so that a source which states line amounts at a greater precision than its own total is not reported as disagreeing with itself. Each check SHALL be reported individually, naming the values that disagree. Validation SHALL apply to the extraction result alone and SHALL NOT alter the purchase.
+The system SHALL check an extraction result against itself using only the values the result
+contains. Validation SHALL be performed once, after extraction has produced a result, and SHALL
+determine only whether that result is reported as Extracted or as needing review; it SHALL NOT
+determine which extraction steps run. The checks SHALL be: that extracted line amounts sum to the
+extracted total; that for any line carrying a list price and a discount, the list price less the
+discount equals the line amount; and that where a tax rate and tax amount were extracted, the total
+implies the extracted tax amount. Amounts SHALL be compared at the precision the ledger records them
+in, rounding each side to two decimal places before comparison, so that a source which states line
+amounts at a greater precision than its own total is not reported as disagreeing with itself. Each
+check SHALL be reported individually, naming the values that disagree. Validation SHALL apply to the
+extraction result alone and SHALL NOT alter the purchase.
 
 #### Scenario: A result that adds up
 
@@ -375,6 +394,12 @@ The system SHALL check an extraction result against itself before accepting it, 
 - **WHEN** an extraction produces lines of 4.49 and 3.99 with a total of 8.98
 - **THEN** the sum check fails
 - **AND** the failure reports the extracted total 8.98 and the computed sum 8.48
+
+#### Scenario: Validation runs once for a result
+
+- **WHEN** an extraction result is produced by any step
+- **THEN** it is validated once
+- **AND** the outcome of that validation decides only whether the state is Extracted or NeedsReview
 
 #### Scenario: Discount arithmetic is checked per line
 
@@ -398,43 +423,27 @@ The system SHALL check an extraction result against itself before accepting it, 
 - **THEN** the discount and tax checks are reported as not applicable
 - **AND** the result is not marked as failing validation on their account
 
-#### Scenario: Validation does not touch the ledger
-
-- **WHEN** an extraction result fails every check
-- **THEN** the expenses of the purchase are unchanged
-- **AND** the candidates remain available for review
-
-#### Scenario: Line amounts stated at a greater precision than the total
-
-- **WHEN** an extraction produces lines whose raw sum is 59.6515 against a stated total of 59.65
-- **THEN** the sum check passes
-- **AND** the result is not marked as needing review on account of the rounding
-
 ### Requirement: Fiscal receipt identity is captured when present
 
-Where a receipt carries fiscal identifiers issued by a tax authority, the system SHALL retain them alongside the image exactly as read, without imposing a format. Fiscal identifiers SHALL be accepted alongside a capture as well as discovered from the image, so that a client which decodes them at capture time need not depend on the server rediscovering them. Each identifier SHALL be taken only from a source that actually carries it: an identifier absent from the fiscal code SHALL NOT be populated from another value found there. Where an identifier is known from more than one source, the system SHALL compare them and SHALL report a disagreement rather than silently preferring one.
+Where a receipt carries fiscal identifiers issued by a tax authority, the system SHALL retain them
+alongside the image exactly as read, without imposing a format. A fiscal QR payload SHALL be
+accepted alongside a capture as well as decoded from the image, so that a client which read the code
+at capture time need not depend on the server rediscovering it. Where a payload is supplied, it
+SHALL be preferred outright and the image SHALL NOT be decoded for a second reading, because a
+client reading a live camera has retries and focus available to it that a single stored frame does
+not. Each identifier SHALL be taken only from a source that actually carries it: an identifier
+absent from the fiscal code SHALL NOT be populated from another value found there.
 
 #### Scenario: Identifiers read from the receipt
 
 - **WHEN** extraction reads fiscal identifiers from a captured image
 - **THEN** they are retained with the image and returned in the capture response, and again when the confirmed purchase's receipt is retrieved
 
-#### Scenario: Identifiers supplied with the capture
+#### Scenario: A payload supplied with the capture
 
-- **WHEN** a receipt image is captured together with fiscal identifiers decoded by the client
-- **THEN** they are retained with the capture without extraction needing to rediscover them
-
-#### Scenario: Sources agree
-
-- **WHEN** a fiscal identifier supplied at capture matches the one extraction reads from the same image
-- **THEN** the identifier is reported as corroborated
-
-#### Scenario: Sources disagree
-
-- **WHEN** a fiscal identifier supplied at capture differs from the one extraction reads from the same image
-- **THEN** both values are retained
-- **AND** the disagreement is reported
-- **AND** the outcome is NeedsReview
+- **WHEN** a receipt image is captured together with a fiscal QR payload
+- **THEN** the identifiers it carries are retained with the capture without extraction needing to rediscover them
+- **AND** the image is not decoded for a second reading
 
 #### Scenario: Receipt carries no fiscal identifiers
 
@@ -456,13 +465,26 @@ Where a receipt carries fiscal identifiers issued by a tax authority, the system
 
 ### Requirement: Fiscal-code decoding is opportunistic
 
-The system SHALL attempt to decode a fiscal code from a stored receipt image, and SHALL treat failure to decode as an ordinary outcome rather than an error. Failure SHALL NOT change the extraction state, SHALL NOT be surfaced to the user as a problem with the receipt, and SHALL NOT prevent any later stage from running. Where the code does decode, it SHALL lead extraction rather than merely annotate it: no probabilistic stage SHALL be asked to produce a value the code has already established. Decoding SHALL be attempted with a decoder capable of reading a dense symbol printed on thermal paper and photographed, and the expectation SHALL be that some tills produce symbols that cannot be read at all.
+Where no fiscal QR payload was supplied with a capture, the system SHALL attempt to decode one from
+the stored receipt image, and SHALL treat failure to decode as an ordinary outcome rather than an
+error. Failure SHALL NOT change the extraction state, SHALL NOT be surfaced to the user as a problem
+with the receipt, and SHALL NOT prevent the remaining step from running. Where a payload is obtained
+by either route, it SHALL lead extraction rather than merely annotate it: no probabilistic step
+SHALL be asked to produce a value the code has already established. Decoding SHALL be attempted with
+a decoder capable of reading a dense symbol printed on thermal paper and photographed, and the
+expectation SHALL be that some tills produce symbols that cannot be read at all.
 
 #### Scenario: Decoding succeeds
 
 - **WHEN** a fiscal code is decoded from a stored image
 - **THEN** the identifiers it carries are retained
 - **AND** they are marked as having been decoded rather than read as text
+
+#### Scenario: Decoding is skipped when a payload was supplied
+
+- **WHEN** a capture supplies a fiscal QR payload
+- **THEN** the image is not decoded
+- **AND** the identifiers are marked as having been supplied at capture
 
 #### Scenario: Decoding fails
 
@@ -485,60 +507,84 @@ The system SHALL attempt to decode a fiscal code from a stored receipt image, an
 #### Scenario: A miss does not degrade the receipt
 
 - **WHEN** a receipt whose symbol is too dense for its print quality is ingested
-- **THEN** the receipt is stored and extracted by the remaining stages
+- **THEN** the receipt is stored and extracted by the remaining step
 - **AND** the outcome is reported no differently from a receipt that carries no code
 
 ### Requirement: The fiscal QR carries invoice identity and total
 
-Where a receipt's fiscal QR decodes, the system SHALL read the invoice identity it carries without any network call. The decoded payload SHALL yield at least the issuer tax identification number, the invoice creation timestamp, the invoice identification code, and the invoice total. These values SHALL be treated as exact rather than estimated, and SHALL be recorded as having been decoded rather than read as text.
+Where a fiscal QR payload is obtained for a receipt, whether supplied at capture or decoded from the
+image, the system SHALL read the invoice identity it carries without any network call. The payload
+SHALL be parsed by one implementation regardless of which route it arrived by, so that a supplied
+payload and a decoded one yield the same identifiers. The payload SHALL yield at least the issuer
+tax identification number, the invoice creation timestamp, the invoice identification code, and the
+invoice total. These values SHALL be treated as exact rather than estimated, and SHALL be recorded
+as having been decoded or supplied rather than read as text. A payload SHALL never be dereferenced
+as a network address, whatever form it takes.
 
 #### Scenario: Identity and total are read from the code alone
 
-- **WHEN** a fiscal QR is decoded from a stored image
+- **WHEN** a fiscal QR payload is obtained for a stored image
 - **THEN** the issuer tax identification number, creation timestamp, invoice identification code and total are available
 - **AND** no network call was required to obtain them
 
+#### Scenario: A supplied payload yields the same identifiers as a decoded one
+
+- **WHEN** the same payload is supplied at capture and decoded from the image
+- **THEN** the identifiers read from it are identical
+
+#### Scenario: The payload is not fetched
+
+- **WHEN** a payload takes the form of a verification address
+- **THEN** the identifiers are read from the address without it being requested
+
 #### Scenario: The decoded total anchors validation
 
-- **WHEN** a fiscal QR yields a total and a later stage produces line amounts
+- **WHEN** a fiscal QR yields a total and a later step produces line amounts
 - **THEN** the line amounts are checked against the decoded total
-- **AND** a disagreement is reported against the decoded value rather than against a value the later stage produced
+- **AND** a disagreement is reported against the decoded value rather than against a value the later step produced
 
 #### Scenario: A decoded value is never overwritten by an estimate
 
-- **WHEN** a value decoded from the fiscal QR is also produced by a later probabilistic stage
+- **WHEN** a value decoded from the fiscal QR is also produced by a later probabilistic step
 - **THEN** the decoded value is retained
 - **AND** the disagreement is reported
 
 ### Requirement: Invoice detail is retrieved from the fiscal verification portal
 
-Where a fiscal QR has been decoded, the system SHALL retrieve the corresponding invoice from the fiscal verification service the code refers to, and SHALL map the returned invoice onto extraction candidates. All receipts are assumed to be issued under the same national fiscalisation scheme and verified by the same service. A retrieved invoice SHALL be treated as authoritative: its line items, quantities, units, tax rates, seller identity and totals SHALL be used verbatim rather than re-estimated.
+Where a fiscal QR payload has been obtained, the system SHALL retrieve the corresponding invoice
+from the fiscal verification service the code refers to, and SHALL map the returned invoice onto
+extraction candidates. All receipts are assumed to be issued under the same national fiscalisation
+scheme and verified by the same service. A retrieved invoice SHALL be treated as authoritative: its
+line items, quantities, units, tax rates, seller identity and totals SHALL be used verbatim rather
+than re-estimated, and SHALL NOT be re-derived by any later step, whether or not it reconciles
+arithmetically.
 
 #### Scenario: Invoice detail is retrieved and mapped
 
-- **WHEN** an invoice is retrieved for a decoded fiscal code
+- **WHEN** an invoice is retrieved for a fiscal code
 - **THEN** each returned line becomes a candidate carrying its description, quantity, unit, tax rate and amount
 - **AND** the seller name and tax identification number are recorded as the merchant
-- **AND** the candidates identify the retrieval stage as their source
+- **AND** the candidates identify the retrieval step as their source
 
-#### Scenario: Retrieved detail supersedes an estimate
+#### Scenario: A retrieved invoice that does not reconcile is still authoritative
 
-- **WHEN** an invoice is retrieved for a receipt that a probabilistic stage had already described
-- **THEN** the retrieved values are the ones retained
-- **AND** the result records that they came from the verification service
+- **WHEN** an invoice retrieved from the verification service fails an arithmetic check
+- **THEN** it is retained as the result
+- **AND** no probabilistic step is asked to produce an alternative
+- **AND** the extraction state is NeedsReview
 
 #### Scenario: The service has no record of the invoice
 
-- **WHEN** the verification service reports no invoice for a decoded fiscal code
-- **THEN** extraction continues with the remaining stages
-- **AND** the identifiers decoded from the code are still retained
+- **WHEN** the verification service reports no invoice for a fiscal code
+- **THEN** extraction continues with the remaining step
+- **AND** the identifiers read from the code are still retained
 
 #### Scenario: The service cannot be reached
 
 - **WHEN** the verification service cannot be reached or does not answer within its time budget
-- **THEN** the outcome is the same as a stage that produced nothing
+- **THEN** the outcome is the same as a step that produced nothing
 - **AND** no error about the receipt is reported to the user
-- **AND** the values already decoded from the fiscal QR are retained
+- **AND** the values already read from the fiscal QR are retained
 
 #### Scenario: Retrieval is not repeated needlessly
 
@@ -656,3 +702,65 @@ The system SHALL remove, on a recurring daily schedule, any temporary capture th
 - **WHEN** confirmation names a key for a capture the daily cleanup already removed
 - **THEN** the system reports that the capture was not found, the same as for any unknown key
 - **AND** the cleanup itself is not treated as having failed
+
+### Requirement: The fiscal QR payload is retained with the receipt
+
+Where a fiscal QR payload is obtained for a receipt — supplied by the client at capture or decoded
+from the image — the system SHALL retain the payload verbatim alongside the receipt, and SHALL
+retain it whether or not any identifier could be parsed out of it. Where a payload is retained, a
+later extraction of the same receipt SHALL use it rather than attempting to decode the image again.
+A receipt for which no payload was obtained SHALL record its absence rather than an empty payload.
+
+#### Scenario: A supplied payload is retained
+
+- **WHEN** a receipt is captured with a fiscal QR payload and the capture is confirmed
+- **THEN** the payload is retained with the receipt exactly as it was submitted
+
+#### Scenario: A decoded payload is retained
+
+- **WHEN** no payload was supplied and one is decoded from the image
+- **THEN** the decoded payload is retained with the receipt
+
+#### Scenario: A re-run does not decode the image again
+
+- **WHEN** extraction is re-run for a receipt that retained a fiscal QR payload
+- **THEN** the retained payload is used
+- **AND** no attempt is made to decode the image
+
+#### Scenario: An unrecognised payload is still retained
+
+- **WHEN** a payload is obtained whose format yields no recognisable identifiers
+- **THEN** the payload is still retained with the receipt
+
+#### Scenario: A receipt with no payload
+
+- **WHEN** a receipt is confirmed for which no payload was supplied or decoded
+- **THEN** the receipt records that no payload is held
+
+### Requirement: Vision extraction failure is an ordinary outcome
+
+The vision stage SHALL treat every failure to produce a result — the engine being unreachable, answering too slowly, refusing the request, or answering with something the stage cannot interpret as the expected shape — as the stage producing nothing, the same as any other optional extraction stage. A missing or invalid engine credential SHALL also be treated this way rather than raised during startup or as an unhandled error, since the vision stage may be configured with no credential at all where it is not needed. Because the vision stage is the last stage in the cascade, a failure here with no deterministic result already established SHALL leave the receipt without candidates rather than substituting a fabricated or estimated one.
+
+#### Scenario: The engine cannot be reached
+
+- **WHEN** the vision engine cannot be reached or does not answer within its time budget
+- **THEN** the outcome is the same as a stage that produced nothing
+- **AND** no error about the receipt is reported to the user
+
+#### Scenario: The engine's answer cannot be interpreted
+
+- **WHEN** the vision engine answers with a response that does not carry the fields extraction expects
+- **THEN** the outcome is the same as a stage that produced nothing
+
+#### Scenario: No credential is configured
+
+- **WHEN** the vision stage is asked to run with no engine credential configured
+- **THEN** the stage produces nothing
+- **AND** the system does not fail to start on that account
+
+#### Scenario: A vision failure with nothing deterministic behind it
+
+- **WHEN** no deterministic stage produced a result for a receipt and the vision stage then fails
+- **THEN** the receipt's extraction reaches the Failed state
+- **AND** the temporary or attached image remains available so the caller can confirm it with lines entered by hand
+

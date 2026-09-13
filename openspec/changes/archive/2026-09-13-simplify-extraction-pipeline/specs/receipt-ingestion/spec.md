@@ -142,7 +142,7 @@ extraction result alone and SHALL NOT alter the purchase.
 - **THEN** the discount and tax checks are reported as not applicable
 - **AND** the result is not marked as failing validation on their account
 
-### Requirement: Vision extraction is pluggable and mocked in this change
+### Requirement: Vision extraction is pluggable
 
 Vision extraction SHALL be a single step, sitting behind a boundary so that it can be replaced
 without changing how purchases, images, candidates, validation or the pipeline behave. It SHALL be
