@@ -52,10 +52,10 @@ Locally:
 ./test-ui.sh               # the desktop client's view-model and headless UI suites; E2E=1 for end-to-end
 ```
 
-`./up.sh` brings up the local stack — postgres, api, mcp — waits for every healthcheck, starts the
-desktop client in a window of its own, then runs and opens the browser client. Run with
-`NO_DESKTOP=1` or `NO_FE=1` to skip either client (both for the containers alone), `COMPOSE_BUILD=1`
-to rebuild the api and mcp images first, or `FE_HOST=1` to expose the browser client on the LAN.
+`./up.sh` brings up the local stack — postgres, api, mcp, rebuilding the api and mcp images every
+time — waits for every healthcheck, starts the desktop client in a window of its own, then runs and
+opens the browser client. Run with `NO_DESKTOP=1` or `NO_FE=1` to skip either client (both for the
+containers alone), or `FE_HOST=1` to expose the browser client on the LAN.
 
 `docker compose up -d postgres` brings up just the database, which is all the test suite and a
 locally-run host need. See [BE/README.md](BE/README.md) for what each service does and why the MCP
@@ -64,4 +64,4 @@ container waits on the API's healthcheck, and
 
 Every script prints its own options in a header comment — read the top of the file for the full
 list of environment variables it accepts (`UNIT`, `DETAIL`, `WATCH`, `KEEP`, `HEADED`,
-`SKIP_BUILD`, `NO_FE`, `NO_DESKTOP`, `COMPOSE_BUILD`, `FE_HOST`, `E2E`). On Windows, run them from a Git Bash terminal.
+`SKIP_BUILD`, `NO_FE`, `NO_DESKTOP`, `FE_HOST`, `E2E`). On Windows, run them from a Git Bash terminal.

@@ -7,8 +7,7 @@
 # it holds this terminal: Ctrl+C stops it and leaves the containers and the desktop window up.
 #
 # Run with NO_DESKTOP=1 to skip the desktop client, NO_FE=1 to skip the browser client (both for the
-# containers alone), COMPOSE_BUILD=1 to rebuild the api and mcp images first, and FE_HOST=1 to expose
-# the browser client on the LAN so a phone can reach it.
+# containers alone), and FE_HOST=1 to expose the browser client on the LAN so a phone can reach it.
 #
 # On Windows run it from a Git Bash terminal (plain `bash` in PowerShell is WSL).
 set -uo pipefail
@@ -37,8 +36,9 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-# Images are built only when missing unless COMPOSE_BUILD is set.
-docker compose -f "$(winpath "$root/docker-compose.yml")" up -d --wait ${COMPOSE_BUILD:+--build} || exit 1
+# Always --build: an image built only when missing silently keeps serving old code after a pull or
+# a change to BE. The layer cache keeps an unchanged rebuild to a few seconds.
+docker compose -f "$(winpath "$root/docker-compose.yml")" up -d --wait --build || exit 1
 
 echo
 echo "API      http://localhost:5082/swagger"
