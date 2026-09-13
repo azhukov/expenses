@@ -1,0 +1,29 @@
+<Project>
+
+  <!-- Copied from BE/Directory.Build.props rather than moved to the repository root, so that this
+       half and BE/ keep the same strictness without either one's build depending on the other (D9). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- IDE0005 is a warning in .editorconfig, which makes the compiler demand GenerateDocumentationFile
+         (https://github.com/dotnet/roslyn/issues/41640). As in BE/, the plain build mutes that demand
+         and the style job builds with -p:GenerateDocumentationFile=true instead. -->
+    <NoWarn>$(NoWarn);EnableGenerateDocumentationFile</NoWarn>
+    <InvariantGlobalization>false</InvariantGlobalization>
+
+    <!-- A mistyped binding path is a build error, not a silently empty field (D9). -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Only SA1402 (one type per file) is turned on, via .editorconfig. -->
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

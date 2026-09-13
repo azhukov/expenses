@@ -15,10 +15,13 @@
 #   be-unit         Domain and Application tests - no database, no containers
 #   be-integration  the real HTTP host over a real PostgreSQL through Testcontainers (D17)
 #   e2e             a browser against the built client, the real API and a real database
+#   ui-style        the desktop client's .editorconfig gate, as be-style (Avalonia-UI/)
+#   ui-unit         desktop view models, and the real views on Avalonia's headless platform
+#   ui-e2e          the headless desktop client against the real API and a real database
 #
 # To fix what the style jobs report, run the fe-style-fix or be-editorconfig-fix skill. To run any
 # of this locally: ./act-fe.sh, ./act-be.sh, ./act-all.sh, or ./test-e2e.sh for the browser suite
-# alone.
+# alone, or ./test-ui.sh for the desktop client.
 
 name: CI
 
@@ -41,6 +44,7 @@ jobs:
     outputs:
       fe: ${{ steps.filter.outputs.fe }}
       be: ${{ steps.filter.outputs.be }}
+      ui: ${{ steps.filter.outputs.ui }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,6 +62,7 @@ jobs:
             echo "no usable base commit - running every suite"
             echo "fe=true" >> "$GITHUB_OUTPUT"
             echo "be=true" >> "$GITHUB_OUTPUT"
+            echo "ui=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -74,8 +79,12 @@ jobs:
           grep -q '^FE/' <<<"$changed" && fe=true || fe=$shared
           grep -q '^BE/' <<<"$changed" && be=true || be=$shared
 
+          # The desktop client is a half of its own, with its runner counted as part of it.
+          grep -Eq '^(Avalonia-UI/|test-ui\.sh$)' <<<"$changed" && ui=true || ui=$shared
+
           echo "fe=$fe" >> "$GITHUB_OUTPUT"
           echo "be=$be" >> "$GITHUB_OUTPUT"
+          echo "ui=$ui" >> "$GITHUB_OUTPUT"
 
   fe-style:
     name: FE style
@@ -261,12 +270,84 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.e2e.yml down -v
 
+  # The desktop client builds and gates on its own: its Directory.Build.props and .editorconfig are
+  # copies of BE's, not BE's own, so neither half's build depends on the other.
+  ui-style:
+    name: UI style
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet restore Avalonia-UI/Expenses.Desktop.sln
+
+      # Compiled bindings are on by default, so a mistyped binding path fails here as well.
+      - name: Build (.editorconfig rules at warning and above)
+        run: dotnet build Avalonia-UI/Expenses.Desktop.sln --no-restore -p:GenerateFullPaths=true
+
+      - name: Whitespace, BOM and final newlines
+        if: ${{ !cancelled() }}
+        run: dotnet format whitespace Avalonia-UI/Expenses.Desktop.sln --no-restore --verify-no-changes
+
+      - name: Unnecessary usings (IDE0005)
+        if: ${{ !cancelled() }}
+        run: >
+          dotnet build Avalonia-UI/Expenses.Desktop.sln --no-restore --no-incremental
+          -p:GenerateDocumentationFile=true
+          -p:NoWarn=CS1591%3BCS1587
+          -p:GenerateFullPaths=true
+
+  ui-unit:
+    name: UI unit tests
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet restore Avalonia-UI/Expenses.Desktop.sln
+
+      # Neither suite needs a display: the view models load no UI platform at all, and the views run
+      # on Avalonia's headless one.
+      - name: View-model tests
+        run: dotnet test Avalonia-UI/tests/Expenses.Desktop.Core.Tests --no-restore
+
+      - name: Headless UI tests
+        if: ${{ !cancelled() }}
+        run: dotnet test Avalonia-UI/tests/Expenses.Desktop.UI.Tests --no-restore
+
+  # Also on a BE change, as the browser suite is: a changed contract breaks this client too, and this
+  # is the suite that would notice.
+  ui-e2e:
+    name: UI E2E
+    needs: changes
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.be == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Brings docker-compose.e2e.yml up on an empty database, runs the suite, and tears it down.
+      # Through bash rather than executed directly: a script committed from Windows arrives without
+      # its executable bit, and a runner then refuses it with "Permission denied".
+      - name: Run the suite
+        run: E2E=1 bash ./test-ui.sh
+
   # The one required check. It runs whatever the others did, so branch protection always has a
   # verdict to wait on - including on a PR where every suite legitimately skipped.
   gate:
     name: gate
     if: always()
-    needs: [changes, fe-style, fe-unit, be-style, be-unit, be-integration, e2e]
+    needs: [changes, fe-style, fe-unit, be-style, be-unit, be-integration, e2e, ui-style, ui-unit, ui-e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Every suite passed or was skipped
