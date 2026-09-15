@@ -19,8 +19,9 @@ docker compose up -d --build
 The browser client is not in `docker compose`: it is run from `FE/` with `npm install` and
 `API_URL=http://localhost:5082 npm run dev` on <http://localhost:5173>, and calls the API directly,
 which allows that origin. `./up.sh` sets `API_URL` for you; `FE_HOST=1 ./up.sh` also serves the
-page and the API over HTTPS on the LAN for a phone. How the built client is served in production has
-deliberately not been decided yet — see [FE/README.md](FE/README.md).
+page and the API over HTTPS on the LAN for a phone. The deployed client and API run on Railway: the
+client is `vite preview` from [FE/Dockerfile](FE/Dockerfile), and the API runs as the `Railway`
+environment — see [BE/README.md](BE/README.md#railway).
 
 The desktop client is not in `docker compose` either: `dotnet run --project
 Avalonia-UI/src/Expenses.Desktop` opens it against the API on port 5082 — see

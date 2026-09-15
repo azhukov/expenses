@@ -6,6 +6,7 @@ import { loadEnv, type Plugin } from 'vite'
 import { defineConfig } from 'vitest/config'
 
 import { LEDGER_ADDRESS_SETTING, parseLedgerAddress } from './src/api/ledgerAddress.ts'
+import { PREVIEW_HOSTS_SETTING, parsePreviewHosts } from './src/api/previewHosts.ts'
 
 // `FE_HTTPS=1` serves the client over HTTPS with a self-signed certificate. A phone reaches the dev
 // server on a LAN address, which — unlike localhost — is not a secure context, and the camera is
@@ -61,9 +62,34 @@ function ledgerAddress(): Plugin {
   }
 }
 
+/**
+ * The public host names the preview server answers besides localhost, from `PREVIEW_ALLOWED_HOSTS`
+ * in the shell or a `.env` file. Vite answers any other `Host` with a 403, so a server published
+ * under a public domain has to be told that domain — on Railway the variable is set to
+ * `${{RAILWAY_PUBLIC_DOMAIN}}`, so a regenerated domain follows. Only the preview server: the dev
+ * server keeps Vite's default. A malformed entry stops the server here.
+ */
+function previewHosts(): Plugin {
+  return {
+    name: 'expenses-preview-hosts',
+    config(config, { mode }) {
+      const env = loadEnv(mode, config.root ?? process.cwd(), '')
+
+      return {
+        preview: {
+          allowedHosts: parsePreviewHosts(
+            process.env[PREVIEW_HOSTS_SETTING] ?? env[PREVIEW_HOSTS_SETTING],
+          ),
+        },
+      }
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    previewHosts(),
     ...(https ? [basicSsl()] : []),
     // Vitest starts a Vite server of its own; unit tests set the address in src/test/setup.ts.
     ...(process.env.VITEST ? [] : [ledgerAddress()]),
