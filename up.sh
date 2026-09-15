@@ -8,13 +8,20 @@
 #
 # Run with NO_DESKTOP=1 to skip the desktop client, NO_FE=1 to skip the browser client (both for the
 # containers alone), and FE_HOST=1 to expose the browser client on the LAN so a phone can reach it.
+# FE_HOST implies HTTPS (FE_HTTPS=1, a self-signed certificate): a LAN address is not a secure
+# context, and the camera is only offered to one. FE_HTTPS=1 alone serves HTTPS on localhost only.
 #
 # On Windows run it from a Git Bash terminal (plain `bash` in PowerShell is WSL).
 set -uo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fe="$root/FE"
-fe_url="http://localhost:5173"
+if [ -n "${FE_HOST:-}" ]; then
+  export FE_HTTPS=1
+fi
+fe_scheme="${FE_HTTPS:+https}"
+fe_scheme="${fe_scheme:-http}"
+fe_url="$fe_scheme://localhost:5173"
 desktop="$root/Avalonia-UI/src/Expenses.Desktop"
 desktop_log="${TMPDIR:-/tmp}/expenses-desktop.log"
 
@@ -83,13 +90,20 @@ if [ ! -d "$fe/node_modules" ]; then
 fi
 
 echo "Client   $fe_url"
+if [ -n "${FE_HOST:-}" ]; then
+  # By machine name through mDNS (.local), which phones resolve on the same network; Vite also
+  # prints every address it listens on once it is ready. The certificate is self-signed, so the
+  # phone warns once before it opens the page.
+  echo "         $fe_scheme://$(hostname | tr '[:upper:]' '[:lower:]').local:5173   (from a phone on this network)"
+fi
 echo
 
 # Opened once the dev server answers, not before: a browser that arrives first shows a connection
 # error and has to be reloaded by hand.
 (
   for _ in $(seq 1 60); do
-    if curl -fsS -o /dev/null --max-time 2 "$fe_url" 2>/dev/null; then
+    # -k: the certificate FE_HTTPS serves is self-signed, and all this asks is whether Vite answers.
+    if curl -fsSk -o /dev/null --max-time 2 "$fe_url" 2>/dev/null; then
       browse "$fe_url"
       exit 0
     fi

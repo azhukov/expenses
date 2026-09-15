@@ -5,8 +5,9 @@ opens, what the safe-area insets resolve to, and how the layout behaves as the b
 collapses. They are checked by hand on a real iPhone and a real Android device, not simulated
 (D15). The rest of the behaviour is covered by `npm test`.
 
-Run it with `npm run dev -- --host` and the API up, reaching the dev server from the phone on the
-machine's LAN address.
+Run it with `FE_HTTPS=1 npm run dev -- --host` (or `FE_HOST=1 ./up.sh`) and the API up, reaching
+the dev server from the phone at `https://<machine-name>.local:5173` or the machine's LAN address.
+Over plain HTTP a LAN address is not a secure context, so check 1 would fail for that reason alone.
 
 Record the outcome in the results table below each time the layout, the capture control or the
 viewport handling changes.
