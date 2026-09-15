@@ -8,6 +8,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- The ledger address, written by whatever serves this page from its own environment. A
+         classic script, not a module, so it has run before the app below reads it. -->
+    <script src="/config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

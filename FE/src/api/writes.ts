@@ -1,4 +1,4 @@
-import { failureOf, LedgerError, send } from './client'
+import { failureOf, LedgerError, ledgerUrl, send } from './client'
 import type {
   CaptureResult,
   ExtractionState,
@@ -6,9 +6,6 @@ import type {
   MerchantView,
   PurchaseView,
 } from './types'
-
-/** The dev proxy and a same-origin deployment both put the API here (D9). */
-const BASE = '/api'
 
 /**
  * What a client read from a receipt's fiscal QR before uploading it: the payload verbatim, not the
@@ -35,10 +32,11 @@ export async function captureReceipt(
     form.append('fiscalQr', fiscalQr)
   }
 
+  const url = ledgerUrl('/receipts/capture')
   let response: Response
 
   try {
-    response = await fetch(`${BASE}/receipts/capture`, {
+    response = await fetch(url, {
       method: 'POST',
       headers: { accept: 'application/json' },
       body: form,

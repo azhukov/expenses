@@ -60,6 +60,9 @@ services:
       # From the host's environment or a root .env (gitignored), never committed. Empty is fine —
       # the vision stage then just produces nothing rather than failing to start (D32).
       Extraction__Vision__ApiKey: ${Extraction__Vision__ApiKey:-}
+      # Browser origins allowed to call the API come from appsettings.Development.json (the local dev
+      # and preview servers). Add one with Cors__AllowedOrigins__N, N past the last index there;
+      # docker-compose.lan.yml does exactly that for a phone on the LAN.
     volumes:
       - expenses-receipts:/var/lib/expenses/receipts
     ports:

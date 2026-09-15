@@ -23,8 +23,28 @@ export class LedgerError extends Error {
   }
 }
 
-/** The dev proxy and a same-origin deployment both put the API here, so the paths never change (D9). */
-const BASE = '/api'
+declare global {
+  interface Window {
+    /** Set by `/config.js`, which the server serving the client writes from its own environment. */
+    __EXPENSES_CONFIG__?: { apiUrl: string }
+  }
+}
+
+/**
+ * The absolute URL of one ledger path, under the address the serving server was started with. Read
+ * on every call rather than once at import, so nothing holds an address the page was not given.
+ * Absent only where a host served the bundle without `/config.js`, and that is named rather than
+ * left to fail as a request to nowhere.
+ */
+export function ledgerUrl(path: string): string {
+  const address = window.__EXPENSES_CONFIG__?.apiUrl
+
+  if (!address) {
+    throw new LedgerError('The ledger address is not configured.')
+  }
+
+  return `${address}${path}`
+}
 
 function isErrorResponse(body: unknown): body is ErrorResponse {
   return (
@@ -40,10 +60,11 @@ function isErrorResponse(body: unknown): body is ErrorResponse {
  * not exist.
  */
 export async function read<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = ledgerUrl(path)
   let response: Response
 
   try {
-    response = await fetch(`${BASE}${path}`, {
+    response = await fetch(url, {
       headers: { accept: 'application/json' },
       ...init,
     })
@@ -81,10 +102,11 @@ export async function failureOf(response: Response): Promise<LedgerError> {
  * through here: a body that is not JSON is a different call, not a parameter of this one.
  */
 export async function send<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
+  const url = ledgerUrl(path)
   let response: Response
 
   try {
-    response = await fetch(`${BASE}${path}`, {
+    response = await fetch(url, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify(body),

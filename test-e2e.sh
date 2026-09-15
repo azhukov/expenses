@@ -61,6 +61,9 @@ if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
 fi
 
 printf '\n=== Running the suite ===\n'
+# The address `vite preview` serves to the page, which then calls the API cross-origin. The API
+# allows the preview origin through appsettings.Development.json.
+export API_URL="${API_URL:-http://localhost:5082}"
 args=()
 [[ "${HEADED:-0}" = "1" ]] && args+=(--headed)
 

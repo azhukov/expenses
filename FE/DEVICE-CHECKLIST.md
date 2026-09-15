@@ -5,9 +5,20 @@ opens, what the safe-area insets resolve to, and how the layout behaves as the b
 collapses. They are checked by hand on a real iPhone and a real Android device, not simulated
 (D15). The rest of the behaviour is covered by `npm test`.
 
-Run it with `FE_HTTPS=1 npm run dev -- --host` (or `FE_HOST=1 ./up.sh`) and the API up, reaching
-the dev server from the phone at `https://<machine-name>.local:5173` or the machine's LAN address.
-Over plain HTTP a LAN address is not a secure context, so check 1 would fail for that reason alone.
+Run it with `FE_HOST=1 ./up.sh` from the repository root. It serves the page and the API over HTTPS
+at `LAN_HOST` (`<machine-name>.local`, or an IPv4 address you set it to) and prints both URLs.
+Over plain HTTP a LAN address is not a secure context, so check 1 would fail for that reason alone,
+and the page's calls to the API would be blocked as mixed content.
+
+Before the checks, on each device:
+
+1. Open the API URL `up.sh` prints (`https://<LAN_HOST>:5443/openapi/v1.json`) and accept the
+   certificate warning.
+2. Open the page (`https://<LAN_HOST>:5173`) and accept its warning.
+
+If home says the ledger could not be reached, step 1 has not taken. A request to a certificate
+the device has not accepted fails with no warning at all, and iOS can forget an accepted exception
+(after a browser restart, say). Open the API URL again and accept.
 
 Record the outcome in the results table below each time the layout, the capture control or the
 viewport handling changes.

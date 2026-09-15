@@ -13,7 +13,7 @@ here with a reason.
 | `purchase-recording` | 35 | `Expenses.Domain.Tests/PurchaseTests`, `ExpenseTests`; `Expenses.Application.Tests/Purchases/*`; `Expenses.Integration.Tests/Persistence/SchemaTests`, `Ledger/LedgerBehaviourTests` |
 | `reference-data` | 43 | `Expenses.Domain.Tests/CategoryTests`, `UnitTests`, `MerchantTests`; `Expenses.Application.Tests/ReferenceData`, `Merchants`; `Expenses.Integration.Tests/Persistence/SeedingTests`, `RepositoryTests`, `Ledger/*` |
 | `receipt-ingestion` | 50 | `Expenses.Domain.Tests/ReceiptTests`; `Expenses.Application.Tests/Receipts/*`, `Extraction/ExtractionCascadeTests`; `Expenses.Integration.Tests/Receipts`, `Extraction/*`, `Ledger/ReceiptJourneyTests` |
-| `api-surface` | 28 | `Expenses.Integration.Tests/Api/HttpAdapterTests`, `Mcp/McpAdapterTests`, `Ledger/CrossAdapterTests` |
+| `api-surface` | 44 | `Expenses.Integration.Tests/Api/HttpAdapterTests`, `CorsTests`, `HttpsTests`, `Mcp/McpAdapterTests`, `Ledger/CrossAdapterTests` |
 
 Test classes carry a class-level XML doc naming the requirements they cover, and test methods are
 named after the scenario they implement, so the mapping is readable from the test file rather than

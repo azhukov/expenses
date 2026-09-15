@@ -2,14 +2,22 @@ import { defineConfig, devices } from '@playwright/test'
 
 /**
  * The end-to-end gate. Unlike the vitest suites, nothing here is mocked: the browser drives the
- * built client, the client's `/api` calls reach the real HTTP host, and that host reads and writes
- * a real PostgreSQL. The stack is `docker compose`'s (see docker-compose.e2e.yml); this config only
- * serves the client and points the browser at it.
+ * built client, which calls the real HTTP host cross-origin at `API_URL`, and that host reads and
+ * writes a real PostgreSQL. The stack is `docker compose`'s (see docker-compose.e2e.yml); this
+ * config only serves the client and points the browser at it.
  *
  * `E2E_BASE_URL` overrides the served client — set it when the app is already running (`./up.sh`)
  * and Playwright should attach rather than start its own server.
  */
 const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:4173'
+
+// The preview server would refuse to start without it anyway, but only after Playwright has waited
+// out its webServer timeout for a server that was never going to answer.
+if (!process.env.E2E_BASE_URL && !process.env.API_URL) {
+  throw new Error(
+    'API_URL is not set. The preview server this suite starts needs the API address, e.g. API_URL=http://localhost:5082.',
+  )
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -40,7 +48,8 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        // The built client, not the dev server: what CI ships is what the browser should drive.
+        // The built client, not the dev server: what CI ships is what the browser should drive. It
+        // inherits this environment, API_URL included, and serves that address as /config.js.
         command: 'npm run preview -- --port 4173 --strictPort',
         url: baseURL,
         reuseExistingServer: !process.env.CI,

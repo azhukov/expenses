@@ -39,6 +39,9 @@ pnpm-debug.log*
 .env.*.local
 *.local.json
 appsettings.Local.json
+# The self-signed certificate FE_HOST=1 ./up.sh makes for the API on the LAN. Kept between runs so a
+# phone that accepted it once is not asked again; never committed.
+.certs/
 
 # ---- Editors / OS ----
 .idea/
