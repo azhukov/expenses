@@ -111,8 +111,73 @@ dotnet ef migrations bundle  --output ../artifacts/migrate     # deployment step
 ```
 
 Development applies migrations on startup for convenience. Anywhere else runs the bundle as a
-deployment step: two hosts migrating on startup would race, and neither should hold DDL rights at
-runtime.
+deployment step unless it opts in with `Database:ApplyMigrationsOnStartup: true`: two hosts
+migrating on startup would race, and neither should hold DDL rights at runtime. The one opt-in is
+the `Railway` environment below, which runs exactly one API replica and no MCP host. The provisioning
+check runs whether or not the host migrated.
+
+## Railway
+
+The API and the browser client each run as a Railway service from this repository. The API runs as
+`ASPNETCORE_ENVIRONMENT=Railway`, so it reads
+[appsettings.Railway.json](Expenses.Api/appsettings.Railway.json): the only allowed browser origin is
+`https://expenses-frontend-production-2e52.up.railway.app`, and it migrates on startup. Everything
+secret or specific to the instance is a service variable, not in that file.
+
+**The client calls the API at its public domain,
+`https://expenses-api-production-4d79.up.railway.app`.** Only other Railway services can resolve
+`expenses-api.railway.internal`. The client runs in the user's browser and has no proxy, so an
+internal address in `API_URL` would fail every request. Keep the internal name for traffic between
+services, such as a future MCP host.
+
+| Service | Root directory | Config file | Healthcheck |
+| --- | --- | --- | --- |
+| `expenses-api` | `/BE` | `/BE/railway.json` | `/units` |
+| `expenses-frontend` | `/FE` | `/FE/railway.json` | `/config.js` |
+
+The config file does not follow the root directory, so set its absolute path in each service's
+settings. `/units` is the API healthcheck because `/openapi/v1.json` is mapped only in Development,
+and Kestrel listens only after the database is migrated and verified.
+
+`expenses-api` variables:
+
+| Variable | Value |
+| --- | --- |
+| `ASPNETCORE_ENVIRONMENT` | `Railway` |
+| `ASPNETCORE_HTTP_PORTS` | `8080` |
+| `PORT` | `8080` — so Railway routes to the port Kestrel listens on |
+| `ConnectionStrings__Expenses` | `Host=${{Postgres.PGHOST}};Port=${{Postgres.PGPORT}};Database=expenses;Username=${{Postgres.PGUSER}};Password=${{Postgres.PGPASSWORD}}` |
+| `Receipts__RootPath` | `/var/lib/expenses/receipts` |
+| `TemporaryReceipts__RootPath` | `/var/lib/expenses/receipts-temp` |
+| `Extraction__Vision__ApiKey` | the Anthropic key (sealed variable) |
+| `RAILWAY_RUN_UID` | `0` |
+
+- **The connection string is in Npgsql's key/value form, not `DATABASE_URL`.** Railway's
+  `DATABASE_URL` is a `postgres://` URI, which Npgsql does not accept. It also names the `railway`
+  database, not `expenses`.
+- **Attach a volume at `/var/lib/expenses/receipts`.** The ledger refers to those files and cannot
+  reproduce them (see "The receipt store"). Railway mounts volumes owned by root, and the image
+  runs as a non-root user, so `RAILWAY_RUN_UID=0` is what makes the store writable. Without it the
+  host refuses to start.
+- **If Railway changes the client's domain,** set `Cors__AllowedOrigins__0` to the new origin on
+  the API until `appsettings.Railway.json` is updated. Index 0 replaces the file's entry.
+
+`expenses-frontend` variables (see [FE/README.md](../FE/README.md)):
+
+| Variable | Value |
+| --- | --- |
+| `API_URL` | `https://expenses-api-production-4d79.up.railway.app` |
+| `PREVIEW_ALLOWED_HOSTS` | `${{RAILWAY_PUBLIC_DOMAIN}},healthcheck.railway.app` — Railway's healthcheck is sent with `Host: healthcheck.railway.app` |
+
+**Create the database once, before the first API deploy.** Railway's Postgres service creates a
+database named `railway` with the image defaults, and the provisioning check refuses it. Run
+[db/init/01-create-database.sql](db/init/01-create-database.sql) against the maintenance database,
+either with `railway connect Postgres` and pasting the statement, or with `psql` over the service's
+public TCP proxy URL. It runs once for the life of the service. A migration cannot do this, and
+the runtime host is not given `CREATEDB` rights.
+
+**The API has no authentication, and it now has a public URL.** CORS decides which web pages can
+read responses in a browser. It does not stop anyone calling the API directly.
 
 Seeding is split by mutability (D15): `Units` are `HasData` rows because nobody edits them,
 categories are upserted by `Code` so a user's rename and a user's own categories survive a re-run.

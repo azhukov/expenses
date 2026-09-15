@@ -16,6 +16,7 @@
     "typecheck": "tsc -b",
     "style": "npm run format:check && npm run lint && npm run typecheck && npm run structure",
     "structure": "node scripts/check-structure.mjs",
+    "test:preview-hosts": "npm run build && node scripts/check-preview-hosts.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

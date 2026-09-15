@@ -110,11 +110,27 @@ on it. A host that serves `dist/` without the script gets a client whose every r
 that is intended.
 
 The page's origin must also be in the API's `Cors:AllowedOrigins` (see
-[BE/README.md](../BE/README.md)). No production host for the bundle exists yet: choosing one is
-still open.
+[BE/README.md](../BE/README.md)).
 
-There is no authentication, because the API has none. The client assumes a single trusted user on a
-private network.
+### The deployed client: `vite preview` in a container
+
+The client is deployed to Railway (<https://expenses-frontend-production-2e52.up.railway.app>) from
+[Dockerfile](Dockerfile). The image runs `npm ci` and `npm run build`, then runs `vite preview` on
+`$PORT`. It takes two settings from its environment at startup, never at build time:
+
+- `API_URL` is the API's **public** address, `https://expenses-api-production-4d79.up.railway.app`.
+  The browser makes the calls, so a private `*.railway.internal` name cannot work.
+- `PREVIEW_ALLOWED_HOSTS` is a comma-separated list of the host names the server answers besides
+  `localhost`. Vite answers any other `Host` header with a 403. On Railway, set it to
+  `${{RAILWAY_PUBLIC_DOMAIN}},healthcheck.railway.app`, because the healthcheck is sent under that
+  second name. An entry with a scheme, port or path stops the server.
+
+`npm run test:preview-hosts` builds, then checks that a listed host is served (with `/config.js`)
+and an unlisted one is refused. Railway service settings are in
+[BE/README.md](../BE/README.md#railway).
+
+There is no authentication, because the API has none. The deployed API has a public URL, so anyone
+who knows it can call it. CORS only limits which web pages can read its responses.
 
 ## Layout
 

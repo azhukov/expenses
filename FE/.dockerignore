@@ -1,0 +1,12 @@
+# Rebuilt inside the image; a host copy would be the wrong platform or stale.
+node_modules
+dist
+
+# Test output and the end-to-end suite, which the image never runs.
+test-results
+playwright-report
+e2e
+
+# Local settings and secrets: the container takes its settings from its own environment.
+.env
+.env.*

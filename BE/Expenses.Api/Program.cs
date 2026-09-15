@@ -65,17 +65,16 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "Expenses API"));
+}
 
-    // Migrating on startup is a development convenience only: two hosts doing it anywhere else
-    // would race, and neither should hold DDL rights at runtime (D15).
-    await app.Services.PrepareExpensesDatabase(applyMigrations: true);
-}
-else
-{
-    // The provisioning assertion runs everywhere, because a mis-provisioned database looks
-    // healthy and merely sorts wrongly (D13).
-    await app.Services.PrepareExpensesDatabase(applyMigrations: false);
-}
+// Migrating on startup is a Development convenience, and elsewhere an explicit opt-in for a
+// deployment with exactly one API replica (Railway): two hosts doing it would race, and the MCP
+// host never does (D15). The provisioning assertion runs everywhere, because a mis-provisioned
+// database looks healthy and merely sorts wrongly (D13).
+bool applyMigrations = app.Environment.IsDevelopment()
+    || builder.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup");
+
+await app.Services.PrepareExpensesDatabase(applyMigrations);
 
 app.MapControllers();
 
