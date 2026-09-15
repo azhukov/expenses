@@ -1,5 +1,11 @@
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
+
+// `FE_HTTPS=1` serves the client over HTTPS with a self-signed certificate. A phone reaches the dev
+// server on a LAN address, which — unlike localhost — is not a secure context, and the camera is
+// only offered to a secure one. Off by default so the end-to-end suite keeps its plain-HTTP origin.
+const https = !!process.env.FE_HTTPS
 
 // The client always calls same-origin `/api/...` paths, in development as in a same-origin
 // deployment. The API has no CORS configuration and this change adds none (D9), so the dev
@@ -16,7 +22,7 @@ const api = {
 }
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), ...(https ? [basicSsl()] : [])],
   server: { proxy: api },
   // `vite preview` serves the built client, which is what the end-to-end suite drives. Without
   // the same proxy here, every /api call in that run would 404 against the static server.

@@ -55,7 +55,8 @@ Locally:
 `./up.sh` brings up the local stack — postgres, api, mcp, rebuilding the api and mcp images every
 time — waits for every healthcheck, starts the desktop client in a window of its own, then runs and
 opens the browser client. Run with `NO_DESKTOP=1` or `NO_FE=1` to skip either client (both for the
-containers alone), or `FE_HOST=1` to expose the browser client on the LAN.
+containers alone), or `FE_HOST=1` to expose the browser client on the LAN over HTTPS, at
+`https://<machine-name>.local:5173`.
 
 `docker compose up -d postgres` brings up just the database, which is all the test suite and a
 locally-run host need. See [BE/README.md](BE/README.md) for what each service does and why the MCP

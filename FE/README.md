@@ -21,8 +21,14 @@ Then, in `FE/`:
 ```bash
 npm install
 npm run dev                         # http://localhost:5173
-npm run dev -- --host               # reachable from a phone on the same network
+FE_HTTPS=1 npm run dev -- --host    # reachable from a phone on the same network, over HTTPS
 ```
+
+A phone needs HTTPS: a LAN address is not a secure context, and the camera is only offered to one.
+`FE_HTTPS=1` serves a self-signed certificate, so the phone warns once before it opens the page.
+Reach it at `https://<machine-name>.local:5173` (mDNS, which iOS and recent Android resolve) or at
+the Network address Vite prints. On Windows the network has to be a Private one, or the firewall
+drops the connection. In PowerShell, set the variable with `$env:FE_HTTPS=1` first.
 
 | | |
 | --- | --- |
