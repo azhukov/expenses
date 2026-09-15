@@ -45,6 +45,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 // below is a reader over this same document, so the two cannot disagree.
 builder.Services.AddOpenApi();
 
+// The browser client is served from an origin of its own, so which origins may call is configuration.
+builder.Services.AddExpensesCrossOriginAccess(builder.Configuration);
+
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
     // The limit is refused before the body is buffered rather than after (D11).
@@ -53,6 +56,9 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 
 var app = builder.Build();
 
+// Outermost, so a request is judged before anything else answers it. The headers are added when the
+// response starts, so an error the handler below writes carries them too (CorsTests pins that).
+app.UseExpensesCrossOriginAccess();
 app.UseExpensesErrors();
 
 if (app.Environment.IsDevelopment())

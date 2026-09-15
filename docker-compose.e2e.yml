@@ -53,9 +53,11 @@ services:
       # government portal is up. Manual entry after a failed extraction is the path under test.
       Extraction__Portal__BaseAddress: 'http://127.0.0.1:9'
       Extraction__Portal__TimeoutMilliseconds: 1000
+      # `vite preview` on :4173 is already an allowed origin through appsettings.Development.json.
+      # Another would be Cors__AllowedOrigins__N, N past the last index there.
     ports:
-      # The port the client's dev proxy and `vite preview` proxy both target, so nothing about the
-      # client has to know it is talking to the e2e stack.
+      # The same port the development stack publishes, so API_URL=http://localhost:5082 is right for
+      # either and nothing about the client has to know it is talking to the e2e stack.
       - '5082:8080'
     depends_on:
       postgres:

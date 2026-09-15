@@ -9,7 +9,8 @@ import { expect, test } from '@playwright/test'
  * Nothing here is stubbed. The image is posted to the real capture endpoint, which stores it and
  * runs extraction before answering; the confirmation becomes a row in a real PostgreSQL; and the
  * assertion at the end is a second read of that database through the client's own query. The
- * seams this covers — the /api proxy, the multipart upload, the capture echo the server keeps no
+ * seams this covers — the address served as /config.js, the API's CORS policy on a cross-origin
+ * call, the multipart upload, the capture echo the server keeps no
  * copy of — are the ones no vitest or xUnit test can see.
  *
  * Extraction is deliberately not under test here: docker-compose.e2e.yml points the fiscal portal

@@ -37,6 +37,26 @@ Both hosts read their connection string from `ConnectionStrings:Expenses`; nothi
 `appsettings.json` supplies it, so a locally-run host needs `ConnectionStrings__Expenses` in its
 environment or in user secrets. Compose sets it for the containers.
 
+### Browser origins and HTTPS
+
+The browser client is served from an origin of its own and calls the API directly, so the API
+decides which origins may call it:
+
+| Key | Default | Effect |
+| --- | --- | --- |
+| `Cors:AllowedOrigins` | *(none)* | Exact origins (scheme, host, port) allowed to call from a browser. Development lists `http://localhost:5173`, `https://localhost:5173` and `http://localhost:4173`. Empty or absent allows no origin at all. An entry that is not a plain http(s) origin (a `*`, a path, a query, another scheme) stops the host at startup, naming the entry. In the environment: `Cors__AllowedOrigins__N`, with `N` past the last index `appsettings.Development.json` uses. |
+
+Allowed origins may use `GET`, `POST`, `PUT` and `DELETE` with `accept` and `content-type` headers,
+never credentials. An error response carries the same headers as a success, so a client on another
+origin can still read the error's message.
+
+HTTPS takes no code, only Kestrel's own settings: `ASPNETCORE_HTTPS_PORTS` plus
+`Kestrel:Certificates:Default:Path` and `KeyPath` (PEM). HTTP keeps answering on its own port and
+is never redirected, because e2e, the desktop client and the healthcheck all use it.
+[`docker-compose.lan.yml`](../docker-compose.lan.yml) does exactly this for `FE_HOST=1 ./up.sh`,
+serving `https://<LAN_HOST>:5443` so a phone on the LAN can use the browser client (`HttpsTests`
+pins both halves).
+
 ## Database provisioning
 
 **Encoding, locale provider and collation are decided when the database is created and cannot be

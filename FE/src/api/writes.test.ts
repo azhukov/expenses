@@ -46,7 +46,7 @@ describe('Capturing a receipt image', () => {
     await captureReceipt(file)
 
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe('/api/receipts/capture')
+    expect(path).toBe('http://ledger.test:9000/receipts/capture')
     expect(init.method).toBe('POST')
     expect(sentForm().get('file')).toBe(file)
   })
@@ -139,7 +139,7 @@ describe('Recording a purchase', () => {
     await recordPurchase(command)
 
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe('/api/purchases')
+    expect(path).toBe('http://ledger.test:9000/purchases')
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual(command)
   })

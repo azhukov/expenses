@@ -1,0 +1,26 @@
+# HTTPS for the API on the LAN, so a phone can use the browser client. Layered over
+# docker-compose.yml by `FE_HOST=1 ./up.sh`, its only caller, which also makes the certificate:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.lan.yml up -d --wait --build
+#
+# The phone opens the page at https://<LAN_HOST>:5173, and that page calls the API directly. Over
+# plain HTTP that call would be mixed content, which the browser blocks, so the API has to answer
+# HTTPS at the same LAN name. The certificate is self-signed: each device opens the API URL up.sh
+# prints once and accepts the warning (D6). HTTP on 5082 stays exactly as it was.
+#
+# Kept out of docker-compose.yml so a stack with no .certs/ — the everyday one — can never fail to
+# start over a certificate it does not use.
+
+services:
+  api:
+    environment:
+      ASPNETCORE_HTTPS_PORTS: 8443
+      Kestrel__Certificates__Default__Path: /certs/lan.pem
+      Kestrel__Certificates__Default__KeyPath: /certs/lan-key.pem
+      # The page's LAN origin. Index 3 because configuration merges arrays by index and
+      # appsettings.Development.json holds 0-2: add an origin there and this index has to move too.
+      Cors__AllowedOrigins__3: 'https://${LAN_HOST:?LAN_HOST is set by up.sh}:5173'
+    volumes:
+      - ./.certs:/certs:ro
+    ports:
+      - '5443:8443'

@@ -27,8 +27,19 @@ public sealed class ExpensesApi(string connectionString, params (string Key, str
     /// </summary>
     public string? ContentRoot { get; init; }
 
+    /// <summary>
+    /// Left unset (the factory's default, Development) unless a test needs configuration that
+    /// appsettings.Development.json would otherwise add to, e.g. an exact list of allowed origins.
+    /// </summary>
+    public string? Environment { get; init; }
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
+        if (Environment is not null)
+        {
+            builder.UseEnvironment(Environment);
+        }
+
         var configuration = new Dictionary<string, string?>
         {
             [$"ConnectionStrings:{ExpensesInfrastructure.ConnectionName}"] = connectionString,

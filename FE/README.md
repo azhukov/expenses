@@ -10,7 +10,7 @@ handed and does nothing else.
 
 ## Running it
 
-The client expects the API on `http://localhost:5082`. Bring it up from the repository root:
+`./up.sh` from the repository root does all of this. By hand, bring the API up first:
 
 ```bash
 docker compose up -d --build        # or: docker compose up -d postgres, then dotnet run in BE/
@@ -20,19 +20,50 @@ Then, in `FE/`:
 
 ```bash
 npm install
-npm run dev                         # http://localhost:5173
-FE_HTTPS=1 npm run dev -- --host    # reachable from a phone on the same network, over HTTPS
+API_URL=http://localhost:5082 npm run dev    # http://localhost:5173
+```
+
+The client calls the API directly, at **`API_URL`**. The dev and preview servers read it when they
+start, from the shell or from a git-ignored `FE/.env.local` (`API_URL=http://localhost:5082`), and
+refuse to start without a usable one. There is no proxy. In PowerShell, set it with
+`$env:API_URL="http://localhost:5082"` first.
+
+The API only answers pages from origins it lists in `Cors:AllowedOrigins`. In Development those are
+`http://localhost:5173`, `https://localhost:5173` and `http://localhost:4173`. The match is exact:
+a page opened at `http://127.0.0.1:5173` is a different origin, and every call from it is refused.
+
+### From a phone
+
+```bash
+FE_HOST=1 ./up.sh                   # from the repository root
 ```
 
 A phone needs HTTPS: a LAN address is not a secure context, and the camera is only offered to one.
-`FE_HTTPS=1` serves a self-signed certificate, so the phone warns once before it opens the page.
-Reach it at `https://<machine-name>.local:5173` (mDNS, which iOS and recent Android resolve) or at
-the Network address Vite prints. On Windows the network has to be a Private one, or the firewall
-drops the connection. In PowerShell, set the variable with `$env:FE_HTTPS=1` first.
+The page's calls to the API then have to be HTTPS as well, or the browser blocks them as mixed
+content. `FE_HOST=1 ./up.sh` does the setup:
+
+- serves the page at `https://<LAN_HOST>:5173`;
+- serves the API at `https://<LAN_HOST>:5443`, with a self-signed certificate it makes once in
+  `.certs/` and reuses on later runs;
+- allows that page's origin;
+- prints both URLs.
+
+`LAN_HOST` is `<machine-name>.local` (mDNS, which iOS and recent Android resolve). Where the phone
+cannot resolve it, rerun with `LAN_HOST=<the machine's IPv4 address>`.
+
+On each device, accept two certificates, once each:
+
+1. Open the **API URL** `up.sh` prints (`https://<LAN_HOST>:5443/openapi/v1.json`) and accept the warning.
+2. Open the page and accept its warning.
+
+**"The ledger could not be reached" usually means step 1 was skipped.** A request to an
+unaccepted certificate fails silently, with no warning to click through. iOS can also forget an
+accepted exception, so the remedy is the same: open the API URL again. On Windows the network has
+to be a Private one and inbound connections to 5173 and 5443 allowed, or the firewall drops them.
 
 | | |
 | --- | --- |
-| `npm run dev` | Vite dev server, with the `/api` proxy |
+| `npm run dev` | Vite dev server; needs `API_URL` |
 | `npm test` | Vitest, once |
 | `npm run test:watch` | Vitest, watching |
 | `npm run test:e2e` | Playwright, against a real API and database — see below |
@@ -63,16 +94,24 @@ what a formatter cannot decide (`eslint.config.js`), tsc owns the types, and
 naming, colocation, and the layer map in [`structure.config.json`](structure.config.json) that
 ESLint also reads to police the import graph. `npm run style` is all four.
 
-## It is not production-deployable yet
+## Serving the built client
 
-The client calls the API through same-origin `/api/...` paths, and `vite.config.ts` proxies those
-to `:5082` in development. The API has no CORS configuration, and this change adds none: the proxy
-is what makes development same-origin, and it keeps the request code identical to what a
-same-origin deployment would need (D9).
+`npm run build` puts a bundle in `dist/` that does not contain the API address. `index.html` loads
+`/config.js` before the app, and whatever serves `dist/` must answer that path with:
 
-Deciding how the built bundle is served in production — static files behind the API, a separate
-nginx service, or a separate origin with CORS — is a real decision with its own trade-offs, and it
-is deliberately not made here. Until it is, `npm run build` produces a bundle nothing serves.
+```js
+window.__EXPENSES_CONFIG__ = {"apiUrl":"https://ledger.example"}
+```
+
+The script is written from the host's own environment when it starts, with `no-store`, so one build
+can be pointed at any API. `vite preview` does exactly this from `API_URL`, and the e2e suite relies
+on it. A host that serves `dist/` without the script gets a client whose every request fails with
+"The ledger address is not configured." The build prints a notice that `/config.js` is not bundled;
+that is intended.
+
+The page's origin must also be in the API's `Cors:AllowedOrigins` (see
+[BE/README.md](../BE/README.md)). No production host for the bundle exists yet: choosing one is
+still open.
 
 There is no authentication, because the API has none. The client assumes a single trusted user on a
 private network.

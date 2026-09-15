@@ -248,8 +248,12 @@ jobs:
       - name: Start the stack
         run: docker compose -f docker-compose.e2e.yml up -d --build --wait
 
+      # `vite preview` serves this address to the page, which calls the API on it cross-origin. The
+      # bundle built above does not contain it, so it is decided here and not at build time.
       - name: Run the suite
         working-directory: FE
+        env:
+          API_URL: http://localhost:5082
         run: npx playwright test
 
       # Traces and screenshots are kept only for failures, so this artifact is the whole story of
