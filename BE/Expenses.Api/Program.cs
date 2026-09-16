@@ -56,6 +56,25 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 
 var app = builder.Build();
 
+// Logged before the database is touched: a host started against the wrong environment reads a
+// different connection string, so PrepareExpensesDatabase below is exactly where that mistake
+// surfaces, and the log should already say which environment it was.
+string[] allowedOrigins = CrossOriginAccess.ReadAllowedOrigins(app.Configuration);
+
+app.Logger.LogInformation(
+    "Expenses.Api starting in the {Environment} environment. Browser origins allowed: {AllowedOrigins}",
+    app.Environment.EnvironmentName,
+    allowedOrigins);
+
+if (allowedOrigins.Length == 0)
+{
+    // Not an error — a host nobody configured fails closed on purpose — but it looks healthy while
+    // every browser call is refused, so it should not be read out of an absent line.
+    app.Logger.LogWarning(
+        "No origin is configured under {SettingKey}, so every cross-origin browser request will be refused.",
+        CrossOriginAccess.SettingKey);
+}
+
 // Outermost, so a request is judged before anything else answers it. The headers are added when the
 // response starts, so an error the handler below writes carries them too (CorsTests pins that).
 app.UseExpensesCrossOriginAccess();
@@ -77,8 +96,6 @@ bool applyMigrations = app.Environment.IsDevelopment()
 await app.Services.PrepareExpensesDatabase(applyMigrations);
 
 app.MapControllers();
-
-app.Logger.LogInformation("Expenses.Api starting.");
 
 try
 {
