@@ -34,14 +34,10 @@ RUN apt-get update \
 #
 # `receipts-temp` is where captures wait to be confirmed, and is deliberately a sibling rather than
 # a child of the permanent store, so a naive walk over either one never mistakes an unconfirmed
-# capture for a confirmed receipt. It gets no volume: what lands there is swept within a day. It
-# does have to exist and be writable, because both hosts verify it at startup and refuse to run
-# without it — the default under `/app` is root-owned and this image runs as $APP_UID.
-RUN mkdir -p /var/lib/expenses/receipts /var/lib/expenses/receipts-temp \
-    && chown -R $APP_UID:$APP_UID /var/lib/expenses
+# capture for a confirmed receipt. It gets no volume: what lands there is swept within a day.
+RUN mkdir -p /var/lib/expenses/receipts /var/lib/expenses/receipts-temp
 
 WORKDIR /app
 COPY --from=build /app ./
-USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Expenses.Api.dll"]
