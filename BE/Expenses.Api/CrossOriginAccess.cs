@@ -20,7 +20,7 @@ public static class CrossOriginAccess
     /// </exception>
     public static IServiceCollection AddExpensesCrossOriginAccess(this IServiceCollection services, IConfiguration configuration)
     {
-        string[] origins = [.. (configuration.GetSection(SettingKey).Get<string[]>() ?? []).Select(Normalise)];
+        string[] origins = ReadAllowedOrigins(configuration);
 
         return services.AddCors(options => options.AddPolicy(PolicyName, policy => policy
             .WithOrigins(origins)
@@ -38,6 +38,15 @@ public static class CrossOriginAccess
     /// </summary>
     public static IApplicationBuilder UseExpensesCrossOriginAccess(this WebApplication app)
         => app.UseCors(PolicyName);
+
+    /// <summary>
+    /// The origins configured under <see cref="SettingKey"/>, normalised exactly as the policy takes
+    /// them. Public so a host can log what it will actually allow rather than a second reading of the
+    /// configuration that could disagree with the registered policy.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">An entry is not a plain http(s) origin.</exception>
+    public static string[] ReadAllowedOrigins(IConfiguration configuration)
+        => [.. (configuration.GetSection(SettingKey).Get<string[]>() ?? []).Select(Normalise)];
 
     private static string Normalise(string entry)
     {
