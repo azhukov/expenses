@@ -5,6 +5,7 @@ using Expenses.Infrastructure.Persistence;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Testcontainers.PostgreSql;
 
 namespace Expenses.Integration.Tests.Api;
 
@@ -72,11 +73,49 @@ public sealed class HealthTests(PostgresFixture postgres) : IAsyncLifetime
             new DbContextOptionsBuilder<ExpensesDbContext>().UseNpgsql(Unreachable).Options);
 
         var result = await new DatabaseHealthCheck(context).CheckHealthAsync(
-            new HealthCheckContext { Registration = Registration },
+            Context,
             CancellationToken.None);
 
         Assert.Equal(HealthStatus.Unhealthy, result.Status);
         Assert.NotNull(result.Exception);
+    }
+
+    /// <remarks>
+    /// A database of its own, stopped mid-test, which the shared fixture cannot be. It earns the
+    /// extra container: opening a connection is served from Npgsql's pool without reaching the
+    /// server, so a check built that way reported a stopped database as healthy and this is the
+    /// only arrangement in which that shows.
+    /// </remarks>
+    [Fact]
+    public async Task The_database_check_is_unhealthy_once_the_database_it_reached_stops()
+    {
+        var container = new PostgreSqlBuilder("postgres:17-alpine").Build();
+        await container.StartAsync();
+
+        try
+        {
+            await using var context = new ExpensesDbContext(
+                new DbContextOptionsBuilder<ExpensesDbContext>()
+                    .UseNpgsql(container.GetConnectionString())
+                    .Options);
+
+            var check = new DatabaseHealthCheck(context);
+
+            // Warms the pool: the failing case is a probe answered out of it afterwards.
+            var before = await check.CheckHealthAsync(Context, CancellationToken.None);
+            Assert.Equal(HealthStatus.Healthy, before.Status);
+
+            await container.StopAsync();
+
+            var after = await check.CheckHealthAsync(Context, CancellationToken.None);
+
+            Assert.Equal(HealthStatus.Unhealthy, after.Status);
+            Assert.NotNull(after.Exception);
+        }
+        finally
+        {
+            await container.DisposeAsync();
+        }
     }
 
     [Fact]
@@ -86,18 +125,24 @@ public sealed class HealthTests(PostgresFixture postgres) : IAsyncLifetime
             new DbContextOptionsBuilder<ExpensesDbContext>().UseNpgsql(postgres.ConnectionString).Options);
 
         var result = await new DatabaseHealthCheck(context).CheckHealthAsync(
-            new HealthCheckContext { Registration = Registration },
+            Context,
             CancellationToken.None);
 
         Assert.Equal(HealthStatus.Healthy, result.Status);
     }
 
-    /// <summary>The check reads nothing off its registration; it is here because the context requires one.</summary>
-    private static HealthCheckRegistration Registration => new(
-        DatabaseHealthCheck.Name,
-        _ => throw new InvalidOperationException("The check under test is constructed directly."),
-        HealthStatus.Unhealthy,
-        [HealthTags.Ready]);
+    /// <summary>
+    /// The check reads nothing off its registration; it exists because the context requires one,
+    /// and the factory throws because nothing here resolves the check through it.
+    /// </summary>
+    private static HealthCheckContext Context => new()
+    {
+        Registration = new HealthCheckRegistration(
+            DatabaseHealthCheck.Name,
+            _ => throw new InvalidOperationException("The check under test is constructed directly."),
+            HealthStatus.Unhealthy,
+            [HealthTags.Ready]),
+    };
 
     private ExpensesApi Host()
     {

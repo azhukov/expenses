@@ -9,10 +9,16 @@ namespace Expenses.Infrastructure.Persistence;
 /// liveness alone would keep it in rotation while every request that touches the ledger fails.
 /// </summary>
 /// <remarks>
-/// A round trip to the server, not merely a pool entry: <c>CanConnectAsync</c>
-/// opens a connection and discards it. Schema is deliberately not re-checked here — migrations and
-/// the provisioning assertion run once at startup (D13, D15), and repeating either on every probe
-/// would turn a five-second interval into steady load on <c>pg_database</c>.
+/// A statement, because nothing cheaper actually reaches the server: opening a connection is
+/// served from Npgsql's pool without a round trip, so a probe built on it reports a stopped
+/// database as healthy — observed, with the database stopped underneath a running host.
+/// <c>CanConnectAsync</c> does query, but reports the outcome as a bare <c>false</c>, and the
+/// reason the database refused — wrong password, no route, too many clients — is the whole content
+/// of the probe once it starts failing, so it must reach the body.
+///
+/// Schema is deliberately not re-checked: migrations and the provisioning assertion run once at
+/// startup (D13, D15), and repeating either on every probe would turn a five-second interval into
+/// steady load on <c>pg_database</c>.
 /// </remarks>
 public sealed class DatabaseHealthCheck(ExpensesDbContext ledger) : IHealthCheck
 {
@@ -24,9 +30,9 @@ public sealed class DatabaseHealthCheck(ExpensesDbContext ledger) : IHealthCheck
     {
         try
         {
-            return await ledger.Database.CanConnectAsync(cancellationToken)
-                ? HealthCheckResult.Healthy("The ledger database answered.")
-                : HealthCheckResult.Unhealthy("The ledger database did not answer.");
+            await ledger.Database.ExecuteSqlRawAsync("SELECT 1", cancellationToken);
+
+            return HealthCheckResult.Healthy("The ledger database answered.");
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
