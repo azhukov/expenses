@@ -95,6 +95,10 @@ bool applyMigrations = app.Environment.IsDevelopment()
 
 await app.Services.PrepareExpensesDatabase(applyMigrations);
 
+// Mapped after the database is prepared, in the same order Kestrel starts listening in: a probe
+// that answered while migrations were still running would report a host ready that is not.
+app.MapExpensesHealth();
+
 app.MapControllers();
 
 try

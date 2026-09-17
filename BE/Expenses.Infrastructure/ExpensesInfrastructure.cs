@@ -46,6 +46,14 @@ public static class ExpensesInfrastructure
         services.AddScoped<IMerchantRepository, MerchantRepository>();
         services.AddScoped<IUnitOfWork, ExpensesUnitOfWork>();
 
+        // Registered here rather than in the host: which dependency has to answer before this
+        // process can serve is a fact about the wiring, and the wiring lives in one place (D1). A
+        // host that publishes no probe endpoint is merely not asking.
+        services.AddHealthChecks()
+            .AddCheck<DatabaseHealthCheck>(
+                DatabaseHealthCheck.Name,
+                tags: [HealthTags.Ready]);
+
         // The receipt store is a directory, not a table: the bytes are files and the ledger holds
         // the reference (D11).
         var receipts = Bind<ReceiptStoreOptions>(configuration, "Receipts");
