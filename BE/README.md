@@ -130,14 +130,23 @@ secret or specific to the instance is a service variable, not in that file.
 internal address in `API_URL` would fail every request. Keep the internal name for traffic between
 services, such as a future MCP host.
 
-| Service | Root directory | Config file | Healthcheck |
-| --- | --- | --- | --- |
-| `expenses-api` | `/BE` | `/BE/railway.json` | `/units` |
-| `expenses-frontend` | `/FE` | `/FE/railway.json` | `/config.js` |
+There is no `railway.json` in this repository: both services are configured in the Railway
+dashboard.
 
-The config file does not follow the root directory, so set its absolute path in each service's
-settings. `/units` is the API healthcheck because `/openapi/v1.json` is mapped only in Development,
-and Kestrel listens only after the database is migrated and verified.
+| Service | Root directory | Dockerfile | Healthcheck |
+| --- | --- | --- | --- |
+| `expenses-api` | `/BE` | `RAILWAY_DOCKERFILE_PATH=/BE/Expenses.Api/Dockerfile` | `/units` |
+| `expenses-frontend` | `/FE` | auto-detected at `/FE/Dockerfile` | `/config.js` |
+
+The API's Dockerfile is not at its root directory, because the build context has to be `/BE` — the
+image restores from the same project references the solution does. Railway only auto-detects a
+`Dockerfile` sitting at the root directory, so the API needs `RAILWAY_DOCKERFILE_PATH` as a service
+variable to find it. That path is absolute from the repository root, not relative to the root
+directory. Without it the build silently falls back to Railpack and guesses at `/BE`.
+
+Set each healthcheck in the service's deploy settings. `/units` is the API's because
+`/openapi/v1.json` is mapped only in Development, and Kestrel listens only after the database is
+migrated and verified — so a passing healthcheck means migrations applied.
 
 `expenses-api` variables:
 
@@ -151,6 +160,7 @@ and Kestrel listens only after the database is migrated and verified.
 | `TemporaryReceipts__RootPath` | `/var/lib/expenses/receipts-temp` |
 | `Extraction__Vision__ApiKey` | the Anthropic key (sealed variable) |
 | `RAILWAY_RUN_UID` | `0` |
+| `RAILWAY_DOCKERFILE_PATH` | `/BE/Expenses.Api/Dockerfile` — the Dockerfile is below the root directory, so it is not auto-detected |
 
 - **The connection string is in Npgsql's key/value form, not `DATABASE_URL`.** Railway's
   `DATABASE_URL` is a `postgres://` URI, which Npgsql does not accept. It also names the `railway`
