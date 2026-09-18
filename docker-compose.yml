@@ -40,7 +40,8 @@ services:
 
   # The HTTP front door, and — because it runs as Development here — the one process that applies
   # migrations (D15). Its healthcheck is what the MCP host waits on: Kestrel does not listen until
-  # after `PrepareExpensesDatabase`, so "answering" means "the schema is there".
+  # after `PrepareExpensesDatabase`, so "answering" means "the schema is there". Readiness rather
+  # than liveness, because what the MCP host is waiting for is the database, not the port.
   api:
     build:
       context: ./BE
@@ -73,7 +74,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/openapi/v1.json > /dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready > /dev/null"]
       interval: 5s
       timeout: 5s
       retries: 20

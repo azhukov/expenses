@@ -17,7 +17,7 @@ docker compose up -d --build
 
 | | | |
 | --- | --- | --- |
-| API | <http://localhost:5082> | Swagger UI at `/swagger`, OpenAPI at `/openapi/v1.json` |
+| API | <http://localhost:5082> | Swagger UI at `/swagger`, OpenAPI at `/openapi/v1.json`, probes at `/health` and `/health/ready` |
 | MCP | <http://localhost:5083> | HTTP transport; stdio is a `dotnet run` on the host machine |
 | PostgreSQL | `localhost:5432` | user, password and database all `expenses` |
 
@@ -135,7 +135,7 @@ dashboard.
 
 | Service | Root directory | Dockerfile | Healthcheck |
 | --- | --- | --- | --- |
-| `expenses-api` | `/BE` | `RAILWAY_DOCKERFILE_PATH=/BE/Expenses.Api/Dockerfile` | `/units` |
+| `expenses-api` | `/BE` | `RAILWAY_DOCKERFILE_PATH=/BE/Expenses.Api/Dockerfile` | `/health/ready` |
 | `expenses-frontend` | `/FE` | auto-detected at `/FE/Dockerfile` | `/config.js` |
 
 The API's Dockerfile is not at its root directory, because the build context has to be `/BE` — the
@@ -144,9 +144,12 @@ image restores from the same project references the solution does. Railway only 
 variable to find it. That path is absolute from the repository root, not relative to the root
 directory. Without it the build silently falls back to Railpack and guesses at `/BE`.
 
-Set each healthcheck in the service's deploy settings. `/units` is the API's because
-`/openapi/v1.json` is mapped only in Development, and Kestrel listens only after the database is
-migrated and verified — so a passing healthcheck means migrations applied.
+Set each healthcheck in the service's deploy settings. The API publishes two probes: `/health`
+answers for the process alone and consults nothing, and `/health/ready` also asks whether the ledger
+database answers. Railway gets the readiness one — Kestrel listens only after the database is
+migrated and verified, so a passing healthcheck means migrations applied, and a host that later
+loses its database stops claiming to be ready. Use `/health` wherever a failing probe would restart
+the container, so a database blink does not take the host with it.
 
 `expenses-api` variables:
 
