@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -43,8 +43,8 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
             amount = 20.00m,
             expenses = new[]
             {
-                new { description = "Corrected line one", amount = 12.00m },
-                new { description = "Corrected line two", amount = 8.00m },
+                new { description = "Corrected line one", amount = 12.00m, unitCode = "PCS" },
+                new { description = "Corrected line two", amount = 8.00m, unitCode = "PCS" },
             },
             capture = new { tempKey, state },
         });

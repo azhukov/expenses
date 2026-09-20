@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Expenses.Integration.Tests.Harness;
@@ -46,8 +46,8 @@ public sealed class CrossAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             merchant = new { text = "AROMA", taxId = "09940001" },
             expenses = new[]
             {
-                new { description = "Sladoled", amount = 4.49m },
-                new { description = "Cokolada", amount = 3.99m },
+                new { description = "Sladoled", amount = 4.49m, unitCode = "PCS" },
+                new { description = "Cokolada", amount = 3.99m, unitCode = "PCS" },
             },
         }));
 
@@ -58,8 +58,8 @@ public sealed class CrossAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             ["merchant"] = new { text = "AROMA", taxId = "09940001" },
             ["expenses"] = new[]
             {
-                new { description = "Sladoled", amount = 4.49m },
-                new { description = "Cokolada", amount = 3.99m },
+                new { description = "Sladoled", amount = 4.49m, unitCode = "PCS" },
+                new { description = "Cokolada", amount = 3.99m, unitCode = "PCS" },
             },
         });
 
@@ -89,8 +89,8 @@ public sealed class CrossAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         var occurred = Next();
         var lines = new[]
         {
-            new { description = "Shoes", amount = 60.00m },
-            new { description = "Socks", amount = 18.50m },
+            new { description = "Shoes", amount = 60.00m, unitCode = "PCS" },
+            new { description = "Socks", amount = 18.50m, unitCode = "PCS" },
         };
 
         var overHttp = await _http.PostAsJsonAsync("/purchases", new { occurredAt = occurred, amount = 80.00m, expenses = lines });
@@ -126,14 +126,14 @@ public sealed class CrossAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         {
             ["occurredAt"] = occurred,
             ["amount"] = 4.44m,
-            ["expenses"] = new[] { new { description = "Tea", amount = 4.44m } },
+            ["expenses"] = new[] { new { description = "Tea", amount = 4.44m, unitCode = "PCS" } },
         });
 
         var overHttp = await _http.PostAsJsonAsync("/purchases", new
         {
             occurredAt = occurred,
             amount = 4.44m,
-            expenses = new[] { new { description = "Tea", amount = 4.44m } },
+            expenses = new[] { new { description = "Tea", amount = 4.44m, unitCode = "PCS" } },
         });
 
         var httpPurchase = await ExpensesApi.Read<JsonElement>(overHttp);

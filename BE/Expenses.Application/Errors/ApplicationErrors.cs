@@ -18,6 +18,8 @@ public static class ApplicationErrors
     public const string QuantityPrecision = "quantity.precision_exceeded";
 
     public const string ExpenseDescriptionRequired = "expense.description_required";
+    public const string ExpenseDescriptionTooLong = "expense.description_too_long";
+    public const string ExpenseUnitRequired = "expense.unit_required";
     public const string ExpenseDiscountIncomplete = "expense.discount_incomplete";
     public const string ExpenseDiscountNegative = "expense.discount_negative";
     public const string ExpenseDiscountPercentageNotAccepted = "expense.discount_percentage_not_accepted";

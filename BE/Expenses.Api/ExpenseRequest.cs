@@ -1,4 +1,4 @@
-using Expenses.Application.Dtos;
+﻿using Expenses.Application.Dtos;
 
 namespace Expenses.Api;
 
@@ -9,7 +9,12 @@ namespace Expenses.Api;
 /// <param name="Description">The line's free-text description.</param>
 /// <param name="Amount">The line's total amount.</param>
 /// <param name="Quantity">The quantity purchased, if known.</param>
-/// <param name="UnitCode">The code of the unit the quantity is measured in, if known.</param>
+/// <param name="UnitCode">
+/// The code of the unit the quantity is measured in. A line without one is refused — but the
+/// parameter stays optional here so that the refusal is the ledger's own, naming the line, rather
+/// than a binding failure that says only that the request could not be read (D1: no rule lives in
+/// an adapter).
+/// </param>
 /// <param name="UnitPrice">The price per unit, if known.</param>
 /// <param name="CategoryCode">The code of the assigned category, if known.</param>
 /// <param name="CategoryRaw">The category as extracted, before mapping to a code.</param>

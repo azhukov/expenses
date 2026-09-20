@@ -1,4 +1,4 @@
-using Expenses.Application.Dtos;
+﻿using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Interfaces;
 using Expenses.Application.Services;
@@ -37,7 +37,7 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
     public async Task Concurrent_duplicate_submissions()
     {
         var occurred = Next();
-        IReadOnlyList<ExpenseCommand> expenses = [new ExpenseCommand("Coffee", 2.90m)];
+        IReadOnlyList<ExpenseCommand> expenses = [new ExpenseCommand("Coffee", 2.90m, UnitCode: "PCS")];
 
         // Two writers, no coordination: the case a check-then-insert loses and the unique index
         // exists for (D4).
@@ -170,13 +170,13 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChanges();
 
         var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
-            Next(), 1.50m, [new ExpenseCommand("Ticket", 1.50m, CategoryCode: code)]);
+            Next(), 1.50m, [new ExpenseCommand("Ticket", 1.50m, UnitCode: "PCS", CategoryCode: code)]);
 
         await scope.ServiceProvider.GetRequiredService<CategoryService>().Deactivate(code);
 
         var refused = await Assert.ThrowsAsync<ExpensesException>(() =>
             scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
-                Next(), 1.50m, [new ExpenseCommand("Ticket", 1.50m, CategoryCode: code)]));
+                Next(), 1.50m, [new ExpenseCommand("Ticket", 1.50m, UnitCode: "PCS", CategoryCode: code)]));
 
         Assert.Equal(ApplicationErrors.CategoryInactive, refused.Error.Code);
 
@@ -204,7 +204,7 @@ public sealed class LedgerBehaviourTests(PostgresFixture postgres) : IAsyncLifet
 
     private static (DateTime OccurredAt, decimal Amount, IReadOnlyList<ExpenseCommand> Expenses, MerchantCommand? Merchant) Purchase(
         decimal amount, MerchantCommand? merchant = null)
-        => (Next(), amount, [new ExpenseCommand("Line", amount)], merchant);
+        => (Next(), amount, [new ExpenseCommand("Line", amount, UnitCode: "PCS")], merchant);
 
     private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 }

@@ -284,6 +284,9 @@ describe('The capture result is not re-requested', () => {
       }),
     )
 
+    // This capture decoded no creation timestamp, so the date is entered: the screen no longer
+    // submits without one ("The review screen refuses an incomplete purchase").
+    await userEvent.type(screen.getByLabelText(/^date/i), '2026-09-01T10:15')
     await userEvent.clear(within(lines()[0]).getByLabelText(/description/i))
     await userEvent.type(within(lines()[0]).getByLabelText(/description/i), 'Edited')
     await userEvent.click(confirm)
@@ -433,6 +436,8 @@ describe('A failed extraction still allows manual entry', () => {
     await userEvent.type(screen.getByLabelText(/date/i), '2026-09-02T18:30')
     await userEvent.type(within(lines()[0]).getByLabelText(/description/i), 'Coffee')
     await userEvent.type(within(lines()[0]).getByLabelText(/^amount$/i), '9.99')
+    await userEvent.type(within(lines()[0]).getByLabelText(/quantity/i), '1')
+    await userEvent.selectOptions(within(lines()[0]).getByLabelText(/unit/i), 'kg')
     await userEvent.click(confirm)
 
     await waitFor(() => expect(record).toHaveBeenCalledTimes(1))
@@ -538,22 +543,20 @@ describe('A rejected confirmation is reported in place', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/which is not the purchase amount/i)
   })
 
-  it('states that a date is required when neither the receipt nor the user gave one', async () => {
-    record.mockRejectedValue(
-      new LedgerError(
-        'A purchase requires a date. Supply one, or confirm a capture whose fiscal QR decoded one.',
-        {
-          code: 'purchase.occurrence_required',
-        },
-      ),
-    )
+  /**
+   * browser-client, "A missing date never reaches the ledger". This used to assert the ledger's
+   * own `purchase.occurrence_required` message; that rejection is now unreachable from this screen,
+   * because the screen refuses to submit without a date and marks the input instead.
+   */
+  it('refuses to submit when neither the receipt nor the user gave a date', async () => {
     const confirm = await reviewOf(
       extracted({ extracted: noFiscal, supplied: noFiscal, fiscalSource: 'None' }),
     )
 
     await userEvent.click(confirm)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/requires a date/i)
+    expect(record).not.toHaveBeenCalled()
+    expect(screen.getByLabelText(/^date/i)).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('leaves the entered lines, amount and date exactly as they were', async () => {

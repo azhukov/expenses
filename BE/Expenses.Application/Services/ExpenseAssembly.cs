@@ -1,4 +1,4 @@
-using Expenses.Application.Dtos;
+﻿using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Interfaces;
 using Expenses.Domain.Entities;
@@ -20,12 +20,24 @@ internal static class ExpenseAssembly
     {
         var lines = new List<Expense>(commands.Count);
 
-        foreach (var command in commands)
+        foreach (var (command, position) in commands.Select((command, index) => (command, index + 1)))
         {
             long? categoryId = await ResolveCategory(command.CategoryCode, categories, cancellationToken)
                 ?? command.MatchedCategoryId;
             long? unitId = await ResolveUnit(command.UnitCode, units, cancellationToken)
                 ?? command.MatchedUnitId;
+
+            // Checked here rather than in the entity: a unit reaches a line either as a code or as
+            // a match made while extracting, and this is the one place both have been consulted.
+            // The entity cannot state the rule either way, since expenses recorded before it have
+            // no unit and must still load.
+            if (unitId is null)
+            {
+                throw ExpensesException.For(
+                    ApplicationErrors.ExpenseUnitRequired,
+                    $"Expense line {position} requires a unit.",
+                    ("line", position));
+            }
 
             try
             {

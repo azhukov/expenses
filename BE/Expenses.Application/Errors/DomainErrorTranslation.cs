@@ -9,6 +9,12 @@ internal static class DomainErrorTranslation
 {
     public static ExpensesException Expense(Exception exception) => exception switch
     {
+        // Before the arm below it: a length violation is an ArgumentOutOfRangeException, which is
+        // itself an ArgumentException naming the same parameter, and would otherwise be reported
+        // as a description that is missing.
+        ArgumentOutOfRangeException { ParamName: "description" } =>
+            Wrap(ApplicationErrors.ExpenseDescriptionTooLong, exception),
+
         ArgumentException { ParamName: "description" } => Wrap(ApplicationErrors.ExpenseDescriptionRequired, exception),
 
         // The pair is set together or not at all (D19), which arrives as a plain ArgumentException

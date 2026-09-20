@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -84,6 +84,25 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(78.50m, error.GetProperty("fields").GetProperty("expensesTotal").GetDecimal());
     }
 
+    /// <summary>
+    /// purchase-recording, "An expense without a unit is rejected". The shape matters as much as
+    /// the refusal: the browser client marks the line the error names.
+    /// </summary>
+    [Fact]
+    public async Task An_expense_without_a_unit_is_rejected()
+    {
+        var response = await Record(NewPurchase(
+            4.00m,
+            [Line("Bananas", 2.00m), new { description = "Bus fare", amount = 2.00m }]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await ExpensesApi.Read<JsonElement>(response);
+
+        Assert.Equal("expense.unit_required", error.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(error.GetProperty("message").GetString()));
+        Assert.Equal(2, error.GetProperty("fields").GetProperty("line").GetInt32());
+    }
+
     [Fact]
     public async Task Unknown_resource()
     {
@@ -140,8 +159,8 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             merchant = new { text = "AROMA", taxId = "08800011" },
             expenses = new[]
             {
-                new { description = "Sladoled", amount = 4.49m, listUnitPrice = 8.50m, discountAmount = 4.01m },
-                new { description = "Cokolada", amount = 3.99m, listUnitPrice = 7.50m, discountAmount = 3.51m },
+                new { description = "Sladoled", amount = 4.49m, unitCode = "PCS", listUnitPrice = 8.50m, discountAmount = 4.01m },
+                new { description = "Cokolada", amount = 3.99m, unitCode = "PCS", listUnitPrice = 7.50m, discountAmount = 3.51m },
             },
         }));
 
@@ -167,7 +186,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             amount = 4.49m,
             expenses = new[]
             {
-                new { description = "Sladoled", amount = 4.49m, listUnitPrice = 8.50m, discountPercentage = 47.18m },
+                new { description = "Sladoled", amount = 4.49m, unitCode = "PCS", listUnitPrice = 8.50m, discountPercentage = 47.18m },
             },
         });
 
@@ -325,7 +344,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             occurredAt = Next(),
             amount = 2.50m,
             merchant = new { text = "Kafiterija Šćepanović", taxId = "08800022" },
-            expenses = new[] { new { description = "Kafa", amount = 2.50m } },
+            expenses = new[] { new { description = "Kafa", amount = 2.50m, unitCode = "PCS" } },
         });
 
         var listed = await ExpensesApi.Read<JsonElement>(await _client.GetAsync("/merchants"));
@@ -349,7 +368,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         // does after correcting them.
         var confirmed = await _client.PostAsJsonAsync(
             $"/purchases/{purchaseId}/extraction/confirm",
-            new { expenses = new[] { new { description = "Corrected line", amount = 10.00m } } });
+            new { expenses = new[] { new { description = "Corrected line", amount = 10.00m, unitCode = "PCS" } } });
 
         Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
         var purchase = await ExpensesApi.Read<JsonElement>(confirmed);
@@ -439,7 +458,12 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
     private static object NewPurchase(decimal amount, object[] expenses, DateTime? occurredAt = null)
         => new { occurredAt = occurredAt ?? Next(), amount, expenses };
 
-    private static object Line(string description, decimal amount) => new { description, amount };
+    /// <summary>
+    /// A line for the tests that are not about units. Every expense needs one, so the helper
+    /// supplies the seeded piece unit rather than each test restating it.
+    /// </summary>
+    private static object Line(string description, decimal amount)
+        => new { description, amount, unitCode = "PCS" };
 
     private static DateTime Next() => s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence));
 

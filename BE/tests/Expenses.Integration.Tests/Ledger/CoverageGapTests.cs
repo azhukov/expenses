@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -41,7 +41,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
         var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
                 Next(),
                 6.00m,
-                [new ExpenseCommand("Line", 6.00m)],
+                [new ExpenseCommand("Line", 6.00m, UnitCode: "PCS")],
                 capture: new CapturedReceiptCommand(captured.TempKey, captured.State, captured.FailureReason));
 
         var purchase = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Get(recorded.Purchase.Id);
@@ -76,8 +76,8 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
                 Next(),
                 3.00m,
                 [
-                    new ExpenseCommand(Cyrillic, 2.00m, UnitRaw: "шт", CategoryRaw: "продукты"),
-                    new ExpenseCommand(Greek, 1.00m),
+                    new ExpenseCommand(Cyrillic, 2.00m, UnitCode: "PCS", UnitRaw: "шт", CategoryRaw: "продукты"),
+                    new ExpenseCommand(Greek, 1.00m, UnitCode: "PCS"),
                 ]);
 
         var purchase = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Get(recorded.Purchase.Id);
@@ -104,7 +104,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
         var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
                 Next(),
                 2.00m,
-                [new ExpenseCommand("Assigned to a parent", 2.00m, CategoryCode: parentCode)]);
+                [new ExpenseCommand("Assigned to a parent", 2.00m, UnitCode: "PCS", CategoryCode: parentCode)]);
 
         Assert.NotNull(recorded.Purchase.Expenses[0].CategoryId);
     }
@@ -121,7 +121,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
         var recorded = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Record(
                 Next(),
                 5.00m,
-                [new ExpenseCommand("At the chain itself", 5.00m)],
+                [new ExpenseCommand("At the chain itself", 5.00m, UnitCode: "PCS")],
                 new MerchantCommand("GAP CHAIN", "09950001"));
 
         // A merchant with children is assignable in its own right, exactly like a category (D18).
@@ -173,7 +173,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     private static async Task<RecordPurchaseResult> Record(IServiceProvider services, decimal amount)
-        => await services.GetRequiredService<PurchaseService>().Record(Next(), amount, [new ExpenseCommand("Line", amount)]);
+        => await services.GetRequiredService<PurchaseService>().Record(Next(), amount, [new ExpenseCommand("Line", amount, UnitCode: "PCS")]);
 
     private static byte[] Jpeg()
         => [0xFF, 0xD8, 0xFF, 0xE0, (byte)s_sequence, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x06, (byte)(s_sequence >> 8)];

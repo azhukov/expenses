@@ -1,4 +1,4 @@
-using Expenses.Application.Dtos;
+﻿using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Interfaces;
 using Expenses.Application.Services;
@@ -13,6 +13,9 @@ public sealed class RerunExtractionTests
     private static readonly DateTime s_occurred = new(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified);
 
     private readonly InMemoryLedger _ledger = new();
+
+    /// <summary>A confirmed line needs a unit, whatever the test is really about.</summary>
+    public RerunExtractionTests() => _ledger.Given(Unit.Create("PCS", "Piece", "pcs", Unit.UnitKind.Count));
 
     [Fact]
     public async Task Re_run_replaces_candidates()
@@ -31,7 +34,7 @@ public sealed class RerunExtractionTests
     public async Task Re_run_after_confirmation()
     {
         var purchase = GivenPurchaseWithReceipt(Receipt.ExtractionState.Extracted);
-        await Subject().ConfirmCandidates(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m)]);
+        await Subject().ConfirmCandidates(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m, UnitCode: "PCS")]);
 
         var extracted = await Subject(FakeStep.Producing(
             "vision", Results.Reconciling("vision")))

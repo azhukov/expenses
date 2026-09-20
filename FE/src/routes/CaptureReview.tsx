@@ -8,11 +8,42 @@ import {
   type EditableLine,
   type Edits,
   emptyLine,
+  type Errors,
   fiscalCreatedAt,
+  isValid,
   lineOf,
   lowConfidence,
   reviewReasons,
+  validate,
 } from '../capture/review'
+
+import styles from './CaptureReview.module.css'
+
+const NOTHING_MARKED: Errors = { byLine: new Map() }
+
+/**
+ * What an input needs in order to be marked: the invalid state and the message, announced together
+ * rather than shown only in ink. The id is derived from the field's own name so the message keeps
+ * the same identity across renders.
+ */
+function marked(id: string, message: string | undefined) {
+  return {
+    'aria-invalid': message !== undefined,
+    'aria-describedby': message === undefined ? undefined : id,
+  }
+}
+
+/**
+ * What is wrong with one input, beside the input. Rendered even when there is nothing to say, so
+ * that marking a line does not push the lines below it down the screen.
+ */
+function Message({ id, text }: { id: string; text: string | undefined }) {
+  return (
+    <span className={styles.message} id={id} data-testid={text === undefined ? undefined : id}>
+      {text ?? ' '}
+    </span>
+  )
+}
 
 export interface ReviewProps {
   capture: CaptureResult
@@ -58,6 +89,16 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
     candidates.map(each => [each.lineNumber, lowConfidence(each.reportedConfidence)]),
   )
 
+  const hasAlert = capture.failureReason !== null || failure !== null || reasons.length > 0
+
+  // Marked only once the user has tried to confirm, and recomputed from the current values on
+  // every render after that — which is what clears a mark as a value is corrected, with no second
+  // mechanism and no state that can fall out of step with what is on the screen (D3).
+  const [attempted, setAttempted] = useState(false)
+  const edits: Edits = { lines, amount, merchant, occurredAt, dateEdited }
+  const errors = validate(edits, fiscalCreatedAt(capture))
+  const marks = attempted ? errors : NOTHING_MARKED
+
   function change(key: number, field: keyof EditableLine, value: string) {
     setLines(current =>
       current.map(line => (line.key === key ? { ...line, [field]: value } : line)),
@@ -66,90 +107,187 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
 
   return (
     <form
+      className={styles.page}
+      noValidate
       onSubmit={event => {
         event.preventDefault()
-        onConfirm({ lines, amount, merchant, occurredAt, dateEdited })
+        setAttempted(true)
+
+        if (isValid(errors)) {
+          onConfirm(edits)
+        }
       }}
     >
-      {capture.failureReason !== null && <p role="alert">{capture.failureReason}</p>}
+      <header className={styles.header}>
+        {/*
+          Above everything it qualifies: which reading the user is correcting. Taken from the
+          response's own engine name and nothing else — where extraction produced no result there
+          is no name to infer, and saying so is better than a blank (D7).
+        */}
+        <p className={styles.engine} data-testid="engine">
+          {capture.result === null
+            ? 'No extraction engine reading available'
+            : `Extracted by ${capture.result.engineName}`}
+        </p>
 
-      {reasons.length > 0 && (
-        <ul data-testid="review-reasons">
-          {reasons.map(reason => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
+        <label className={styles.field}>
+          <span className={styles.caption}>Merchant</span>
+          <input
+            className={`${styles.input} ${styles.provider}`}
+            value={merchant}
+            placeholder="Unknown merchant"
+            onChange={event => setMerchant(event.target.value)}
+          />
+        </label>
+
+        <div className={styles.meta}>
+          <div className={styles.field}>
+            <label className={styles.control}>
+              <span className={styles.caption}>Date</span>
+              <input
+                className={styles.input}
+                type="datetime-local"
+                value={occurredAt}
+                onChange={event => {
+                  setDateEdited(true)
+                  setOccurredAt(event.target.value)
+                }}
+                {...marked('occurred-at-error', marks.occurredAt)}
+              />
+            </label>
+            <Message id="occurred-at-error" text={marks.occurredAt} />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.control}>
+              <span className={styles.caption}>Total amount</span>
+              <input
+                className={`${styles.input} ${styles.number}`}
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={event => setAmount(event.target.value)}
+                {...marked('amount-error', marks.amount)}
+              />
+            </label>
+            <Message id="amount-error" text={marks.amount} />
+          </div>
+        </div>
+      </header>
+
+      {hasAlert && (
+        <div className={styles.alerts}>
+          {capture.failureReason !== null && (
+            <p className={styles.failure} role="alert">
+              {capture.failureReason}
+            </p>
+          )}
+
+          {failure !== null && (
+            <p className={styles.failure} role="alert">
+              {failure}
+            </p>
+          )}
+
+          {reasons.length > 0 && (
+            <ul className={styles.reasons} data-testid="review-reasons">
+              {reasons.map(reason => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
-      {failure !== null && <p role="alert">{failure}</p>}
+      {marks.lines !== undefined && (
+        <p className={styles.failure} role="alert" data-testid="lines-error">
+          {marks.lines}
+        </p>
+      )}
 
-      <label>
-        Merchant
-        <input value={merchant} onChange={event => setMerchant(event.target.value)} />
-      </label>
+      <ul className={styles.lines}>
+        {lines.map((line, index) => (
+          <li className={styles.line} key={line.key} data-testid="line">
+            <div className={styles.lineHead}>
+              <span className={styles.ordinal}>Line {index + 1}</span>
 
-      <label>
-        Date
-        <input
-          type="datetime-local"
-          value={occurredAt}
-          onChange={event => {
-            setDateEdited(true)
-            setOccurredAt(event.target.value)
-          }}
-        />
-      </label>
+              <button
+                className={styles.remove}
+                type="button"
+                onClick={() => setLines(current => current.filter(each => each.key !== line.key))}
+              >
+                Remove
+              </button>
+            </div>
 
-      <label>
-        Total amount
-        <input
-          type="number"
-          step="0.01"
-          value={amount}
-          onChange={event => setAmount(event.target.value)}
-        />
-      </label>
-
-      <ul>
-        {lines.map(line => (
-          <li key={line.key} data-testid="line">
             {(unsureOn.get(line.key)?.length ?? 0) > 0 && (
-              <p data-testid="low-confidence">
+              <p className={styles.unsure} data-testid="low-confidence">
                 Extraction was unsure of {unsureOn.get(line.key)?.join(', ')}.
               </p>
             )}
 
-            <label>
-              Description
-              <input
-                value={line.description}
-                onChange={event => change(line.key, 'description', event.target.value)}
+            <div className={`${styles.field} ${styles.span}`}>
+              <label className={styles.control}>
+                <span className={styles.caption}>Description</span>
+                <input
+                  className={styles.input}
+                  value={line.description}
+                  onChange={event => change(line.key, 'description', event.target.value)}
+                  {...marked(
+                    `line-${line.key}-description-error`,
+                    marks.byLine.get(line.key)?.description,
+                  )}
+                />
+              </label>
+              <Message
+                id={`line-${line.key}-description-error`}
+                text={marks.byLine.get(line.key)?.description}
               />
-            </label>
+            </div>
 
-            <label>
-              Amount
-              <input
-                type="number"
-                step="0.01"
-                value={line.amount}
-                onChange={event => change(line.key, 'amount', event.target.value)}
+            <div className={styles.field}>
+              <label className={styles.control}>
+                <span className={styles.caption}>Amount</span>
+                <input
+                  className={`${styles.input} ${styles.number}`}
+                  type="number"
+                  step="0.01"
+                  value={line.amount}
+                  onChange={event => change(line.key, 'amount', event.target.value)}
+                  {...marked(`line-${line.key}-amount-error`, marks.byLine.get(line.key)?.amount)}
+                />
+              </label>
+              <Message
+                id={`line-${line.key}-amount-error`}
+                text={marks.byLine.get(line.key)?.amount}
               />
-            </label>
+            </div>
 
-            <label>
-              Quantity
-              <input
-                type="number"
-                step="0.001"
-                value={line.quantity}
-                onChange={event => change(line.key, 'quantity', event.target.value)}
+            <div className={styles.field}>
+              <label className={styles.control}>
+                <span className={styles.caption}>Quantity</span>
+                <input
+                  className={`${styles.input} ${styles.number}`}
+                  type="number"
+                  step="0.001"
+                  value={line.quantity}
+                  onChange={event => change(line.key, 'quantity', event.target.value)}
+                  {...marked(
+                    `line-${line.key}-quantity-error`,
+                    marks.byLine.get(line.key)?.quantity,
+                  )}
+                />
+              </label>
+              <Message
+                id={`line-${line.key}-quantity-error`}
+                text={marks.byLine.get(line.key)?.quantity}
               />
-            </label>
+            </div>
 
-            <label>
-              Category
+            <label className={styles.field}>
+              <span className={styles.caption}>Category</span>
               <select
+                className={styles.input}
                 value={line.categoryCode}
                 onChange={event => change(line.key, 'categoryCode', event.target.value)}
               >
@@ -162,41 +300,45 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
               </select>
             </label>
 
-            <label>
-              Unit
-              <select
-                value={line.unitCode}
-                onChange={event => change(line.key, 'unitCode', event.target.value)}
-              >
-                <option value="">None</option>
-                {(units.data ?? []).map(unit => (
-                  <option key={unit.id} value={unit.code}>
-                    {unit.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button
-              type="button"
-              onClick={() => setLines(current => current.filter(each => each.key !== line.key))}
-            >
-              Remove
-            </button>
+            <div className={styles.field}>
+              <label className={styles.control}>
+                <span className={styles.caption}>Unit</span>
+                <select
+                  className={styles.input}
+                  value={line.unitCode}
+                  onChange={event => change(line.key, 'unitCode', event.target.value)}
+                  {...marked(`line-${line.key}-unit-error`, marks.byLine.get(line.key)?.unitCode)}
+                >
+                  <option value="">None</option>
+                  {(units.data ?? []).map(unit => (
+                    <option key={unit.id} value={unit.code}>
+                      {unit.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Message
+                id={`line-${line.key}-unit-error`}
+                text={marks.byLine.get(line.key)?.unitCode}
+              />
+            </div>
           </li>
         ))}
       </ul>
 
-      <button
-        type="button"
-        onClick={() => setLines(current => [...current, emptyLine(nextKey.current++)])}
-      >
-        Add a line
-      </button>
+      <div className={styles.dock}>
+        <button
+          className={styles.add}
+          type="button"
+          onClick={() => setLines(current => [...current, emptyLine(nextKey.current++)])}
+        >
+          Add a line
+        </button>
 
-      <button type="submit" disabled={isConfirming}>
-        Confirm
-      </button>
+        <button className={styles.confirm} type="submit" disabled={isConfirming}>
+          Confirm
+        </button>
+      </div>
     </form>
   )
 }

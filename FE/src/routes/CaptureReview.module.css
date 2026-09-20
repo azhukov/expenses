@@ -1,0 +1,247 @@
+/*
+ * The review screen's shape, following the launcher's (Home.module.css): a fixed header, a fixed
+ * dock, and the lines scrolling between them. `100dvh` for the same reason — on iOS Safari the
+ * toolbar collapses as the list scrolls, and a bottom-anchored Confirm must not move with it.
+ *
+ * The header is outside the scrolling region on purpose. Which receipt is being reviewed is the
+ * one thing the user needs while correcting the tenth line, and a merchant name that scrolls away
+ * with the first line leaves the screen anonymous (D1).
+ */
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+  padding-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+  background: var(--colour-surface);
+  border-bottom: 1px solid var(--colour-line);
+}
+
+/* Date and total read as one line of receipt metadata, and stay two columns at any width. */
+.meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* Without this a grid item refuses to shrink below its input's intrinsic width and the page
+     scrolls sideways — the failure the unstyled form had. */
+  min-width: 0;
+}
+
+/*
+ * The label wraps only the caption and the control, never the message: a wrapping label's text
+ * becomes the control's accessible name, and an error message read out as part of the field's
+ * name is not what a screen reader user should hear. `display: contents` keeps the field's own
+ * column layout, so the markup change is invisible on screen.
+ */
+.control {
+  display: contents;
+}
+
+.caption {
+  color: var(--colour-ink-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+  background: var(--colour-surface);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 1px;
+}
+
+/*
+ * A refused value is marked by a heavier border and by the message below it, never by colour
+ * alone: colour is not available to every reader, and the message is what says what to do.
+ */
+.input[aria-invalid='true'] {
+  border-width: 2px;
+  border-color: var(--colour-failure);
+}
+
+/*
+ * Rendered for every field, holding a non-breaking space when there is nothing to say, so that
+ * marking one line does not push the lines below it down the screen as the user works.
+ */
+.message {
+  min-height: 1rem;
+  color: var(--colour-failure);
+  font-size: 0.8125rem;
+}
+
+/* Amounts and quantities are compared down the column, so they are figures of one width. */
+.number {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Which engine read the receipt. Quiet, above the fields: it qualifies everything below without
+ * competing with the merchant for the eye.
+ */
+.engine {
+  color: var(--colour-ink-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+/* The merchant is the screen's title as much as it is a field, and is sized to be read as one. */
+.provider {
+  font-size: 1.25rem;
+  font-weight: 600;
+  min-height: 52px;
+}
+
+.alerts {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--colour-attention-surface);
+  color: var(--colour-attention);
+  font-size: 0.9375rem;
+  border-bottom: 1px solid var(--colour-line);
+}
+
+.failure {
+  color: var(--colour-failure);
+}
+
+.reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.lines {
+  flex: 1 1 auto;
+  /* Without this the flex item refuses to shrink and the page scrolls instead of the lines. */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  padding-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+}
+
+/*
+ * One card per line, with a fixed two-column body. Every line is the same height whatever it holds,
+ * so a list of twenty does not shift under the finger as values are corrected.
+ */
+.line {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+  background: var(--colour-surface);
+}
+
+.span {
+  grid-column: 1 / -1;
+}
+
+.lineHead {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ordinal {
+  color: var(--colour-ink-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.remove {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--colour-failure);
+  font-size: 0.875rem;
+}
+
+.unsure {
+  grid-column: 1 / -1;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--colour-attention-surface);
+  color: var(--colour-attention);
+  font-size: 0.8125rem;
+}
+
+/*
+ * Outside the scrolling region, so Confirm is reachable whether or not the lines are scrolled. The
+ * bottom inset clears the home indicator (D11).
+ */
+.dock {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+  background: var(--colour-page);
+  border-top: 1px solid var(--colour-line);
+}
+
+.add {
+  flex: 0 0 auto;
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+  background: var(--colour-surface);
+  font-weight: 600;
+}
+
+.confirm {
+  flex: 1 1 auto;
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--colour-accent);
+  color: var(--colour-accent-ink);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.confirm:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

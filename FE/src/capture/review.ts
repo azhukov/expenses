@@ -128,6 +128,118 @@ export function reviewReasons(capture: CaptureResult): string[] {
   return reasons
 }
 
+/**
+ * The longest description the ledger stores — `Expense`'s own limit, restated here so the user
+ * hears it on the field rather than as a rejection after a round trip. The duplication is
+ * deliberate (D2): if the two ever disagree, the ledger's refusal still reaches the screen.
+ */
+const DESCRIPTION_MAX_LENGTH = 200
+
+/** The fields of a line the screen can refuse, and what is wrong with each. */
+export type LineErrors = Partial<Record<'description' | 'amount' | 'quantity' | 'unitCode', string>>
+
+/**
+ * Everything wrong with what the user has entered, all of it at once: a first fault is no reason
+ * to stop looking, since the user would then correct one value per attempt.
+ */
+export interface Errors {
+  amount?: string
+  occurredAt?: string
+  /** The purchase has no lines at all, which is not a fault of any one input. */
+  lines?: string
+  byLine: Map<number, LineErrors>
+}
+
+/**
+ * A number as the user typed it. Absence, nonsense and a negative are each refused; zero is not,
+ * because a line can legitimately come to nothing and the ledger accepts it.
+ */
+function numberProblem(value: string, name: string): string | undefined {
+  if (value.trim() === '') {
+    return `${name} is required.`
+  }
+
+  const parsed = Number(value)
+
+  if (!Number.isFinite(parsed)) {
+    return `${name} must be a number.`
+  }
+
+  return parsed < 0 ? `${name} cannot be negative.` : undefined
+}
+
+function lineProblems(line: EditableLine): LineErrors {
+  const errors: LineErrors = {}
+  const description = line.description.trim()
+
+  if (description === '') {
+    errors.description = 'A description is required.'
+  } else if (description.length > DESCRIPTION_MAX_LENGTH) {
+    errors.description = `A description is at most ${DESCRIPTION_MAX_LENGTH} characters.`
+  }
+
+  const amount = numberProblem(line.amount, 'An amount')
+  if (amount !== undefined) {
+    errors.amount = amount
+  }
+
+  const quantity = numberProblem(line.quantity, 'A quantity')
+  if (quantity !== undefined) {
+    errors.quantity = quantity
+  }
+
+  if (line.unitCode === '') {
+    errors.unitCode = 'A unit is required.'
+  }
+
+  return errors
+}
+
+/**
+ * What the review screen refuses to submit, and why. `fiscalDate` is the date the receipt itself
+ * established, if any: where there is one and the user has not overridden it, confirmation carries
+ * no date at all and the ledger resolves it, so an empty date input is not a fault.
+ *
+ * The rules the ledger enforces are restated here rather than shared with it (D2). The merchant
+ * and a line's category are absent on purpose: both are optional, and nothing decides that twice.
+ */
+export function validate(edits: Edits, fiscalDate: string | null = null): Errors {
+  const errors: Errors = { byLine: new Map() }
+
+  const amount = numberProblem(edits.amount, 'A total amount')
+  if (amount !== undefined) {
+    errors.amount = amount
+  }
+
+  if (edits.occurredAt.trim() === '' && (edits.dateEdited || fiscalDate === null)) {
+    errors.occurredAt = 'A date is required.'
+  }
+
+  if (edits.lines.length === 0) {
+    errors.lines = 'At least one expense line is required.'
+  }
+
+  for (const line of edits.lines) {
+    const problems = lineProblems(line)
+
+    if (Object.keys(problems).length > 0) {
+      errors.byLine.set(line.key, problems)
+    }
+  }
+
+  return errors
+}
+
+/** Whether anything at all is wrong — what the screen asks before submitting. */
+export function isValid(errors: Errors): boolean {
+  return (
+    errors.amount === undefined &&
+    errors.occurredAt === undefined &&
+    errors.lines === undefined &&
+    errors.byLine.size === 0
+  )
+}
+
 /** What the user is asserting about the receipt, as against what extraction proposed. */
 export interface Edits {
   lines: EditableLine[]

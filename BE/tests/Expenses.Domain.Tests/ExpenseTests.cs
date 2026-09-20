@@ -70,6 +70,42 @@ public sealed class ExpenseTests
     }
 
     [Fact]
+    public void A_description_at_the_limit_is_accepted()
+    {
+        string description = new('x', 200);
+
+        var expense = Expense.Record(description, amount: 1.00m);
+
+        Assert.Equal(description, expense.Description);
+    }
+
+    [Fact]
+    public void An_over_long_description_is_rejected()
+    {
+        string description = new('x', 201);
+
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Expense.Record(description, amount: 1.00m));
+
+        Assert.Equal("description", error.ParamName);
+        Assert.Contains("200", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The limit is a limit on what is stored, and what is stored is trimmed — so padding is not
+    /// what makes a description too long.
+    /// </summary>
+    [Fact]
+    public void The_description_limit_is_applied_after_trimming()
+    {
+        string padded = "   " + new string('x', 200) + "   ";
+
+        var expense = Expense.Record(padded, amount: 1.00m);
+
+        Assert.Equal(200, expense.Description.Length);
+    }
+
+    [Fact]
     public void Expense_without_a_category()
     {
         var expense = Expense.Record("Lunch", amount: 12.40m);

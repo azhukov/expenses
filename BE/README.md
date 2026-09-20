@@ -52,7 +52,7 @@ origin can still read the error's message.
 
 HTTPS takes no code, only Kestrel's own settings: `ASPNETCORE_HTTPS_PORTS` plus
 `Kestrel:Certificates:Default:Path` and `KeyPath` (PEM). HTTP keeps answering on its own port and
-is never redirected, because e2e, the desktop client and the healthcheck all use it.
+is never redirected, because e2e and the healthcheck both use it.
 [`docker-compose.lan.yml`](../docker-compose.lan.yml) does exactly this for `FE_HOST=1 ./up.sh`,
 serving `https://<LAN_HOST>:5443` so a phone on the LAN can use the browser client (`HttpsTests`
 pins both halves).

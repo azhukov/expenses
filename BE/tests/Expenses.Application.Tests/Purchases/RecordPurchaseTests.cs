@@ -1,4 +1,4 @@
-using Expenses.Application.Dtos;
+﻿using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
@@ -16,7 +16,16 @@ public sealed class RecordPurchaseTests
 {
     private static readonly DateTime s_occurred = new(2026, 8, 19, 14, 3, 0, DateTimeKind.Unspecified);
 
+    /// <summary>
+    /// The unit a test supplies when the unit is not what it is about. Every line needs one
+    /// ("An expense without a unit is rejected"), so the tests that are about something else say
+    /// so with the plainest unit there is rather than leaving it out.
+    /// </summary>
+    private const string Piece = "PCS";
+
     private readonly InMemoryLedger _ledger = new();
+
+    public RecordPurchaseTests() => _ledger.Given(Unit.Create(Piece, "Piece", "pcs", Unit.UnitKind.Count));
 
     private PurchaseService Subject
         => new(_ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger);
@@ -27,7 +36,7 @@ public sealed class RecordPurchaseTests
         var result = await Subject.Record(
             new DateTime(2026, 8, 19, 0, 0, 0, DateTimeKind.Unspecified),
             12.40m,
-            [new ExpenseCommand("Lunch", 12.40m)]);
+            [new ExpenseCommand("Lunch", 12.40m, UnitCode: Piece)]);
 
         Assert.False(result.AlreadyRecorded);
         Assert.Equal(12.40m, result.Purchase.Amount);
@@ -53,7 +62,7 @@ public sealed class RecordPurchaseTests
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
             s_occurred,
             80.00m,
-            [new ExpenseCommand("Shoes", 60.00m), new ExpenseCommand("Socks", 18.50m)]));
+            [new ExpenseCommand("Shoes", 60.00m, UnitCode: Piece), new ExpenseCommand("Socks", 18.50m, UnitCode: Piece)]));
 
         Assert.Equal(ApplicationErrors.PurchaseReconciliationMismatch, error.Error.Code);
         Assert.Equal(80.00m, error.Error.Fields["amount"]);
@@ -68,9 +77,9 @@ public sealed class RecordPurchaseTests
             s_occurred,
             10.00m,
             [
-                new ExpenseCommand("Third", 3.33m),
-                new ExpenseCommand("Third", 3.33m),
-                new ExpenseCommand("Third", 3.33m),
+                new ExpenseCommand("Third", 3.33m, UnitCode: Piece),
+                new ExpenseCommand("Third", 3.33m, UnitCode: Piece),
+                new ExpenseCommand("Third", 3.33m, UnitCode: Piece),
             ]));
 
         Assert.Equal(ApplicationErrors.PurchaseReconciliationMismatch, error.Error.Code);
@@ -83,7 +92,7 @@ public sealed class RecordPurchaseTests
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
             s_occurred,
             -12.40m,
-            [new ExpenseCommand("Refund", -12.40m)]));
+            [new ExpenseCommand("Refund", -12.40m, UnitCode: Piece)]));
 
         Assert.Equal(ApplicationErrors.AmountNegative, error.Error.Code);
     }
@@ -91,7 +100,7 @@ public sealed class RecordPurchaseTests
     [Fact]
     public async Task Same_purchase_submitted_twice()
     {
-        IReadOnlyList<ExpenseCommand> expenses = [new ExpenseCommand("Lunch", 12.40m)];
+        IReadOnlyList<ExpenseCommand> expenses = [new ExpenseCommand("Lunch", 12.40m, UnitCode: Piece)];
 
         var first = await Subject.Record(s_occurred, 12.40m, expenses);
         var second = await Subject.Record(s_occurred, 12.40m, expenses);
@@ -112,7 +121,7 @@ public sealed class RecordPurchaseTests
         var result = await Subject.Record(
             s_occurred,
             12.40m,
-            [new ExpenseCommand("Lunch", 12.40m)]);
+            [new ExpenseCommand("Lunch", 12.40m, UnitCode: Piece)]);
 
         Assert.True(result.AlreadyRecorded);
         Assert.Single(_ledger.Purchases);
@@ -122,12 +131,12 @@ public sealed class RecordPurchaseTests
     [Fact]
     public async Task Expenses_of_a_duplicate_submission_are_ignored()
     {
-        await Subject.Record(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]);
+        await Subject.Record(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m, UnitCode: Piece)]);
 
         var second = await Subject.Record(
             s_occurred,
             12.40m,
-            [new ExpenseCommand("Soup", 5.40m), new ExpenseCommand("Bread", 7.00m)]);
+            [new ExpenseCommand("Soup", 5.40m, UnitCode: Piece), new ExpenseCommand("Bread", 7.00m, UnitCode: Piece)]);
 
         Assert.True(second.AlreadyRecorded);
         var expense = Assert.Single(second.Purchase.Expenses);
@@ -137,11 +146,11 @@ public sealed class RecordPurchaseTests
     [Fact]
     public async Task Differing_amount_is_not_a_duplicate()
     {
-        await Subject.Record(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]);
+        await Subject.Record(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m, UnitCode: Piece)]);
         var second = await Subject.Record(
             s_occurred,
             12.50m,
-            [new ExpenseCommand("Lunch", 12.50m)]);
+            [new ExpenseCommand("Lunch", 12.50m, UnitCode: Piece)]);
 
         Assert.False(second.AlreadyRecorded);
         Assert.Equal(2, _ledger.Purchases.Count);
@@ -150,11 +159,11 @@ public sealed class RecordPurchaseTests
     [Fact]
     public async Task Differing_occurrence_is_not_a_duplicate()
     {
-        await Subject.Record(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m)]);
+        await Subject.Record(s_occurred, 12.40m, [new ExpenseCommand("Lunch", 12.40m, UnitCode: Piece)]);
         var second = await Subject.Record(
             new DateTime(2026, 8, 19, 15, 20, 0, DateTimeKind.Unspecified),
             12.40m,
-            [new ExpenseCommand("Lunch", 12.40m)]);
+            [new ExpenseCommand("Lunch", 12.40m, UnitCode: Piece)]);
 
         Assert.False(second.AlreadyRecorded);
         Assert.Equal(2, _ledger.Purchases.Count);
@@ -169,12 +178,12 @@ public sealed class RecordPurchaseTests
         var first = await Subject.Record(
             midnight,
             2.90m,
-            [new ExpenseCommand("Coffee", 2.90m)]);
+            [new ExpenseCommand("Coffee", 2.90m, UnitCode: Piece)]);
 
         var second = await Subject.Record(
             midnight,
             2.90m,
-            [new ExpenseCommand("Coffee", 2.90m)]);
+            [new ExpenseCommand("Coffee", 2.90m, UnitCode: Piece)]);
 
         Assert.True(second.AlreadyRecorded);
         Assert.Equal(first.Purchase.Id, second.Purchase.Id);
@@ -184,7 +193,7 @@ public sealed class RecordPurchaseTests
         var withTime = await Subject.Record(
             new DateTime(2026, 8, 19, 16, 30, 0, DateTimeKind.Unspecified),
             2.90m,
-            [new ExpenseCommand("Coffee", 2.90m)]);
+            [new ExpenseCommand("Coffee", 2.90m, UnitCode: Piece)]);
 
         Assert.False(withTime.AlreadyRecorded);
     }
@@ -196,13 +205,13 @@ public sealed class RecordPurchaseTests
         var first = await Subject.Record(
             occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             new MerchantCommand("AROMA", "02440261"));
 
         var second = await Subject.Record(
             occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             new MerchantCommand("VOLI", "03001234"));
 
         Assert.True(second.AlreadyRecorded);
@@ -218,7 +227,7 @@ public sealed class RecordPurchaseTests
         var result = await Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             new MerchantCommand("AROMA", "02440261"));
 
         Assert.True(result.MerchantNewlyAdded);
@@ -234,13 +243,13 @@ public sealed class RecordPurchaseTests
         await Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             new MerchantCommand("AROMA", "02440261"));
 
         var second = await Subject.Record(
             s_occurred.AddDays(1),
             3.20m,
-            [new ExpenseCommand("Coffee", 3.20m)],
+            [new ExpenseCommand("Coffee", 3.20m, UnitCode: Piece)],
             new MerchantCommand("AROMA", "02440261"));
 
         Assert.False(second.MerchantNewlyAdded);
@@ -254,13 +263,13 @@ public sealed class RecordPurchaseTests
         await Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             new MerchantCommand("AROMA", "02440261"));
 
         var second = await Subject.Record(
             s_occurred.AddDays(1),
             3.20m,
-            [new ExpenseCommand("Coffee", 3.20m)],
+            [new ExpenseCommand("Coffee", 3.20m, UnitCode: Piece)],
             new MerchantCommand("AR0MA d.o.o.", "02440261"));
 
         Assert.Single(_ledger.Merchants);
@@ -276,7 +285,7 @@ public sealed class RecordPurchaseTests
         var result = await Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             new MerchantCommand("Aroma 034"));
 
         Assert.Equal("Aroma 034", result.Purchase.MerchantRaw);
@@ -289,7 +298,7 @@ public sealed class RecordPurchaseTests
         var result = await Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)]);
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)]);
 
         Assert.Null(result.Purchase.MerchantId);
         Assert.Null(result.Purchase.MerchantRaw);
@@ -326,12 +335,75 @@ public sealed class RecordPurchaseTests
     }
 
     [Fact]
+    public async Task An_over_long_description_is_rejected()
+    {
+        string description = new('x', 201);
+
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
+            s_occurred,
+            2.00m,
+            [new ExpenseCommand(description, 2.00m, UnitCode: Piece)]));
+
+        Assert.Equal(ApplicationErrors.ExpenseDescriptionTooLong, error.Error.Code);
+        Assert.Contains("200", error.Error.Message, StringComparison.Ordinal);
+        Assert.Empty(_ledger.Purchases);
+    }
+
+    [Fact]
+    public async Task An_expense_without_a_unit_is_rejected()
+    {
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
+            s_occurred,
+            2.00m,
+            [new ExpenseCommand("Bus fare", 2.00m)]));
+
+        Assert.Equal(ApplicationErrors.ExpenseUnitRequired, error.Error.Code);
+        Assert.Empty(_ledger.Purchases);
+    }
+
+    /// <summary>
+    /// Which line is at fault is what the user needs in order to correct it, and a code on its own
+    /// does not say — so the offending position travels in the error's fields.
+    /// </summary>
+    [Fact]
+    public async Task A_rejected_line_without_a_unit_is_named()
+    {
+        var kilogram = _ledger.Given(Unit.Create("KG", "Kilogram", "kg", Unit.UnitKind.Mass));
+
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
+            s_occurred,
+            4.00m,
+            [
+                new ExpenseCommand("Bananas", 2.00m, UnitCode: "KG"),
+                new ExpenseCommand("Bus fare", 2.00m),
+            ]));
+
+        Assert.Equal(ApplicationErrors.ExpenseUnitRequired, error.Error.Code);
+        Assert.Equal(2, Assert.Contains("line", error.Error.Fields));
+        Assert.NotEqual(0, kilogram.Id);
+    }
+
+    [Fact]
+    public async Task A_unit_matched_during_extraction_satisfies_the_rule()
+    {
+        var kilogram = _ledger.Given(Unit.Create("KG", "Kilogram", "kg", Unit.UnitKind.Mass));
+
+        var result = await Subject.Record(
+            s_occurred,
+            1.06m,
+            [new ExpenseCommand("Bananas", 1.06m) { MatchedUnitId = kilogram.Id }]);
+
+        var expense = Assert.Single(result.Purchase.Expenses);
+        Assert.Equal(kilogram.Id, expense.UnitId);
+    }
+
+    [Fact]
     public async Task Unknown_category_code_is_rejected()
     {
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
             s_occurred,
             2.00m,
-            [new ExpenseCommand("Bus fare", 2.00m, CategoryCode: "NOPE")]));
+            [new ExpenseCommand("Bus fare", 2.00m, UnitCode: Piece, CategoryCode: "NOPE")]));
 
         Assert.Equal(ApplicationErrors.CategoryNotFound, error.Error.Code);
     }
@@ -366,8 +438,8 @@ public sealed class RecordPurchaseTests
             s_occurred,
             8.48m,
             [
-                new ExpenseCommand("Sladoled", 4.49m, ListUnitPrice: 8.50m, DiscountAmount: 4.01m),
-                new ExpenseCommand("Cokolada", 3.99m, ListUnitPrice: 7.50m, DiscountAmount: 3.51m),
+                new ExpenseCommand("Sladoled", 4.49m, UnitCode: Piece, ListUnitPrice: 8.50m, DiscountAmount: 4.01m),
+                new ExpenseCommand("Cokolada", 3.99m, UnitCode: Piece, ListUnitPrice: 7.50m, DiscountAmount: 3.51m),
             ]);
 
         Assert.Equal(7.52m, result.Purchase.TotalSaving);
@@ -380,7 +452,7 @@ public sealed class RecordPurchaseTests
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
             s_occurred,
             4.49m,
-            [new ExpenseCommand("Sladoled", 4.49m, ListUnitPrice: 8.50m, DiscountAmount: -4.01m)]));
+            [new ExpenseCommand("Sladoled", 4.49m, UnitCode: Piece, ListUnitPrice: 8.50m, DiscountAmount: -4.01m)]));
 
         Assert.Equal(ApplicationErrors.ExpenseDiscountNegative, error.Error.Code);
     }
@@ -391,7 +463,7 @@ public sealed class RecordPurchaseTests
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
             s_occurred,
             4.49m,
-            [new ExpenseCommand("Sladoled", 4.49m, ListUnitPrice: 8.50m)]));
+            [new ExpenseCommand("Sladoled", 4.49m, UnitCode: Piece, ListUnitPrice: 8.50m)]));
 
         Assert.Equal(ApplicationErrors.ExpenseDiscountIncomplete, error.Error.Code);
     }
@@ -406,7 +478,7 @@ public sealed class RecordPurchaseTests
         var result = await Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted));
 
         Assert.False(result.AlreadyRecorded);
@@ -422,7 +494,7 @@ public sealed class RecordPurchaseTests
         await Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted));
 
         Assert.False(_ledger.HasTemporaryCapture(tempKey));
@@ -437,7 +509,7 @@ public sealed class RecordPurchaseTests
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 5.00m)],
+            [new ExpenseCommand("Groceries", 5.00m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted)));
 
         Assert.Equal(ApplicationErrors.PurchaseReconciliationMismatch, error.Error.Code);
@@ -454,7 +526,7 @@ public sealed class RecordPurchaseTests
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
             s_occurred,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(Guid.NewGuid(), Receipt.ExtractionState.Extracted)));
 
         Assert.Equal(ApplicationErrors.CaptureNotFound, error.Error.Code);
@@ -469,7 +541,7 @@ public sealed class RecordPurchaseTests
         var result = await Subject.Record(
             occurredAt: null,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(
                 tempKey,
                 Receipt.ExtractionState.Extracted,
@@ -486,7 +558,7 @@ public sealed class RecordPurchaseTests
         var result = await Subject.Record(
             new DateTime(2026, 8, 25, 9, 0, 0, DateTimeKind.Unspecified),
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(
                 tempKey,
                 Receipt.ExtractionState.Extracted,
@@ -503,7 +575,7 @@ public sealed class RecordPurchaseTests
         var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
             occurredAt: null,
             8.48m,
-            [new ExpenseCommand("Groceries", 8.48m)],
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted)));
 
         Assert.Equal(ApplicationErrors.PurchaseOccurrenceRequired, error.Error.Code);

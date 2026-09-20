@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
@@ -119,8 +119,8 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             ["amount"] = 80.00m,
             ["expenses"] = new[]
             {
-                new { description = "Shoes", amount = 60.00m },
-                new { description = "Socks", amount = 18.50m },
+                new { description = "Shoes", amount = 60.00m, unitCode = "PCS" },
+                new { description = "Socks", amount = 18.50m, unitCode = "PCS" },
             },
         });
 
@@ -150,7 +150,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             ["amount"] = 5.00m,
             ["expenses"] = new[]
             {
-                new { description = "Bread", amount = 5.00m, categoryCode = "Groceries and things" },
+                new { description = "Bread", amount = 5.00m, unitCode = "PCS", categoryCode = "Groceries and things" },
             },
         });
 
@@ -166,7 +166,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         {
             ["occurredAt"] = occurred,
             ["amount"] = 3.30m,
-            ["expenses"] = new[] { new { description = "Kafa", amount = 3.30m } },
+            ["expenses"] = new[] { new { description = "Kafa", amount = 3.30m, unitCode = "PCS" } },
             ["merchant"] = new { text = "Kafe MCP", taxId = "09900001" },
         });
 
@@ -176,7 +176,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         {
             ["occurredAt"] = Next(),
             ["amount"] = 3.40m,
-            ["expenses"] = new[] { new { description = "Kafa", amount = 3.40m } },
+            ["expenses"] = new[] { new { description = "Kafa", amount = 3.40m, unitCode = "PCS" } },
             ["merchant"] = new { text = "Kafe MCP", taxId = "09900001" },
         });
 
@@ -239,7 +239,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         var recorded = await _mcp.Resolve<PurchaseService>().Record(
             Next(),
             10.00m,
-            [new ExpenseCommand("Placeholder", 10.00m)],
+            [new ExpenseCommand("Placeholder", 10.00m, UnitCode: "PCS")],
             capture: new CapturedReceiptCommand(
                 captured.TempKey,
                 captured.State,
@@ -260,7 +260,7 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         {
             ["occurredAt"] = occurredAt,
             ["amount"] = amount,
-            ["expenses"] = new[] { new { description, amount, categoryCode } },
+            ["expenses"] = new[] { new { description, amount, unitCode = "PCS", categoryCode } },
         });
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Expenses.Integration.Tests.Harness;
@@ -14,7 +14,7 @@ namespace Expenses.Integration.Tests.Api;
 /// <remarks>
 /// HTTPS is Kestrel's own configuration and the host adds no code for it (D6), so these passed on
 /// their first run. They are here to fail the day someone adds HTTPS redirection or an HTTPS-only
-/// binding, which would break every HTTP caller — e2e, the desktop client, the healthcheck. With
+/// binding, which would break every HTTP caller — e2e and the healthcheck. With
 /// <c>app.UseHttpsRedirection()</c> added, the two that go over plain HTTP were seen failing; the
 /// unreadable-certificate test differs from the passing HTTPS ones only in the path it points at.
 /// Unlike the rest of the suite they run on real Kestrel, because a TLS handshake is the thing

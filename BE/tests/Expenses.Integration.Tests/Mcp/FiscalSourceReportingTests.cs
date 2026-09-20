@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Integration.Tests.Extraction;
@@ -91,7 +91,7 @@ public sealed class FiscalSourceReportingTests(PostgresFixture postgres) : IAsyn
         var recorded = await _mcp.Resolve<PurchaseService>().Record(
             s_occurred.AddMinutes(Interlocked.Increment(ref s_sequence)),
             59.65m,
-            [new ExpenseCommand("Receipt", 59.65m)],
+            [new ExpenseCommand("Receipt", 59.65m, UnitCode: "PCS")],
             capture: new CapturedReceiptCommand(captured.TempKey, captured.State, captured.FailureReason));
 
         // A capture's candidates are never held server-side, so confirming it leaves none held;

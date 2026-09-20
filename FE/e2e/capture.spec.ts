@@ -75,9 +75,28 @@ test('a photographed receipt becomes a purchase in the month', async ({ page }) 
   }
 
   const line = lines.first()
+
+  // The client's own rules first: an incomplete line is refused here, not by the ledger. Nothing
+  // is sent, the offending inputs are marked, and the screen stays where it is
+  // ("The review screen refuses an incomplete purchase").
+  await line.getByLabel('Description').fill('')
+  await line.getByLabel('Amount', { exact: true }).fill('')
+  await page.getByRole('button', { name: 'Confirm' }).click()
+
+  await expect(page).toHaveURL(/\/capture$/)
+  await expect(line.getByLabel('Description')).toHaveAttribute('aria-invalid', 'true')
+  await expect(line.getByLabel('Amount', { exact: true })).toHaveAttribute('aria-invalid', 'true')
+
   await line.getByLabel('Description').fill('Groceries')
   await line.getByLabel('Amount', { exact: true }).fill(amount.toFixed(2))
   await line.getByLabel('Quantity').fill('1')
+
+  // A unit is required on every line, by the client and by the ledger alike. Chosen by position
+  // because which units are seeded is the ledger's business, not this test's.
+  await line.getByLabel('Unit').selectOption({ index: 1 })
+
+  // Corrected, the marks are gone before anything is sent.
+  await expect(line.getByLabel('Description')).not.toHaveAttribute('aria-invalid', 'true')
 
   await page.getByRole('button', { name: 'Confirm' }).click()
 

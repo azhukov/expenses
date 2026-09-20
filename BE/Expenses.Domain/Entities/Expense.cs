@@ -18,6 +18,13 @@ public sealed class Expense
     /// <summary>The value a quantity takes when none was supplied.</summary>
     private const decimal DefaultQuantity = 1m;
 
+    /// <summary>
+    /// A line off a receipt, not a note: long enough for the longest printed description and short
+    /// enough that a paragraph pasted in is refused rather than stored. The browser client states
+    /// the same limit so the user hears it before submitting.
+    /// </summary>
+    private const int DescriptionMaxLength = 200;
+
     private Expense()
     {
         // EF materialisation.
@@ -86,6 +93,16 @@ public sealed class Expense
         if (string.IsNullOrWhiteSpace(description))
         {
             throw new ArgumentException("An expense requires a description.", nameof(description));
+        }
+
+        // Measured on what would be stored rather than on what was passed: the description is
+        // trimmed, so padding is not what makes one too long.
+        if (description.Trim().Length > DescriptionMaxLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(description),
+                description.Trim().Length,
+                $"A description carries at most {DescriptionMaxLength} characters.");
         }
 
         // Set together or not at all — the pairing is what makes null mean "no discount printed" (D19).

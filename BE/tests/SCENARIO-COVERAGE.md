@@ -75,3 +75,25 @@ are recorded here rather than papered over:
 Everything else followed red, green, refactor: section tests were written and run before any
 implementation task in that section, and the failing run is recorded in the session that produced
 it.
+
+## Scenarios added by `require-purchase-entry-fields`
+
+`purchase-recording`'s "Expense line detail" changed: a unit became required on every line and a
+description gained a 200-character limit. The new scenarios and where they are tested:
+
+| Scenario | Where |
+| --- | --- |
+| "A description at the limit is accepted" | `Expenses.Domain.Tests/ExpenseTests.A_description_at_the_limit_is_accepted` |
+| "An over-long description is rejected" | `ExpenseTests.An_over_long_description_is_rejected`, and over the use case in `Expenses.Application.Tests/Purchases/RecordPurchaseTests.An_over_long_description_is_rejected` |
+| "An expense without a unit is rejected" | `RecordPurchaseTests.An_expense_without_a_unit_is_rejected` and `.A_rejected_line_without_a_unit_is_named`; over HTTP in `Expenses.Integration.Tests/Api/HttpAdapterTests.An_expense_without_a_unit_is_rejected` |
+| "A unit matched during extraction satisfies the rule" | `RecordPurchaseTests.A_unit_matched_during_extraction_satisfies_the_rule`; the refusal of the opposite case in `Expenses.Application.Tests/Receipts/CandidateTests.Confirming_a_candidate_that_matched_no_unit_is_rejected` |
+| "Existing unit-less expenses stay readable" | Not executed as a scenario of its own: nothing in the suite writes a unit-less expense any more, and the rule lives above the entity, so a stored row is loaded by the same mapping as before. |
+
+The line about the description limit being applied after trimming is not a spec scenario; it is
+recorded as `ExpenseTests.The_description_limit_is_applied_after_trimming` because the limit is
+otherwise ambiguous about padding.
+
+Tests that record a line they do not care about now supply the seeded `PCS` unit, through a
+`Piece` constant, a seeded unit in the test class's constructor, or the `Line` helper in
+`HttpAdapterTests`. That is the fixture cost of the rule, not a weakening of those tests: each one
+still asserts what it did before.

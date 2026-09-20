@@ -276,6 +276,10 @@ public sealed class ReceiptService(
     /// A candidate carries verbatim text and any reference it was matched to; both survive
     /// confirmation, because a match must never erase what the receipt printed (D9) вЂ” and because
     /// the candidate itself does not survive, the expense is where that text then lives.
+    ///
+    /// No unit code is passed and none is invented: the only unit a candidate has is the one a
+    /// stage matched. Where a stage matched none, confirming without edited lines is refused
+    /// rather than defaulted to a count unit, which would state something the receipt did not.
     /// </summary>
     private static ExpenseCommand AsCommand(ExtractionCandidate candidate) => new(
         candidate.Description,

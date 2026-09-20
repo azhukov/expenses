@@ -1,4 +1,4 @@
-using Expenses.Application.Dtos;
+﻿using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
@@ -16,6 +16,15 @@ public sealed class CandidateTests
     private static readonly DateTime s_occurred = new(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified);
 
     private readonly InMemoryLedger _ledger = new();
+
+    /// <summary>
+    /// The unit a candidate carries when the unit is not what the test is about. Every line needs
+    /// one before it can become an expense ("An expense without a unit is rejected"), including a
+    /// line confirmed straight from a candidate.
+    /// </summary>
+    private readonly Unit _piece;
+
+    public CandidateTests() => _piece = _ledger.Given(Unit.Create("PCS", "Piece", "pcs", Unit.UnitKind.Count));
 
     private ReceiptService Subject
         => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([]), _ledger);
@@ -120,6 +129,25 @@ public sealed class CandidateTests
         Assert.Equal("Bund", purchase.Expenses[0].UnitRaw);
     }
 
+    /// <summary>
+    /// purchase-recording, "An expense without a unit is rejected", reached by the one path that
+    /// creates expenses from candidates alone (D6). No unit is invented for the candidate: the
+    /// caller confirms with lines of their own instead.
+    /// </summary>
+    [Fact]
+    public async Task Confirming_a_candidate_that_matched_no_unit_is_rejected()
+    {
+        var purchase = await GivenExtractedPurchase(withUnit: false);
+
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.ConfirmCandidates(purchase.Id));
+
+        Assert.Equal(ApplicationErrors.ExpenseUnitRequired, error.Error.Code);
+        Assert.Equal(1, Assert.Contains("line", error.Error.Fields));
+
+        // Nothing was consumed: the candidates are still there to confirm once a unit is supplied.
+        Assert.NotNull(await _ledger.FindLatest(purchase.Id));
+    }
+
     [Fact]
     public async Task Confirming_candidates_that_do_not_reconcile()
     {
@@ -140,8 +168,8 @@ public sealed class CandidateTests
         var purchase = await GivenExtractedPurchase(secondAmount: 4.99m);
 
         var confirmed = await Subject.ConfirmCandidates(purchase.Id, [
-            new ExpenseCommand("Sladoled", 4.49m, ListUnitPrice: 8.50m, DiscountAmount: 4.01m),
-            new ExpenseCommand("Cokolada", 3.99m),
+            new ExpenseCommand("Sladoled", 4.49m, UnitCode: "PCS", ListUnitPrice: 8.50m, DiscountAmount: 4.01m),
+            new ExpenseCommand("Cokolada", 3.99m, UnitCode: "PCS"),
         ]);
 
         Assert.Equal(8.48m, confirmed.Expenses.Sum(expense => expense.Amount));
@@ -157,7 +185,7 @@ public sealed class CandidateTests
     {
         var purchase = GivenPurchaseWithReceipt();
 
-        var confirmed = await Subject.ConfirmCandidates(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m)]);
+        var confirmed = await Subject.ConfirmCandidates(purchase.Id, [new ExpenseCommand("Sladoled", 8.48m, UnitCode: "PCS")]);
 
         Assert.Equal("Sladoled", Assert.Single(confirmed.Expenses).Description);
     }
@@ -198,9 +226,11 @@ public sealed class CandidateTests
     private Task<Purchase> GivenExtractedPurchase(
         decimal secondAmount = 3.99m,
         long? unitId = null,
-        string? unitRaw = null)
+        string? unitRaw = null,
+        bool withUnit = true)
     {
         var purchase = GivenPurchaseWithReceipt();
+        long? matched = withUnit ? unitId ?? _piece.Id : null;
 
         _ledger.Given(purchase.Id, ExtractionStepResult.From(
             purchase.Id,
@@ -213,9 +243,9 @@ public sealed class CandidateTests
                     4.49m,
                     listUnitPrice: 8.50m,
                     discountAmount: 4.01m,
-                    unitId: unitId,
+                    unitId: matched,
                     unitRaw: unitRaw),
-                ExtractionCandidate.Propose(2, "Cokolada", secondAmount),
+                ExtractionCandidate.Propose(2, "Cokolada", secondAmount, unitId: matched),
             ],
             total: 4.49m + secondAmount));
 
