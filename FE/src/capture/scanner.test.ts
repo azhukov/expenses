@@ -9,13 +9,28 @@ const start = vi.fn<() => Promise<void>>()
 const stop = vi.fn()
 const destroy = vi.fn()
 let decode: (result: { data: string }) => void = () => {}
+let options: { highlightScanRegion?: boolean } = {}
 
 vi.mock('qr-scanner', () => ({
   default: class {
     static hasCamera = hasCamera
 
-    constructor(_video: HTMLVideoElement, onDecode: (result: { data: string }) => void) {
+    $overlay?: HTMLDivElement
+
+    constructor(
+      video: HTMLVideoElement,
+      onDecode: (result: { data: string }) => void,
+      given: { highlightScanRegion?: boolean },
+    ) {
       decode = onDecode
+      options = given
+
+      // As the library does: the overlay goes in beside the video, and destroying the scanner
+      // hides it but leaves it in the document.
+      if (given.highlightScanRegion) {
+        this.$overlay = document.createElement('div')
+        video.after(this.$overlay)
+      }
     }
 
     start = start
@@ -27,7 +42,10 @@ vi.mock('qr-scanner', () => ({
 const { startScanning } = await import('./scanner')
 
 function video() {
-  return document.createElement('video')
+  const element = document.createElement('video')
+  document.createElement('div').append(element)
+
+  return element
 }
 
 beforeEach(() => {
@@ -63,6 +81,41 @@ describe('Scanning the rear camera for a QR code', () => {
     scan?.stop()
 
     expect(destroy).toHaveBeenCalled()
+  })
+})
+
+describe('The region the scanner reads is shown', () => {
+  it('outlines the scan region on the viewfinder', async () => {
+    await startScanning(video(), vi.fn())
+
+    expect(options.highlightScanRegion).toBe(true)
+  })
+
+  it('removes the outline on the first read', async () => {
+    const viewfinder = video()
+    await startScanning(viewfinder, vi.fn())
+
+    decode({ data: 'first' })
+
+    expect(viewfinder.parentElement?.childElementCount).toBe(1)
+  })
+
+  it('removes the outline when stopped', async () => {
+    const viewfinder = video()
+    const scan = await startScanning(viewfinder, vi.fn())
+
+    scan?.stop()
+
+    expect(viewfinder.parentElement?.childElementCount).toBe(1)
+  })
+
+  it('removes the outline when there turns out to be no live camera', async () => {
+    start.mockRejectedValue(new DOMException('Permission denied', 'NotAllowedError'))
+    const viewfinder = video()
+
+    await startScanning(viewfinder, vi.fn())
+
+    expect(viewfinder.parentElement?.childElementCount).toBe(1)
   })
 })
 

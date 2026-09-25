@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs the end-to-end suite against a real stack: PostgreSQL and the HTTP host from
 # docker-compose.e2e.yml, the built client served by `vite preview`, and a real browser driving it.
-# Nothing is mocked. Exits with the Playwright exit code.
+# Nothing in the client or the ledger is mocked; only the government fiscal portal is stood in for,
+# by a stub in the stack. Exits with the Playwright exit code.
 #
 # The stack is its own compose project on an empty database, so it neither adopts nor destroys
 # whatever ./up.sh has running - except for port 5082, which both publish; stop the development

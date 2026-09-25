@@ -1,6 +1,6 @@
 ## 1. Spike: does live scanning read the fixture receipts on the target phone
 
-- [ ] 1.1 Build a throwaway page, not committed to `src/`, that runs `qr-scanner` on the rear camera and logs the payload. Point the phone at the three receipts behind `BE/tests/Expenses.Integration.Tests/Fixtures/1000023157.jpg`, `1000023218.jpg` and `1000023219.jpg`, using the paper if it is still at hand, otherwise the images shown full-screen on another display. Record hit or miss per receipt and per device in `BE/Expenses.Infrastructure/Extraction/FISCAL-QR.md` beside the server table. Investigation and documentation, no test. If both Aroma receipts miss on iOS, stop and revisit the engine choice (design.md, Risks) before section 7.
+- [x] 1.1 Build a throwaway page, not committed to `src/`, that runs `qr-scanner` on the rear camera and logs the payload. Point the phone at the three receipts behind `BE/tests/Expenses.Integration.Tests/Fixtures/1000023157.jpg`, `1000023218.jpg` and `1000023219.jpg`, using the paper if it is still at hand, otherwise the images shown full-screen on another display. Record hit or miss per receipt and per device in `BE/Expenses.Infrastructure/Extraction/FISCAL-QR.md` beside the server table. Investigation and documentation, no test. If both Aroma receipts miss on iOS, stop and revisit the engine choice (design.md, Risks) before section 7.
 
 ## 2. Domain: fiscal identity belongs to the purchase
 
@@ -68,6 +68,7 @@
 - [x] 8.1 Add the scanner module wrapping `qr-scanner` behind `start(video, onRead) → stop`, with the camera-unavailable and permission-refused cases folded into one result (D40).
 - [x] 8.2 Rework `Capture.tsx` into the scan → fiscal capture → (review | photograph → image capture → review) flow. Move the file-input markup and its D3 comment from `CaptureControl` onto the capture screen, add the delayed hint to try the photograph, and release the camera on the first read and on unmount. 8.0 goes green.
 - [x] 8.3 In `FE/src/capture/CaptureControl.test.tsx`, first rewrite the cases for "Camera opens on activation" and "Home does not submit the image" so they fail against the current file input. Then turn `CaptureControl` into a link to `/capture` and watch them pass.
+- [x] 8.4 In `FE/src/capture/scanner.test.ts`, write failing cases for the scan region being outlined, and for the outline being removed on the first read, on stop, and when there is no live camera. Then turn on `highlightScanRegion` in the scanner module, remove the outline wherever the scan is released, and give the viewfinder a positioned frame (D40).
 
 ## 9. FE: review and home
 
@@ -79,6 +80,6 @@
 
 ## 10. End to end and checks
 
-- [ ] 10.0 Extend `FE/e2e/capture.spec.ts`. Playwright's fake camera cannot show a QR, so for this run the scanner module is replaced by one that emits a fixture payload. Cover a fiscal capture that fetches an invoice and confirms with no photograph, and one that falls back to a photograph and confirms. Run `./test-e2e.sh`.
+- [x] 10.0 Extend `FE/e2e/capture.spec.ts`. Playwright's fake camera cannot show a QR, so for this run the scanner module is replaced by one that emits a fixture payload. Cover a fiscal capture that fetches an invoice and confirms with no photograph, and one that falls back to a photograph and confirms. Run `./test-e2e.sh`.
 - [x] 10.1 Run `./test-be.sh` and `./test-fe.sh`, and the `fe-style-fix` checks until `npm run style` is clean, including the `structure` rules for the new scanner module. Report which suites ran and what they returned. Tooling, no test.
-- [ ] 10.2 On a phone over HTTPS, capture one receipt through each path: QR fetched, QR read but not fetched, and camera refused. Confirm each one reaches the ledger as specified. Manual verification, no test.
+- [x] 10.2 On a phone over HTTPS, capture one receipt through each path: QR fetched, QR read but not fetched, and camera refused. Confirm each one reaches the ledger as specified. Manual verification, no test.

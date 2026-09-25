@@ -165,6 +165,12 @@ Flow and ownership:
   interface (`start(video, onRead) → stop`) that `Capture` receives from a module the tests replace.
   jsdom has neither a camera nor a worker, so unit tests drive the interface. The real library is
   exercised only in the browser.
+- **The scan region is outlined on the viewfinder.** `qr-scanner` reads only a centred square of
+  each frame, about two thirds of its shorter side, so a code held off-centre or too close is never
+  read, and without a mark the user cannot tell. The library's own outline (`highlightScanRegion`)
+  shows that square. It places the outline beside the `<video>` by the video's offset, so the video
+  sits in a positioned frame of its own. No outline is drawn around a detected code: the screen
+  leaves on the first read, so it would only flash.
 - **Unavailable versus refused are one case.** `QrScanner.hasCamera()` false, a `NotAllowedError`
   and a missing `mediaDevices` all lead to the same state: the photograph control on its own, with no
   error (spec: *Live camera refused or unavailable*).
@@ -178,6 +184,8 @@ Flow and ownership:
 - **The camera is released** on unmount and on the first read, by stopping every track. This is
   also how StrictMode's double effect is handled: the effect's cleanup stops the scanner it started.
   That is a different guard from the upload ref `Capture` already has, and both are needed.
+  Destroying the scanner hides its outline but leaves it in the document, so releasing the scan
+  removes it too.
 
 ### D41 — Read shapes: `hasReceipt` splits in two
 
@@ -215,4 +223,3 @@ implementation.
 
 - The exact wording of the "couldn't fetch the invoice" and duplicate warnings. This is UX copy and
   can be settled during implementation.
-- Whether the viewfinder draws a scan-region overlay. It is cosmetic, and `qr-scanner` offers one.

@@ -228,7 +228,9 @@ export function Capture() {
     <main className={styles.screen}>
       {isScanning ? (
         <>
-          <video ref={video} className={styles.viewfinder} muted playsInline />
+          <div className={styles.frame}>
+            <video ref={video} className={styles.viewfinder} muted playsInline />
+          </div>
           <p className={styles.guidance}>Point the camera at the QR code on the receipt.</p>
           {hint ? <p className={styles.guidance}>No code yet? Try a photograph instead.</p> : null}
         </>
