@@ -215,23 +215,23 @@ describe('The fiscal code is read before a photograph is asked for', () => {
 })
 
 describe('A photograph is taken only when the code produces no invoice', () => {
-  async function scanned(outcome: Promise<unknown>) {
+  async function scanned(outcome: () => Promise<unknown>) {
     liveCamera()
-    fiscal.mockReturnValue(outcome as never)
+    fiscal.mockImplementation(outcome as never)
     renderAt()
     await waitFor(() => expect(scans).toHaveLength(1))
     act(() => scans[0].read(payload))
   }
 
   it('presents a fetched invoice for review and asks for no photograph', async () => {
-    await scanned(Promise.resolve(extracted({ tempKey: null, fiscalPayload: payload })))
+    await scanned(() => Promise.resolve(extracted({ tempKey: null, fiscalPayload: payload })))
 
     expect(await screen.findByRole('button', { name: /confirm/i })).toBeInTheDocument()
     expect(screen.queryByLabelText(/photograph the receipt/i)).not.toBeInTheDocument()
   })
 
   it('asks for a photograph, and carries the payload with it, when the invoice could not be fetched', async () => {
-    await scanned(
+    await scanned(() =>
       Promise.resolve(
         failed({
           tempKey: null,
@@ -250,7 +250,7 @@ describe('A photograph is taken only when the code produces no invoice', () => {
   })
 
   it('asks for a photograph, without the payload, when the code was not a fiscal code', async () => {
-    await scanned(Promise.resolve(failed({ tempKey: null })))
+    await scanned(() => Promise.resolve(failed({ tempKey: null })))
 
     neverSettles()
     const file = image()
@@ -260,7 +260,7 @@ describe('A photograph is taken only when the code produces no invoice', () => {
   })
 
   it('offers to retry the same payload, or a photograph, when the ledger cannot be reached', async () => {
-    await scanned(Promise.reject(new LedgerError('The ledger could not be reached.')))
+    await scanned(() => Promise.reject(new LedgerError('The ledger could not be reached.')))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not be reached/i)
     expect(photographControl()).toBeInTheDocument()
