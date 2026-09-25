@@ -78,7 +78,8 @@ public sealed class ReceiptTests
             s_occurred.AddSeconds(amount == 8.48m ? 0 : 1),
             amount,
             [Expense.Record("Groceries", amount)],
-            receipt: stored.AsReceipt(Receipt.ExtractionState.Extracted)));
+            receipt: stored.AsReceipt(),
+            extraction: Purchase.ExtractionState.Extracted));
 
     /// <summary>Bytes that a content sniffer reads as a JPEG, varied by <paramref name="seed"/>.</summary>
     private static byte[] Jpeg(byte seed) => [0xFF, 0xD8, 0xFF, seed, 0x01, 0x02];

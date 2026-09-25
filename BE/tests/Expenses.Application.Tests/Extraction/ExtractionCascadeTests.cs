@@ -107,7 +107,7 @@ public sealed class ExtractionCascadeTests
         // And retained on the result the later step produced.
         Assert.Equal(s_decoded.Ikof, outcome.Extracted.Ikof);
         Assert.Equal(s_decoded.Ikof, outcome.Result?.Fiscal.Ikof);
-        Assert.Equal(Receipt.FiscalSource.DecodedFromCode, outcome.FiscalSource);
+        Assert.Equal(FiscalInvoice.FiscalSource.DecodedFromCode, outcome.FiscalSource);
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public sealed class ExtractionCascadeTests
         // The JIKR is absent from the code and printed nowhere the server can read it, so a receipt
         // whose identity the service completed records that it did (D24).
         Assert.Equal("9F8E7D6C", outcome.Extracted.Jikr);
-        Assert.Equal(Receipt.FiscalSource.RetrievedFromService, outcome.FiscalSource);
+        Assert.Equal(FiscalInvoice.FiscalSource.RetrievedFromService, outcome.FiscalSource);
     }
 
     /// <summary>
@@ -179,7 +179,7 @@ public sealed class ExtractionCascadeTests
 
         // But nothing established it here, so nothing is reported as extracted.
         Assert.Null(outcome.Extracted.Ikof);
-        Assert.Equal(Receipt.FiscalSource.None, outcome.FiscalSource);
+        Assert.Equal(FiscalInvoice.FiscalSource.None, outcome.FiscalSource);
     }
 
     [Fact]
@@ -192,5 +192,38 @@ public sealed class ExtractionCascadeTests
         ]).Run(s_image);
 
         Assert.Equal(["first", "second", "third"], outcome.StepsRun);
+    }
+
+    /// <summary>
+    /// A payload captured with no image reaches only the steps that work from a fiscal identity
+    /// (D37). receipt-ingestion, "A fiscal QR payload can be captured with no image".
+    /// </summary>
+    [Fact]
+    public async Task A_step_that_reads_the_image_is_not_reached_without_one()
+    {
+        var fiscal = FakeStep.Silent("fiscal");
+        var vision = FakeStep.Producing("vision", Results.Reconciling("vision")).ReadingImage();
+
+        var outcome = await new ExtractionCascade([fiscal, vision]).Run(
+            image: null,
+            purchaseId: 7,
+            suppliedPayload: "https://mapr.tax.gov.me/ic/#/verify?iic=A1");
+
+        Assert.Equal(["fiscal"], outcome.StepsRun);
+        Assert.Equal(0, vision.Runs);
+        Assert.Equal(7, fiscal.LastRequest?.PurchaseId);
+        Assert.Null(outcome.Result);
+    }
+
+    [Fact]
+    public async Task A_step_that_reads_the_image_still_runs_when_there_is_one()
+    {
+        var vision = FakeStep.Producing("vision", Results.Reconciling("vision")).ReadingImage();
+
+        var outcome = await new ExtractionCascade([FakeStep.Silent("fiscal"), vision]).Run(s_image);
+
+        Assert.Equal(1, vision.Runs);
+        Assert.Equal(1, vision.LastRequest?.PurchaseId);
+        Assert.NotNull(outcome.Result);
     }
 }

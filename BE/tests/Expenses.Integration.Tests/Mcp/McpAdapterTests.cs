@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Expenses.Application.Dtos;
 using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
@@ -226,6 +226,53 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 
         // Synchronous now: the new terminal state and candidates are back in this same response.
         Assert.Contains(reran.GetProperty("state").GetString(), s_terminalStates);
+    }
+
+    /// <summary>
+    /// api-surface, "Receipt capture is HTTP-only": "MCP confirms a fiscal-only capture"; and
+    /// "Confirming a capture is available over both interfaces": "Confirming a fiscal-only capture
+    /// over either interface". The capture itself is HTTP-only, so what an HTTP fiscal capture
+    /// reports is handed over here as it would be.
+    /// </summary>
+    [Fact]
+    public async Task An_assistant_confirms_a_fiscal_only_capture_by_its_payload()
+    {
+        const string Payload =
+            "https://mapr.tax.gov.me/ic/#/verify?iic=MCP-FISCAL-ONLY-1&tin=02365928&crtd=2026-08-29T14:59:22+02:00";
+
+        var confirmed = await Call("confirm_capture", new Dictionary<string, object?>
+        {
+            ["capture"] = new
+            {
+                state = "Extracted",
+                jikr = "a1b2c3d4-0000-0000-0000-000000000000",
+                fiscalSource = "RetrievedFromService",
+                fiscalPayload = Payload,
+            },
+            ["amount"] = 3.20m,
+            ["expenses"] = new[] { new { description = "Coffee", amount = 3.20m, unitCode = "PCS" } },
+            ["occurredAt"] = Next(),
+        });
+
+        var purchase = confirmed.GetProperty("purchase");
+        Assert.False(purchase.GetProperty("hasReceiptImage").GetBoolean());
+        Assert.Equal("Extracted", purchase.GetProperty("extractionState").GetString());
+        Assert.Equal("MCP-FISCAL-ONLY-1", purchase.GetProperty("fiscal").GetProperty("ikofExtracted").GetString());
+        Assert.Equal(Payload, purchase.GetProperty("fiscal").GetProperty("payload").GetString());
+    }
+
+    [Fact]
+    public async Task A_confirmation_naming_neither_a_key_nor_a_payload_is_rejected_over_mcp()
+    {
+        string error = await Failing("confirm_capture", new Dictionary<string, object?>
+        {
+            ["capture"] = new { state = "Extracted" },
+            ["amount"] = 1.00m,
+            ["expenses"] = new[] { new { description = "Coffee", amount = 1.00m, unitCode = "PCS" } },
+            ["occurredAt"] = Next(),
+        });
+
+        Assert.Contains("capture.identity_required", error, StringComparison.Ordinal);
     }
 
     private async Task<long> GivenExtractedReceipt()

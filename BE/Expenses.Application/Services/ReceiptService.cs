@@ -42,12 +42,12 @@ public sealed class ReceiptService(
     /// produced and only labels it (D28). Two independent reasons put a result in front of a
     /// person, and each is recorded as itself rather than collapsed into one number (D20).
     /// </summary>
-    private (Receipt.ExtractionState State, ArithmeticValidationReport? Validation,
+    private (Purchase.ExtractionState State, ArithmeticValidationReport? Validation,
         IReadOnlyList<string> LowConfidence) Judge(ExtractionStepResult? result)
     {
         if (result is null)
         {
-            return (Receipt.ExtractionState.Failed, null, []);
+            return (Purchase.ExtractionState.Failed, null, []);
         }
 
         var validation = ArithmeticValidator.Validate(ExtractionArithmetic.From(result));
@@ -66,8 +66,8 @@ public sealed class ReceiptService(
 
         return (
             validation.Passed && lowConfidence.Count == 0
-                ? Receipt.ExtractionState.Extracted
-                : Receipt.ExtractionState.NeedsReview,
+                ? Purchase.ExtractionState.Extracted
+                : Purchase.ExtractionState.NeedsReview,
             validation,
             lowConfidence);
     }
@@ -92,7 +92,7 @@ public sealed class ReceiptService(
         var image = new ReceiptImageContent(PurchaseId: 0, capture.ContentType, content);
         var supplied = suppliedFiscalIdentifiers ?? FiscalIdentifiers.None;
 
-        var outcome = await cascade.Run(image, supplied, fiscalPayload, cancellationToken);
+        var outcome = await cascade.Run(image, supplied, fiscalPayload, cancellationToken: cancellationToken);
         var (state, validation, _) = Judge(outcome.Result);
 
         return new CaptureResult(
@@ -107,7 +107,44 @@ public sealed class ReceiptService(
 
             // Handed back so the caller can resubmit it at confirmation, which is the only point at
             // which a receipt exists to retain it (D32). Nothing is held server-side meanwhile.
-            fiscalPayload ?? outcome.Payload);
+            fiscalPayload ?? outcome.Payload,
+            await AlreadyRecorded(outcome.Extracted.Ikof ?? supplied.Ikof, cancellationToken));
+    }
+
+    /// <summary>
+    /// Captures a fiscal QR payload on its own, as a client that read the code live sends it (D37).
+    /// Only the steps that work from a fiscal identity run — there is no image to show the vision
+    /// engine — and nothing is stored, so the result carries no temporary key. A payload the service
+    /// returned no invoice for is Failed, with what the payload states still reported, so the caller
+    /// can decide whether to send it again beside a photograph.
+    /// </summary>
+    public async Task<CaptureResult> CaptureFiscal(string payload, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.ReceiptFiscalPayloadRequired,
+                "A fiscal capture requires the payload the receipt's QR code carries.");
+        }
+
+        // Parsed once, by the one parser that reads this format (D30). An unrecognised payload is
+        // an ordinary capture carrying no identifiers, not an error.
+        var supplied = FiscalIdentity.From(payload);
+
+        var outcome = await cascade.Run(image: null, supplied, payload, cancellationToken: cancellationToken);
+        var (state, validation, _) = Judge(outcome.Result);
+
+        return new CaptureResult(
+            TempKey: null,
+            state,
+            outcome.FailureReason,
+            outcome.Result is null ? null : ExtractionResultView.Of(outcome.Result),
+            validation,
+            supplied,
+            outcome.Extracted,
+            outcome.FiscalSource,
+            payload,
+            await AlreadyRecorded(outcome.Extracted.Ikof ?? supplied.Ikof, cancellationToken));
     }
 
     /// <summary>
@@ -139,7 +176,7 @@ public sealed class ReceiptService(
         CancellationToken cancellationToken = default)
     {
         var purchase = await purchases.Require(purchaseId, cancellationToken);
-        var receipt = purchase.RequireReceipt();
+        var state = purchase.RequireExtraction();
 
         // Candidates are transient: none held is absence rather than an extraction that produced
         // nothing, and reading never re-runs the cascade вЂ” a paid stage must not fire because
@@ -147,7 +184,7 @@ public sealed class ReceiptService(
         var result = await candidates.FindLatest(purchase.Id, cancellationToken);
 
         return new ExtractionView(
-            ReceiptView.Of(receipt),
+            ReceiptView.Of(purchase, state),
             result is null ? null : ExtractionResultView.Of(result),
 
             // Recomputed rather than stored: it is a pure function of the result (D20), and a
@@ -166,7 +203,7 @@ public sealed class ReceiptService(
         CancellationToken cancellationToken = default)
     {
         var purchase = await purchases.Require(purchaseId, cancellationToken);
-        var receipt = purchase.RequireReceipt();
+        var state = purchase.RequireExtraction();
 
         var result = await candidates.FindLatest(purchase.Id, cancellationToken);
 
@@ -179,7 +216,7 @@ public sealed class ReceiptService(
                 ApplicationErrors.ExtractionCandidatesNotFound,
                 $"No candidate lines are held for purchase {purchaseId}. Re-run extraction, or confirm edited lines.",
                 ("purchaseId", purchaseId),
-                ("extractionState", receipt.State.ToString()));
+                ("extractionState", state.ToString()));
 
         if (commands.Count == 0)
         {
@@ -216,48 +253,54 @@ public sealed class ReceiptService(
     public async Task DiscardCandidates(long purchaseId, CancellationToken cancellationToken = default)
     {
         var purchase = await purchases.Require(purchaseId, cancellationToken);
-        purchase.RequireReceipt();
+        purchase.RequireExtraction();
 
         // The receipt and the purchase remain: only the suggestion is withdrawn.
         await candidates.Discard(purchase.Id, cancellationToken);
     }
 
     /// <summary>
-    /// Re-runs extraction for a receipt already attached to a purchase, synchronously, replacing any
-    /// unconfirmed candidates with the new outcome. Expenses already confirmed are never touched.
+    /// Re-runs extraction for a purchase's receipt, synchronously, replacing any unconfirmed
+    /// candidates with the new outcome. Expenses already confirmed are never touched. A purchase read
+    /// from its fiscal code alone has no image, and only the steps that need none run (D37).
     /// </summary>
     public async Task<ReceiptView> RerunExtraction(long purchaseId, CancellationToken cancellationToken = default)
     {
         var purchase = await purchases.Require(purchaseId, cancellationToken);
-        var receipt = purchase.RequireReceipt();
+        purchase.RequireExtraction();
 
-        byte[] bytes = await images.Read(receipt.StorageKey, cancellationToken)
-            ?? throw ExpensesException.For(
-                ApplicationErrors.ReceiptImageNotFound,
-                $"The stored file for the receipt of purchase {purchaseId} is missing.",
-                ("purchaseId", purchaseId),
-                ("storageKey", receipt.StorageKey));
+        var content = purchase.Receipt is { } receipt
+            ? await Content(purchase.Id, receipt, cancellationToken)
+            : null;
 
-        var content = new ReceiptImageContent(purchase.Id, receipt.ContentType, bytes);
-
-        // The payload the receipt already holds, rather than the photograph it came from. Decoding
+        // The payload the purchase already holds, rather than the photograph it came from. Decoding
         // a stored image reads one symbol in three, so re-running from the image would lose a
-        // reading the receipt already has — every time (D32).
-        string? payload = receipt.FiscalPayload;
+        // reading the purchase already has — every time (D32).
+        var held = purchase.Fiscal;
+        string? payload = held?.FiscalPayload;
         var supplied = payload is null
-            ? new FiscalIdentifiers(receipt.FiscalIkofSupplied, receipt.FiscalJikrSupplied)
+            ? new FiscalIdentifiers(held?.FiscalIkofSupplied, held?.FiscalJikrSupplied)
             : FiscalIdentity.From(payload);
 
-        var outcome = await cascade.Run(content, supplied, payload, cancellationToken);
+        var outcome = await cascade.Run(content, supplied, payload, purchase.Id, cancellationToken);
         var (state, _, _) = Judge(outcome.Result);
 
-        receipt.RecordExtractedFiscalIdentifiers(
+        // A purchase read from an image may learn its invoice only now, from a code this run
+        // decoded; one that already carries an invoice records onto it (D35).
+        var fiscal = held ?? FiscalInvoice.Create();
+
+        fiscal.RecordExtractedIdentifiers(
             outcome.Extracted.Ikof,
             outcome.Extracted.Jikr,
             outcome.FiscalSource);
 
         // A payload decoded by this run is retained, so the next one need not decode again.
-        receipt.RecordFiscalPayload(outcome.Payload, outcome.FiscalSource);
+        fiscal.RecordPayload(outcome.Payload, outcome.FiscalSource);
+
+        if (held is null)
+        {
+            purchase.AttachFiscalInvoice(fiscal);
+        }
 
         if (outcome.Result is { } result)
         {
@@ -266,10 +309,36 @@ public sealed class ReceiptService(
             await candidates.Replace(purchase.Id, result, cancellationToken);
         }
 
-        receipt.TransitionTo(state, outcome.FailureReason);
+        purchase.TransitionExtraction(state, outcome.FailureReason);
         await unitOfWork.SaveChanges(cancellationToken);
 
-        return ReceiptView.Of(receipt);
+        return ReceiptView.Of(purchase, state);
+    }
+
+    /// <summary>
+    /// The purchase already recorded against the invoice a capture established, whichever way it was
+    /// established — supplied, decoded or answered by the service (D39).
+    /// </summary>
+    private async Task<AlreadyRecordedInvoice?> AlreadyRecorded(string? ikof, CancellationToken cancellationToken)
+        => string.IsNullOrWhiteSpace(ikof)
+            || await purchases.FindLatestByInvoiceCode(ikof.Trim(), cancellationToken) is not { } earlier
+            ? null
+            : new AlreadyRecordedInvoice(earlier.Id, earlier.OccurredAt);
+
+    /// <summary>The stored bytes of a purchase's receipt image, or the reason there are none.</summary>
+    private async Task<ReceiptImageContent> Content(
+        long purchaseId,
+        Receipt receipt,
+        CancellationToken cancellationToken)
+    {
+        byte[] bytes = await images.Read(receipt.StorageKey, cancellationToken)
+            ?? throw ExpensesException.For(
+                ApplicationErrors.ReceiptImageNotFound,
+                $"The stored file for the receipt of purchase {purchaseId} is missing.",
+                ("purchaseId", purchaseId),
+                ("storageKey", receipt.StorageKey));
+
+        return new ReceiptImageContent(purchaseId, receipt.ContentType, bytes);
     }
 
     /// <summary>

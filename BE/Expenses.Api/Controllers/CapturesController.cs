@@ -82,4 +82,31 @@ public sealed class CapturesController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Captures a fiscal QR payload on its own, as a client that read the code live sends it, and
+    /// runs extraction against it synchronously (D37). Nothing is stored, so the response carries no
+    /// temporary key; the payload is what identifies the capture at confirmation (D38).
+    /// </summary>
+    [HttpPost("capture-fiscal")]
+    [Consumes("application/json")]
+    [Produces("application/json")]
+    [EndpointName("CaptureFiscalReceipt")]
+    public async Task<ActionResult<CaptureResult>> CaptureFiscal(
+        [FromBody] FiscalCaptureRequest request,
+        [FromServices] ReceiptService receipts,
+        CancellationToken cancellationToken)
+    {
+        // The same bound as beside an image, checked before the parser sees it (D30).
+        if (request.Payload is { Length: > MaximumFiscalPayloadLength })
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.ReceiptFiscalPayloadTooLong,
+                $"A fiscal QR payload may be at most {MaximumFiscalPayloadLength} characters.",
+                ("length", request.Payload.Length),
+                ("maximumLength", MaximumFiscalPayloadLength));
+        }
+
+        return Ok(await receipts.CaptureFiscal(request.Payload ?? string.Empty, cancellationToken));
+    }
 }

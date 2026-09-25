@@ -17,8 +17,13 @@ internal sealed class VisionStep(IReceiptExtractor extractor) : IExtractionStep
 
     public string Name => StepName;
 
+    public bool ReadsImage => true;
+
     public Task<ExtractionStepResult?> Run(
         ExtractionStepRequest request,
         CancellationToken cancellationToken = default)
-        => extractor.Extract(request.Image, request.Fiscal, cancellationToken);
+        => extractor.Extract(
+            request.Image ?? throw new InvalidOperationException("The vision step was reached with no image."),
+            request.Fiscal,
+            cancellationToken);
 }

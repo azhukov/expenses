@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Dtos;
+using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
@@ -64,7 +64,7 @@ public sealed class CandidateTests
 
         Assert.Null(view.Result);
         Assert.False(view.CandidatesHeld);
-        Assert.Equal(Receipt.ExtractionState.Extracted, view.Receipt.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, view.Receipt.State);
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public sealed class CandidateTests
         Assert.Null(view.Result);
 
         // Absence, not failure — and reading never starts extraction.
-        Assert.Equal(Receipt.ExtractionState.Extracted, view.Receipt.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, view.Receipt.State);
     }
 
     [Fact]
@@ -220,7 +220,8 @@ public sealed class CandidateTests
             s_occurred,
             amount,
             [Expense.Record("Groceries", amount)],
-            receipt: stored.AsReceipt(Receipt.ExtractionState.Extracted)));
+            receipt: stored.AsReceipt(),
+            extraction: Purchase.ExtractionState.Extracted));
     }
 
     private Task<Purchase> GivenExtractedPurchase(

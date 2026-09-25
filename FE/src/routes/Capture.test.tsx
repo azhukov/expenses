@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { StrictMode } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,13 +9,20 @@ import { LedgerError } from '../api/client'
 import { Capture } from './Capture'
 
 /**
- * The two writes are mocked rather than the transport: what these scenarios are about is the
- * screen's behaviour around the calls, and mocking `fetch` would only restate `writes.test.ts`.
+ * The writes are mocked rather than the transport: what these scenarios are about is the screen's
+ * behaviour around the calls, and mocking `fetch` would only restate `writes.test.ts`.
  */
 vi.mock('../api/writes', () => ({
   captureReceipt: vi.fn(),
+  captureFiscal: vi.fn(),
   recordPurchase: vi.fn(),
 }))
+
+/**
+ * The scanner is replaced by one the test drives: jsdom has no camera, and what is specified here
+ * is the screen around a read, not the reading (D40).
+ */
+vi.mock('../capture/scanner', () => ({ startScanning: vi.fn() }))
 
 vi.mock('../api/queries', async importActual => ({
   ...(await importActual<typeof import('../api/queries')>()),
@@ -22,10 +30,33 @@ vi.mock('../api/queries', async importActual => ({
   useUnits: () => ({ data: [{ id: 5, code: 'kg', name: 'Kilogram', symbol: 'kg' }] }),
 }))
 
-const { captureReceipt, recordPurchase } = await import('../api/writes')
+const { captureFiscal, captureReceipt, recordPurchase } = await import('../api/writes')
+const { startScanning } = await import('../capture/scanner')
 
 const capture = vi.mocked(captureReceipt)
+const fiscal = vi.mocked(captureFiscal)
 const record = vi.mocked(recordPurchase)
+const scanning = vi.mocked(startScanning)
+
+const payload =
+  'https://mapr.tax.gov.me/ic/#/verify?iic=32AA324CFF5030271E16D59F7F8EF636&tin=02365928'
+
+/** Every scanner the screen started, with what it reads into and whether it was stopped. */
+let scans: { read: (payload: string) => void; stop: ReturnType<typeof vi.fn> }[] = []
+
+/** A rear camera streaming, whose reads the test delivers by hand. */
+function liveCamera() {
+  scanning.mockImplementation((_video, onRead) => {
+    const scan = { read: onRead, stop: vi.fn() }
+    scans.push(scan)
+    return Promise.resolve({ stop: scan.stop })
+  })
+}
+
+/** No live camera — unsupported, refused or absent all look the same to the screen. */
+function noLiveCamera() {
+  scanning.mockResolvedValue(null)
+}
 
 /** A capture whose extraction never settles, so the waiting state can be observed. */
 function neverSettles() {
@@ -36,43 +67,218 @@ function image(name = 'receipt.jpg') {
   return new File(['bytes'], name, { type: 'image/jpeg' })
 }
 
-function renderAt(state: unknown) {
+function photographControl() {
+  return screen.getByLabelText(/photograph the receipt/i)
+}
+
+function renderAt(options: { strict?: boolean } = {}) {
   const router = createMemoryRouter(
     [
       { path: '/capture', element: <Capture /> },
       { path: '/', element: <p>Home</p> },
     ],
-    { initialEntries: [{ pathname: '/capture', state }] },
+    { initialEntries: ['/capture'] },
   )
 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const tree = (
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  )
 
-  return {
-    client,
-    router,
-    ...render(
-      <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    ),
-  }
+  return { client, router, ...render(options.strict ? <StrictMode>{tree}</StrictMode> : tree) }
+}
+
+/** Arrives on the capture screen with no live camera and takes a photograph through its control. */
+async function photographed(file: File) {
+  const rendered = renderAt()
+  await userEvent.upload(await screen.findByLabelText(/photograph the receipt/i), file)
+
+  return rendered
 }
 
 beforeEach(() => {
+  scans = []
   capture.mockReset()
+  fiscal.mockReset()
   record.mockReset()
+  scanning.mockReset()
+  noLiveCamera()
 })
 
 afterEach(() => {
   vi.clearAllMocks()
 })
 
+describe('The fiscal code is read before a photograph is asked for', () => {
+  it('scans the rear camera as soon as the screen is reached', async () => {
+    liveCamera()
+
+    renderAt()
+
+    await waitFor(() => expect(scanning).toHaveBeenCalledTimes(1))
+    expect(scanning.mock.calls[0][0]).toBeInstanceOf(HTMLVideoElement)
+  })
+
+  it('submits the first code read without a further tap, and stops scanning', async () => {
+    liveCamera()
+    fiscal.mockReturnValue(new Promise(() => {}))
+    renderAt()
+    await waitFor(() => expect(scans).toHaveLength(1))
+
+    act(() => scans[0].read(payload))
+
+    await waitFor(() => expect(fiscal).toHaveBeenCalledWith(payload))
+    expect(await screen.findByRole('status')).toHaveTextContent(/fetching the invoice/i)
+    expect(scans[0].stop).toHaveBeenCalled()
+  })
+
+  it('offers a photograph throughout scanning, as a real camera input', async () => {
+    liveCamera()
+    renderAt()
+    await waitFor(() => expect(scans).toHaveLength(1))
+
+    const control = photographControl()
+
+    // The finger lands on the input itself, so iOS opens the camera for that tap (D3).
+    expect(control).toHaveAttribute('type', 'file')
+    expect(control).toHaveAttribute('accept', 'image/*')
+    expect(control).toHaveAttribute('capture', 'environment')
+    expect(control.closest('label')).not.toBeNull()
+  })
+
+  it('stops scanning when the user chooses a photograph', async () => {
+    liveCamera()
+    neverSettles()
+    renderAt()
+    await waitFor(() => expect(scans).toHaveLength(1))
+
+    const file = image()
+    await userEvent.upload(photographControl(), file)
+
+    expect(scans[0].stop).toHaveBeenCalled()
+    await waitFor(() => expect(capture).toHaveBeenCalledWith(file, undefined))
+  })
+
+  it('offers the photograph control without an error when there is no live camera', async () => {
+    noLiveCamera()
+
+    renderAt()
+
+    expect(await screen.findByLabelText(/photograph the receipt/i)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('releases the camera and submits nothing when the screen is left during scanning', async () => {
+    liveCamera()
+    const { unmount } = renderAt()
+    await waitFor(() => expect(scans).toHaveLength(1))
+
+    unmount()
+
+    expect(scans[0].stop).toHaveBeenCalled()
+    expect(fiscal).not.toHaveBeenCalled()
+    expect(capture).not.toHaveBeenCalled()
+  })
+
+  it('keeps one scanner live and posts one payload under StrictMode', async () => {
+    liveCamera()
+    fiscal.mockReturnValue(new Promise(() => {}))
+    renderAt({ strict: true })
+    await waitFor(() => expect(scans.length).toBeGreaterThan(0))
+
+    // StrictMode mounts, unmounts and mounts again; every scanner but the last is released.
+    const live = scans.filter(scan => scan.stop.mock.calls.length === 0)
+    expect(live).toHaveLength(1)
+
+    act(() => live[0].read(payload))
+
+    await waitFor(() => expect(fiscal).toHaveBeenCalledTimes(1))
+  })
+
+  it('suggests a photograph when nothing has been read for a while', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      liveCamera()
+      renderAt()
+      await waitFor(() => expect(scans).toHaveLength(1))
+      expect(screen.queryByText(/try a photograph/i)).not.toBeInTheDocument()
+
+      await act(() => vi.advanceTimersByTimeAsync(10_000))
+
+      expect(screen.getByText(/try a photograph/i)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('A photograph is taken only when the code produces no invoice', () => {
+  async function scanned(outcome: Promise<unknown>) {
+    liveCamera()
+    fiscal.mockReturnValue(outcome as never)
+    renderAt()
+    await waitFor(() => expect(scans).toHaveLength(1))
+    act(() => scans[0].read(payload))
+  }
+
+  it('presents a fetched invoice for review and asks for no photograph', async () => {
+    await scanned(Promise.resolve(extracted({ tempKey: null, fiscalPayload: payload })))
+
+    expect(await screen.findByRole('button', { name: /confirm/i })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/photograph the receipt/i)).not.toBeInTheDocument()
+  })
+
+  it('asks for a photograph, and carries the payload with it, when the invoice could not be fetched', async () => {
+    await scanned(
+      Promise.resolve(
+        failed({
+          tempKey: null,
+          supplied: { ...noFiscal, ikof: '32AA324CFF5030271E16D59F7F8EF636' },
+        }),
+      ),
+    )
+
+    expect(await screen.findByText(/could not fetch the invoice/i)).toBeInTheDocument()
+
+    neverSettles()
+    const file = image()
+    await userEvent.upload(photographControl(), file)
+
+    await waitFor(() => expect(capture).toHaveBeenCalledWith(file, payload))
+  })
+
+  it('asks for a photograph, without the payload, when the code was not a fiscal code', async () => {
+    await scanned(Promise.resolve(failed({ tempKey: null })))
+
+    neverSettles()
+    const file = image()
+    await userEvent.upload(await screen.findByLabelText(/photograph the receipt/i), file)
+
+    await waitFor(() => expect(capture).toHaveBeenCalledWith(file, undefined))
+  })
+
+  it('offers to retry the same payload, or a photograph, when the ledger cannot be reached', async () => {
+    await scanned(Promise.reject(new LedgerError('The ledger could not be reached.')))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be reached/i)
+    expect(photographControl()).toBeInTheDocument()
+
+    fiscal.mockReturnValue(new Promise(() => {}))
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }))
+
+    await waitFor(() => expect(fiscal).toHaveBeenCalledTimes(2))
+    expect(fiscal.mock.calls[1][0]).toBe(payload)
+  })
+})
+
 describe('A captured image is uploaded on arrival', () => {
-  it('submits the image to the capture endpoint without a further tap', async () => {
+  it('submits the photograph to the capture endpoint without a further tap', async () => {
     neverSettles()
     const file = image()
 
-    renderAt({ file })
+    await photographed(file)
 
     await waitFor(() => expect(capture).toHaveBeenCalledTimes(1))
     expect(capture.mock.calls[0][0]).toBe(file)
@@ -81,7 +287,7 @@ describe('A captured image is uploaded on arrival', () => {
   it('indicates that extraction is running while the request is outstanding', async () => {
     neverSettles()
 
-    renderAt({ file: image() })
+    await photographed(image())
 
     expect(await screen.findByRole('status')).toHaveTextContent(/reading the receipt/i)
   })
@@ -89,19 +295,12 @@ describe('A captured image is uploaded on arrival', () => {
   it('shows no candidate lines, amount or date while the request is outstanding', async () => {
     neverSettles()
 
-    renderAt({ file: image() })
+    await photographed(image())
 
     await screen.findByRole('status')
     expect(screen.queryByRole('textbox', { name: /description/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/total amount/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/date/i)).not.toBeInTheDocument()
-  })
-
-  it('says nothing was handed over when arrived at directly', async () => {
-    renderAt(null)
-
-    expect(await screen.findByText(/no photograph/i)).toBeInTheDocument()
-    expect(capture).not.toHaveBeenCalled()
   })
 })
 
@@ -109,7 +308,7 @@ describe('The upload cannot be reached', () => {
   it('reports that the receipt could not be uploaded', async () => {
     capture.mockRejectedValue(new LedgerError('The ledger could not be reached.'))
 
-    renderAt({ file: image() })
+    await photographed(image())
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not be reached/i)
   })
@@ -118,7 +317,7 @@ describe('The upload cannot be reached', () => {
     capture.mockRejectedValue(new LedgerError('The ledger could not be reached.'))
     const file = image()
 
-    renderAt({ file })
+    await photographed(file)
     await screen.findByRole('alert')
 
     capture.mockReturnValue(new Promise(() => {}))
@@ -130,11 +329,11 @@ describe('The upload cannot be reached', () => {
 })
 
 describe('The same image is never uploaded twice for one visit', () => {
-  it('uploads once even when the effect runs again for the same file', async () => {
+  it('uploads once even when the screen renders again', async () => {
     neverSettles()
     const file = image()
 
-    const { rerender } = renderAt({ file })
+    const { rerender } = await photographed(file)
     await waitFor(() => expect(capture).toHaveBeenCalledTimes(1))
 
     rerender(<p>re-rendered</p>)
@@ -188,13 +387,14 @@ function extracted(overrides: Record<string, unknown> = {}) {
     extracted: { ...noFiscal, createdAt: '2026-09-01T10:15:00' },
     fiscalSource: 'DecodedFromCode',
     fiscalPayload: 'https://mapr.tax.gov.me/ic/#/verify?iic=abc&crtd=2026-09-01T10:15:00',
+    alreadyRecorded: null,
     ...overrides,
   }
 }
 
 async function reviewOf(result: Record<string, unknown> = extracted()) {
   capture.mockResolvedValue(result as never)
-  renderAt({ file: image() })
+  await photographed(image())
 
   return await screen.findByRole('button', { name: /confirm/i })
 }
@@ -408,6 +608,8 @@ function failed(overrides: Record<string, unknown> = {}) {
     supplied: noFiscal,
     extracted: noFiscal,
     fiscalSource: 'None',
+    fiscalPayload: null,
+    alreadyRecorded: null,
     ...overrides,
   }
 }
@@ -493,7 +695,7 @@ describe('Confirming a capture creates the purchase', () => {
     record.mockResolvedValue({ id: 3, alreadyRecorded: false } as never)
     capture.mockResolvedValue(extracted() as never)
 
-    const { client } = renderAt({ file: image() })
+    const { client } = await photographed(image())
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
     await userEvent.click(await screen.findByRole('button', { name: /confirm/i }))
@@ -582,7 +784,7 @@ describe('Abandoning a capture leaves no trace', () => {
   it('calls nothing further when the screen is left before confirming', async () => {
     await reviewOf()
 
-    const { unmount } = renderAt({ file: image() })
+    const { unmount } = await photographed(image())
     unmount()
 
     expect(record).not.toHaveBeenCalled()
@@ -591,7 +793,7 @@ describe('Abandoning a capture leaves no trace', () => {
 
   it('leaves the ledger unchanged, having recorded nothing', async () => {
     capture.mockResolvedValue(extracted() as never)
-    const { client, router } = renderAt({ file: image() })
+    const { client, router } = await photographed(image())
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
     await screen.findByRole('button', { name: /confirm/i })

@@ -6,7 +6,7 @@ namespace Expenses.Infrastructure.Persistence.Migrations;
 
 /// <summary>
 /// Background extraction is removed: a receipt is now only ever constructed already in a
-/// terminal state, and <c>Receipt.ExtractionState</c> no longer has <c>Pending</c> (0) or
+/// terminal state, and <c>Purchase.ExtractionState</c> no longer has <c>Pending</c> (0) or
 /// <c>Extracting</c> (1) members. Nothing can resume the bytes-in-flight a receipt found in
 /// either state was mid-queue on, so each is transitioned to <c>Failed</c> (4) with a reason
 /// noting why, leaving it in a state a user can explicitly re-run. No schema change is needed:

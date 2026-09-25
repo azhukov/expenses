@@ -208,6 +208,39 @@ public sealed class RepositoryTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Contains(matches, match => match.Merchant is null && match.MatchedText == "PIJACA ŠTAND 12");
     }
 
+    /// <summary>receipt-ingestion, "A capture reports an invoice already recorded" (D39).</summary>
+    [Fact]
+    public async Task The_most_recent_purchase_carrying_an_invoice_code_is_found_in_either_column()
+    {
+        const string Ikof = "REPOSITORYTESTIKOF0000000000000001";
+
+        await Given(WithInvoice(At(100), supplied: Ikof));
+        await Given(WithInvoice(At(101), extracted: Ikof));
+        await Given(WithInvoice(At(102), supplied: "ANOTHERINVOICE"));
+
+        using var scope = _services.CreateScope();
+        var purchases = scope.ServiceProvider.GetRequiredService<IPurchaseRepository>();
+
+        var found = await purchases.FindLatestByInvoiceCode(Ikof);
+
+        Assert.Equal(At(101), found?.OccurredAt);
+        Assert.Null(await purchases.FindLatestByInvoiceCode("NOBODYHASTHISCODE"));
+    }
+
+    private static Purchase WithInvoice(DateTime occurredAt, string? supplied = null, string? extracted = null)
+    {
+        var invoice = FiscalInvoice.Create();
+        invoice.SupplyIdentifiers(supplied, jikr: null);
+        invoice.RecordExtractedIdentifiers(extracted, jikr: null, FiscalInvoice.FiscalSource.DecodedFromCode);
+
+        return Purchase.Record(
+            occurredAt,
+            1.00m,
+            [Expense.Record("Coffee", 1.00m)],
+            fiscal: invoice,
+            extraction: Purchase.ExtractionState.Extracted);
+    }
+
     private async Task Given(Purchase purchase)
     {
         using var scope = _services.CreateScope();

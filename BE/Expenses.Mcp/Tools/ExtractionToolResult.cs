@@ -59,11 +59,11 @@ public sealed record ExtractionToolResult(
 
         string state = view.Receipt.State switch
         {
-            Receipt.ExtractionState.Extracted =>
+            Purchase.ExtractionState.Extracted =>
                 $"Extraction read {view.Result?.Candidates.Count ?? 0} lines and the numbers add up.",
-            Receipt.ExtractionState.NeedsReview =>
+            Purchase.ExtractionState.NeedsReview =>
                 $"Extraction read {view.Result?.Candidates.Count ?? 0} lines but the result needs a human eye.",
-            Receipt.ExtractionState.Failed =>
+            Purchase.ExtractionState.Failed =>
                 $"Extraction failed: {view.Receipt.FailureReason}",
             _ => "The extraction state is unknown.",
         };
@@ -90,12 +90,12 @@ public sealed record ExtractionToolResult(
         // Candidates are transient (D12): saying so is what stops an assistant reading the absence
         // as a receipt with nothing on it.
         if (!view.CandidatesHeld && view.Receipt.State
-            is Receipt.ExtractionState.Extracted or Receipt.ExtractionState.NeedsReview)
+            is Purchase.ExtractionState.Extracted or Purchase.ExtractionState.NeedsReview)
         {
             reasons.Add("Its candidate lines are no longer held; re-run extraction to read them again.");
         }
 
-        if (view.Receipt.Corroboration == Receipt.FiscalCorroboration.Disagreed)
+        if (view.Receipt.Corroboration == FiscalInvoice.FiscalCorroboration.Disagreed)
         {
             reasons.Add("The fiscal identifier supplied at upload differs from the one read from the image; "
                 + "both were kept.");

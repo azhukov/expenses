@@ -27,7 +27,7 @@ export function PurchaseRow({ purchase, merchants }: Props) {
           <span data-testid="when">{describeWhen(purchase.occurredAt)}</span>
           <span aria-hidden="true"> · </span>
           <span>{lineCount(purchase.expenses.length)}</span>
-          {purchase.hasReceipt ? (
+          {purchase.hasReceiptImage || purchase.fiscal !== null ? (
             <>
               <span aria-hidden="true"> · </span>
               <span className={styles.receipt}>Receipt</span>

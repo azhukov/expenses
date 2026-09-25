@@ -201,7 +201,8 @@ public sealed class SchemaTests(PostgresFixture postgres) : IAsyncLifetime
             occurred,
             4.00m,
             [Expense.Record("Coffee", 4.00m)],
-            receipt: Receipt.Of(storageKey, "image/jpeg", 1024, Receipt.ExtractionState.Extracted));
+            receipt: Receipt.Of(storageKey, "image/jpeg", 1024),
+            extraction: Purchase.ExtractionState.Extracted);
 
     private async Task<long> Store(Purchase purchase)
     {

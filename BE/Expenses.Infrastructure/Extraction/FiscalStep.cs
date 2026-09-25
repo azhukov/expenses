@@ -29,6 +29,12 @@ internal sealed class FiscalStep(
 
     public string Name => StepName;
 
+    /// <summary>
+    /// It decodes the image only when no payload was supplied, so a payload captured on its own
+    /// reaches it with no image at all (D37).
+    /// </summary>
+    public bool ReadsImage => false;
+
     public async Task<ExtractionStepResult?> Run(
         ExtractionStepRequest request,
         CancellationToken cancellationToken = default)
@@ -49,7 +55,7 @@ internal sealed class FiscalStep(
             return ExtractionStepResult.FiscalOnly(Name, identifiers, source, payload);
         }
 
-        var invoice = await Retrieve(request.Image.PurchaseId, identifiers, cancellationToken);
+        var invoice = await Retrieve(request.PurchaseId, identifiers, cancellationToken);
 
         return invoice is null
             ? ExtractionStepResult.FiscalOnly(Name, identifiers, source, payload)
@@ -62,18 +68,24 @@ internal sealed class FiscalStep(
     /// has focus and retries available to it that a single stored frame does not, and the server's
     /// own decoder is measured at one hit in three (D31).
     /// </summary>
-    private async Task<(string? Payload, Receipt.FiscalSource Source)> Payload(
+    private async Task<(string? Payload, FiscalInvoice.FiscalSource Source)> Payload(
         ExtractionStepRequest request,
         CancellationToken cancellationToken)
     {
         if (request.Payload is { Length: > 0 })
         {
-            return (request.Payload, Receipt.FiscalSource.SuppliedAtUpload);
+            return (request.Payload, FiscalInvoice.FiscalSource.SuppliedAtUpload);
+        }
+
+        // Neither a payload nor an image to decode one from: nothing to read.
+        if (request.Image is null)
+        {
+            return (null, FiscalInvoice.FiscalSource.None);
         }
 
         try
         {
-            return (await decoder.Decode(request.Image, cancellationToken), Receipt.FiscalSource.DecodedFromCode);
+            return (await decoder.Decode(request.Image, cancellationToken), FiscalInvoice.FiscalSource.DecodedFromCode);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -83,9 +95,9 @@ internal sealed class FiscalStep(
             logger.LogDebug(
                 exception,
                 "Fiscal code decoding failed for the receipt of purchase {PurchaseId}; continuing without it.",
-                request.Image.PurchaseId);
+                request.PurchaseId);
 
-            return (null, Receipt.FiscalSource.None);
+            return (null, FiscalInvoice.FiscalSource.None);
         }
     }
 

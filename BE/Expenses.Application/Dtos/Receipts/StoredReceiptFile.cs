@@ -9,6 +9,6 @@ namespace Expenses.Application.Dtos;
 /// </summary>
 public sealed record StoredReceiptFile(string StorageKey, string ContentType, long SizeInBytes)
 {
-    public Receipt AsReceipt(Receipt.ExtractionState state, string? failureReason = null)
-        => Receipt.Of(StorageKey, ContentType, SizeInBytes, state, failureReason);
+    public Receipt AsReceipt()
+        => Receipt.Of(StorageKey, ContentType, SizeInBytes);
 }

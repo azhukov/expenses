@@ -73,11 +73,11 @@ public sealed class DecoderRegressionTests(PostgresFixture postgres) : IAsyncLif
         // Reported no differently from a receipt carrying no code at all: the stage ran, decoded
         // nothing, recorded nothing, and every later stage behaved as it always does.
         Assert.Contains("fiscal", result.Result!.StepsRun);
-        Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, result.State);
         Assert.NotEmpty(result.Result.Candidates);
         Assert.Null(result.FailureReason);
         Assert.Null(result.Extracted.Ikof);
-        Assert.Equal(Receipt.FiscalSource.None, result.FiscalSource);
+        Assert.Equal(FiscalInvoice.FiscalSource.None, result.FiscalSource);
     }
 
     public static ReceiptImageContent Photograph(string fixture) => new(

@@ -26,4 +26,15 @@ internal static class ReceiptLookup
             ApplicationErrors.ReceiptImageNotFound,
             $"Purchase {purchase.Id} has no receipt image.",
             ("purchaseId", purchase.Id));
+
+    /// <summary>
+    /// The extraction state of a purchase that carries a receipt of either kind — an image, a fiscal
+    /// invoice or both (D35). A purchase with neither has nothing extraction ever read.
+    /// </summary>
+    public static Purchase.ExtractionState RequireExtraction(this Purchase purchase)
+        => purchase.Extraction
+        ?? throw ExpensesException.For(
+            ApplicationErrors.ReceiptImageNotFound,
+            $"Purchase {purchase.Id} has no receipt.",
+            ("purchaseId", purchase.Id));
 }

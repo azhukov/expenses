@@ -26,6 +26,13 @@ public interface IPurchaseRepository
     /// </summary>
     Task<int> CountByReceiptStorageKey(string storageKey, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The most recently occurred purchase whose fiscal invoice carries this invoice identification
+    /// code, supplied or extracted, compared exactly. Null where none does. Asked at every capture so
+    /// that a receipt scanned twice is warned about rather than silently recorded twice (D39).
+    /// </summary>
+    Task<Purchase?> FindLatestByInvoiceCode(string ikof, CancellationToken cancellationToken = default);
+
     /// <summary>Most recent first, paged. Ordering belongs here because the database does it.</summary>
     Task<IReadOnlyList<Purchase>> List(PurchaseListQuery query, CancellationToken cancellationToken = default);
 

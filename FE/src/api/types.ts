@@ -39,11 +39,14 @@ export interface PurchaseView {
   amount: number
   merchantId: number | null
   merchantRaw: string | null
-  hasReceipt: boolean
+  /** Whether a photograph is stored. A purchase read from its fiscal code alone has none. */
+  hasReceiptImage: boolean
+  /** The fiscal invoice the purchase was recorded against, apart from its image. */
+  fiscal: FiscalInvoiceView | null
   expenses: ExpenseView[]
   totalSaving: number
   savingPercentage: number | null
-  /** Null when the purchase carries no receipt. */
+  /** Null when the purchase carries neither an image nor a fiscal invoice. */
   extractionState: ExtractionState | null
 }
 
@@ -157,7 +160,8 @@ export interface ExtractionResultView {
  * untouched beside the user's edits.
  */
 export interface CaptureResult {
-  tempKey: string
+  /** Null for a capture of a fiscal QR payload alone, which stored nothing; its payload identifies it. */
+  tempKey: string | null
   state: ExtractionState
   failureReason: string | null
   /** Null where extraction failed. */
@@ -167,6 +171,34 @@ export interface CaptureResult {
   extracted: FiscalIdentifiers
   fiscalSource: FiscalSource
   fiscalPayload: string | null
+  /**
+   * The purchase already carrying the invoice this capture established, where one does. A warning
+   * for review, never a refusal.
+   */
+  alreadyRecorded: AlreadyRecordedInvoice | null
+}
+
+/** The purchase a capture's invoice appears to be recorded against already. */
+export interface AlreadyRecordedInvoice {
+  purchaseId: number
+  /** Offset-less wall-clock time, like every `occurredAt`. */
+  occurredAt: string
+}
+
+/**
+ * A purchase's fiscal invoice, reported apart from its image. Identifiers are per source; the
+ * payload is the verification link, and for a purchase read from its code alone it is the whole
+ * receipt.
+ */
+export interface FiscalInvoiceView {
+  ikofSupplied: string | null
+  ikofExtracted: string | null
+  jikrSupplied: string | null
+  jikrExtracted: string | null
+  extractedSource: FiscalSource
+  payload: string | null
+  payloadSource: FiscalSource
+  corroboration: 'Absent' | 'Unverified' | 'Corroborated' | 'Disagreed'
 }
 
 /** What a unit is measured in. Like a category, it is addressed by code rather than by name. */

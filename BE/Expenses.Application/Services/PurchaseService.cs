@@ -43,6 +43,15 @@ public sealed class PurchaseService(
                 "A purchase requires at least one expense.");
         }
 
+        // A capture is identified by the image it stored or, where it stored none, by the payload it
+        // was read from (D38). One that names neither describes nothing that was captured.
+        if (capture is { TempKey: null } && string.IsNullOrWhiteSpace(capture.FiscalPayload))
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.CaptureIdentityRequired,
+                "A capture is confirmed by the temporary key of its image or by the fiscal QR payload it was read from.");
+        }
+
         var resolvedOccurredAt = ResolveOccurrence(occurredAt, capture);
 
         // The fast path: one round trip, a clean result, and no exception used as control flow.
@@ -64,9 +73,11 @@ public sealed class PurchaseService(
 
         // Promoted only once every rejection that must leave the capture untouched has already
         // happened: a reconciliation failure above never touches the temporary store (D11, D12).
-        var receipt = capture is { } toPromote
+        var receipt = capture?.TempKey is { } toPromote
             ? await Promote(toPromote, cancellationToken)
             : null;
+
+        var fiscal = capture is { } read ? FiscalOf(read) : null;
 
         Purchase purchase;
         try
@@ -77,7 +88,10 @@ public sealed class PurchaseService(
                 lines,
                 resolvedMerchant?.Merchant.Id,
                 merchant?.Text,
-                receipt);
+                receipt,
+                fiscal,
+                capture?.State,
+                capture?.FailureReason);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
@@ -102,17 +116,17 @@ public sealed class PurchaseService(
                     ("occurredAt", resolvedOccurredAt),
                     ("amount", amount));
 
-            if (capture is { } raced)
+            if (capture?.TempKey is { } raced)
             {
-                await tempStore.Delete(raced.TempKey, cancellationToken);
+                await tempStore.Delete(raced, cancellationToken);
             }
 
             return AlreadyRecorded(winner);
         }
 
-        if (capture is { } confirmed)
+        if (capture?.TempKey is { } confirmed)
         {
-            await tempStore.Delete(confirmed.TempKey, cancellationToken);
+            await tempStore.Delete(confirmed, cancellationToken);
         }
 
         return new RecordPurchaseResult(
@@ -181,52 +195,59 @@ public sealed class PurchaseService(
     }
 
     /// <summary>
-    /// Reads the temporary capture, promotes its bytes into the permanent store, and builds the
-    /// receipt already in the terminal state extraction reached at capture time вЂ” never Pending or
-    /// Extracting, since none exists any more (D12).
+    /// Reads the temporary capture, promotes its bytes into the permanent store, and returns the
+    /// image referring to them. The extraction state it reached at capture belongs to the purchase
+    /// (D35).
     /// </summary>
-    private async Task<Receipt> Promote(CapturedReceiptCommand capture, CancellationToken cancellationToken)
+    private async Task<Receipt> Promote(Guid tempKey, CancellationToken cancellationToken)
     {
-        byte[] bytes = await tempStore.Read(capture.TempKey, cancellationToken)
+        byte[] bytes = await tempStore.Read(tempKey, cancellationToken)
             ?? throw ExpensesException.For(
                 ApplicationErrors.CaptureNotFound,
-                $"No capture was found for key {capture.TempKey}. It may already have been confirmed, "
+                $"No capture was found for key {tempKey}. It may already have been confirmed, "
                 + "or removed by the daily cleanup.",
-                ("tempKey", capture.TempKey));
+                ("tempKey", tempKey));
 
         var stored = await images.Save(bytes, cancellationToken);
 
-        Receipt receipt;
         try
         {
-            receipt = stored.AsReceipt(capture.State, capture.FailureReason);
+            return stored.AsReceipt();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
             throw DomainErrorTranslation.Receipt(exception);
         }
+    }
 
+    /// <summary>
+    /// The fiscal invoice a capture read, built from what the caller resubmitted. Empty where the
+    /// capture read none, which the aggregate then does not keep (D35).
+    /// </summary>
+    private static FiscalInvoice FiscalOf(CapturedReceiptCommand capture)
+    {
+        var fiscal = FiscalInvoice.Create();
         var identifiers = Identifiers(capture);
 
         // How the identity was established says which slot it belongs in. A payload the client read
         // is supplied; anything a step established is extracted (D31, D32). No step establishing
         // anything leaves the payload as the client's own reading, which is the ordinary case for a
         // capture that arrived with one.
-        if (capture.FiscalSource is Receipt.FiscalSource.None or Receipt.FiscalSource.SuppliedAtUpload)
+        if (capture.FiscalSource is FiscalInvoice.FiscalSource.None or FiscalInvoice.FiscalSource.SuppliedAtUpload)
         {
-            receipt.SupplyFiscalIdentifiers(identifiers.Ikof, capture.Jikr);
+            fiscal.SupplyIdentifiers(identifiers.Ikof, capture.Jikr);
         }
         else if (identifiers.Ikof is not null || capture.Jikr is not null)
         {
-            receipt.RecordExtractedFiscalIdentifiers(identifiers.Ikof, capture.Jikr, capture.FiscalSource);
+            fiscal.RecordExtractedIdentifiers(identifiers.Ikof, capture.Jikr, capture.FiscalSource);
         }
 
         // Retained whether or not anything could be read from it: the unparseable payload is
         // precisely the one a later parser would want back, and it is gone for good once dropped
-        // (D32). Confirmation is the first moment a receipt exists to hold it.
-        receipt.RecordFiscalPayload(capture.FiscalPayload, capture.FiscalSource);
+        // (D32). Confirmation is the first moment a purchase exists to hold it.
+        fiscal.RecordPayload(capture.FiscalPayload, capture.FiscalSource);
 
-        return receipt;
+        return fiscal;
     }
 
     /// <summary>What the capture's fiscal QR payload states, or nothing where it carried none.</summary>

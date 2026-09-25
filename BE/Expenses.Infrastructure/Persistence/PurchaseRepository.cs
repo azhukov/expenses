@@ -33,6 +33,14 @@ internal sealed class PurchaseRepository(ExpensesDbContext context) : IPurchaseR
             purchase => purchase.Receipt!.StorageKey == storageKey,
             cancellationToken);
 
+    /// <inheritdoc />
+    public async Task<Purchase?> FindLatestByInvoiceCode(string ikof, CancellationToken cancellationToken = default)
+        => await context.Purchases
+            .Where(purchase => purchase.Fiscal!.FiscalIkofSupplied == ikof
+                || purchase.Fiscal!.FiscalIkofExtracted == ikof)
+            .OrderByDescending(purchase => purchase.OccurredAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
     /// <summary>
     /// Most recent first, paged. Both bounds are inclusive dates as a user reads them, so the
     /// upper one becomes an exclusive instant at the start of the following day вЂ” a purchase at

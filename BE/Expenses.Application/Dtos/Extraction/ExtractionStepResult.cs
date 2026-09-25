@@ -75,7 +75,7 @@ public sealed record ExtractionStepResult
     /// something neither the code nor printed text can tell, and the receipt records that
     /// distinction (D24).
     /// </summary>
-    public Receipt.FiscalSource FiscalSource { get; private init; } = Receipt.FiscalSource.None;
+    public FiscalInvoice.FiscalSource FiscalSource { get; private init; } = FiscalInvoice.FiscalSource.None;
 
     /// <summary>The fiscal QR payload the step obtained, verbatim, where it obtained one (D32).</summary>
     public string? Payload { get; private init; }
@@ -94,7 +94,7 @@ public sealed record ExtractionStepResult
         IReadOnlyDictionary<string, string>? provenance = null,
         IReadOnlyDictionary<string, decimal>? reportedConfidence = null,
         FiscalIdentifiers? fiscal = null,
-        Receipt.FiscalSource fiscalSource = Receipt.FiscalSource.None,
+        FiscalInvoice.FiscalSource fiscalSource = FiscalInvoice.FiscalSource.None,
         string? payload = null)
     {
         if (string.IsNullOrWhiteSpace(engineName))
@@ -129,7 +129,7 @@ public sealed record ExtractionStepResult
     public static ExtractionStepResult FiscalOnly(
         string stepName,
         FiscalIdentifiers fiscal,
-        Receipt.FiscalSource fiscalSource,
+        FiscalInvoice.FiscalSource fiscalSource,
         string? payload = null)
         => new(purchaseId: 0, stepName, string.Empty, [], [stepName])
         {
@@ -158,7 +158,7 @@ public sealed record ExtractionStepResult
     /// </summary>
     public ExtractionStepResult Carrying(
         FiscalIdentifiers known,
-        Receipt.FiscalSource knownSource,
+        FiscalInvoice.FiscalSource knownSource,
         string? knownPayload)
         => this with
         {
@@ -168,7 +168,7 @@ public sealed record ExtractionStepResult
                 known.IssuerTaxNumber ?? Fiscal.IssuerTaxNumber,
                 known.CreatedAt ?? Fiscal.CreatedAt,
                 known.Total ?? Fiscal.Total),
-            FiscalSource = knownSource is Receipt.FiscalSource.None ? FiscalSource : knownSource,
+            FiscalSource = knownSource is FiscalInvoice.FiscalSource.None ? FiscalSource : knownSource,
             Payload = knownPayload ?? Payload,
         };
 

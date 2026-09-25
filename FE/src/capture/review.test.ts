@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { CaptureResult } from '../api/types'
 
-import { type EditableLine, type Edits, emptyLine, validate } from './review'
+import { confirmationOf, type EditableLine, type Edits, emptyLine, validate } from './review'
 
 /**
  * Scenarios from browser-client: "The review screen refuses an incomplete purchase" and the parts
@@ -153,3 +153,41 @@ function hasAny(errors: ReturnType<typeof validate>): boolean {
     [...errors.byLine.values()].some(line => Object.keys(line).length > 0)
   )
 }
+
+describe('confirmationOf', () => {
+  const payload =
+    'https://mapr.tax.gov.me/ic/#/verify?iic=32AA324CFF5030271E16D59F7F8EF636&tin=02365928'
+
+  function fiscalCapture(overrides: Partial<CaptureResult> = {}): CaptureResult {
+    return {
+      tempKey: null,
+      state: 'Extracted',
+      failureReason: null,
+      result: null,
+      validation: null,
+      supplied: { ...noFiscalDate, ikof: '32AA324CFF5030271E16D59F7F8EF636' },
+      extracted: { ...noFiscalDate, jikr: 'a1b2c3d4-0000-0000-0000-000000000000' },
+      fiscalSource: 'RetrievedFromService',
+      fiscalPayload: payload,
+      alreadyRecorded: null,
+      ...overrides,
+    }
+  }
+
+  it('confirms a fiscal-only capture by its payload, sending no temporary key', () => {
+    const request = confirmationOf(fiscalCapture(), edits())
+
+    expect(request.capture).not.toHaveProperty('tempKey')
+    expect(request.capture?.fiscalPayload).toBe(payload)
+    expect(request.capture?.jikr).toBe('a1b2c3d4-0000-0000-0000-000000000000')
+  })
+
+  it('confirms an image capture by its temporary key, as before', () => {
+    const request = confirmationOf(
+      fiscalCapture({ tempKey: '0f2b0a3c-0000-4000-8000-000000000001' }),
+      edits(),
+    )
+
+    expect(request.capture?.tempKey).toBe('0f2b0a3c-0000-4000-8000-000000000001')
+  })
+})

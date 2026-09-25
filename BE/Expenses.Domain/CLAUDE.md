@@ -6,7 +6,7 @@ in-memory.
 
 ## Entities and nothing else (D22)
 
-**Every type in this project is an entity, or a value one owns.** Seven of them:
+**Every type in this project is an entity, or a value one owns.** Eight of them:
 
 | Type | Role |
 | --- | --- |
@@ -14,7 +14,8 @@ in-memory.
 | [Expense.cs](Expense.cs) | A line inside a purchase. No repository, no independent lifecycle. |
 | [Category.cs](Category.cs), [Unit.cs](Unit.cs) | Dictionary entries keyed by immutable `Code` (D8). |
 | [Merchant.cs](Merchant.cs) | Learned dictionary, keyed by tax id, hierarchical (D18). |
-| [Receipt.cs](Receipt.cs) | A value **inside** `Purchase`: the reference to its stored file and the extraction state machine. Never the bytes, and never a row of its own (D11). |
+| [Receipt.cs](Receipt.cs) | A value **inside** `Purchase`: the reference to its stored image file. Never the bytes, and never a row of its own (D11). |
+| [FiscalInvoice.cs](FiscalInvoice.cs) | A value **inside** `Purchase`, independent of the image: the fiscal QR payload and the identifiers read from it or answered for it (D35). |
 | [Extraction/ExtractionResult.cs](Extraction/ExtractionResult.cs) | `ExtractionResult` and `ExtractionCandidate` — unconfirmed suggestions, held apart from the aggregate (D12). |
 
 Nothing else is added here. Not a value object, not a wrapper over a single primitive (`Money`,
@@ -24,8 +25,8 @@ tried and removed; D22 lists what moved where. The rule takes no judgement to ap
 an entity, it belongs in [../Expenses.Application](../Expenses.Application).**
 
 An enum that describes an entity's own state is part of that entity and is **nested inside it** —
-`Unit.UnitKind`, `Receipt.ExtractionState`, `Receipt.FiscalSource`,
-`Receipt.FiscalCorroboration`.
+`Unit.UnitKind`, `Purchase.ExtractionState`, `FiscalInvoice.FiscalSource`,
+`FiscalInvoice.FiscalCorroboration`.
 
 ## Signalling a broken rule
 

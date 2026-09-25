@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -387,7 +387,7 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
         var purchase = await ExpensesApi.Read<JsonElement>(deleted);
-        Assert.False(purchase.GetProperty("hasReceipt").GetBoolean());
+        Assert.False(purchase.GetProperty("hasReceiptImage").GetBoolean());
 
         // The bytes are gone with the reference; the purchase and its expenses are not (D11).
         var download = await _client.GetAsync($"/purchases/{purchaseId}/receipt/content");

@@ -80,7 +80,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
 
         var view = await Captured(services, Jpeg(0x76));
 
-        Assert.Equal(Receipt.ExtractionState.Extracted, view.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, view.State);
         Assert.True(view.Validation!.Passed);
     }
 
@@ -97,7 +97,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
 
         var view = await Captured(services, Jpeg(0x77));
 
-        Assert.Equal(Receipt.ExtractionState.NeedsReview, view.State);
+        Assert.Equal(Purchase.ExtractionState.NeedsReview, view.State);
         Assert.False(view.Validation!.Passed);
         Assert.Equal(["fiscal", "vision"], view.Result!.StepsRun);
     }
@@ -109,7 +109,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
 
         var view = await Captured(services, Jpeg(0x78));
 
-        Assert.Equal(Receipt.ExtractionState.NeedsReview, view.State);
+        Assert.Equal(Purchase.ExtractionState.NeedsReview, view.State);
         Assert.True(view.Validation!.Passed);
     }
 
@@ -123,7 +123,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         var view = await Captured(services, Jpeg(0x79));
 
         // The same result, below a threshold nobody set low enough to care about.
-        Assert.Equal(Receipt.ExtractionState.Extracted, view.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, view.State);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
 
         var view = await Captured(services, Jpeg(0x7A));
 
-        Assert.Equal(Receipt.ExtractionState.Failed, view.State);
+        Assert.Equal(Purchase.ExtractionState.Failed, view.State);
         Assert.NotNull(view.FailureReason);
         Assert.Null(view.Result);
     }
@@ -148,9 +148,9 @@ public sealed class ExtractionPipelineTests(PostgresFixture postgres) : IAsyncLi
         // where the stage was never configured.
         var view = await Captured(services, Jpeg(0x7B));
 
-        Assert.Equal(Receipt.ExtractionState.Extracted, view.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, view.State);
         Assert.Null(view.Extracted.Ikof);
-        Assert.Equal(Receipt.FiscalSource.None, view.FiscalSource);
+        Assert.Equal(FiscalInvoice.FiscalSource.None, view.FiscalSource);
         Assert.Contains("fiscal", view.Result!.StepsRun);
     }
 

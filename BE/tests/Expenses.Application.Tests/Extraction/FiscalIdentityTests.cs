@@ -75,4 +75,20 @@ public sealed class FiscalIdentityTests
         Assert.Equal("32AA324CFF5030271E16D59F7F8EF636", identifiers.Ikof);
         Assert.Null(identifiers.IssuerTaxNumber);
     }
+
+    /// <summary>
+    /// A client scanning live reads whatever QR comes into view first — a menu, a loyalty card. An
+    /// address carrying none of the verification parameters is not an invoice code, and taking the
+    /// whole of it as one would send it to the portal and, carried into the photograph's upload,
+    /// stop the server decoding the receipt's real code (D31, D40). browser-client, "The code was
+    /// not a fiscal code".
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com/menu")]
+    [InlineData("https://mapr.tax.gov.me/ic/#/verify")]
+    [InlineData("WIFI:T:WPA;S:cafe;P:secret;;")]
+    public void An_address_that_is_not_a_verification_address_yields_no_identifiers(string payload)
+    {
+        Assert.True(FiscalIdentity.From(payload).IsEmpty);
+    }
 }

@@ -176,7 +176,7 @@ internal sealed class FiscalPortalClient(
             // The JIKR arrives here and nowhere else. Everything else the code already carried is
             // carried through unchanged, so nothing decoded is lost by having asked (D24).
             fiscal: decoded with { Jikr = invoice.Fic },
-            fiscalSource: Receipt.FiscalSource.RetrievedFromService);
+            fiscalSource: FiscalInvoice.FiscalSource.RetrievedFromService);
     }
 
     private static IReadOnlyDictionary<string, string> Provenance(params string[] values)

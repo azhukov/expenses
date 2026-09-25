@@ -14,6 +14,9 @@ internal sealed class FakeStep(
 {
     public string Name { get; } = name;
 
+    /// <summary>False unless <see cref="ReadingImage"/> says otherwise, like the fiscal step.</summary>
+    public bool ReadsImage { get; private set; }
+
     public int Runs { get; private set; }
 
     /// <summary>What the step was given when it last ran, so threading can be asserted (D29).</summary>
@@ -29,7 +32,7 @@ internal sealed class FakeStep(
     /// verification service knows, recorded as having come from there (D24).
     /// </summary>
     public static FakeStep Retrieving(string name, ExtractionStepResult result, FiscalIdentifiers identifiers)
-        => new(name, _ => result.Carrying(identifiers, Receipt.FiscalSource.RetrievedFromService, null));
+        => new(name, _ => result.Carrying(identifiers, FiscalInvoice.FiscalSource.RetrievedFromService, null));
 
     /// <summary>
     /// A step that established fiscal identity but read no lines: the run continues past it,
@@ -39,8 +42,18 @@ internal sealed class FakeStep(
         => new(name, _ => ExtractionStepResult.FiscalOnly(
             name,
             identifiers,
-            Receipt.FiscalSource.DecodedFromCode,
+            FiscalInvoice.FiscalSource.DecodedFromCode,
             payload));
+
+    /// <summary>
+    /// Marks the step as one that needs an image, like the vision step, so that a run with no image
+    /// can be shown never to reach it (D37).
+    /// </summary>
+    public FakeStep ReadingImage()
+    {
+        ReadsImage = true;
+        return this;
+    }
 
     public Task<ExtractionStepResult?> Run(
         ExtractionStepRequest request,

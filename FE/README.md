@@ -4,9 +4,11 @@ The human front door onto the ledger: React, Vite and TypeScript, used primarily
 phone at the point of purchase. Home is a **launcher**, not a dashboard — a large, always-reachable
 capture control with the month's total and a few recent purchases beneath it.
 
-One screen exists today. Uploading a captured image, reviewing what was extracted, and confirming
-it into a purchase are a later change; `/capture` is a placeholder that names the file it was
-handed and does nothing else.
+The capture action leads to `/capture`, which is **QR first**. It scans the rear camera for the
+receipt's fiscal code and sends the first code it reads on its own. If the ledger fetches the
+invoice for that code, the invoice is the whole capture and no photograph is taken. Otherwise, and
+whenever there is no live camera, the screen offers a photograph, which is uploaded for
+extraction. The capture is then reviewed and confirmed into a purchase.
 
 ## Running it
 
@@ -137,22 +139,27 @@ who knows it can call it. CORS only limits which web pages can read its response
 ```
 src/
   api/          typed fetch over /api, the read functions, and the query hooks
-  capture/      the camera-backed capture control
+  capture/      Home's capture link, the QR scanner module, and the review rules
   components/   the header, the review banner and the recent list
   format/       amounts and dates, en-GB and EUR in one place
   labels/       merchant and category display names, resolved against the dictionaries
   month/        the month boundary and the figures derived from one month's purchases
-  routes/       home, and the placeholder capture screen
+  routes/       home, the capture screen (scan, then photograph) and its review
 ```
 
-## Two things worth knowing before changing it
+## Three things worth knowing before changing it
 
-**The capture control must stay a plain `<label>` around a file input.** iOS Safari opens the
-camera only for the interaction that asked for it. Navigating first and triggering the input on the
-destination screen spends the gesture, and iOS then does nothing at all — no error, no camera.
-Android is more permissive, which is what makes this a bug that passes every test but the one
-device that matters. There is a test asserting no navigation is dispatched before the input is
-activated; if it fails, that is why (D3).
+**The photograph control must stay a plain `<label>` around a file input.** It lives on the capture
+screen. iOS Safari opens the camera only for the interaction that asked for it. Triggering the input
+programmatically, or putting anything between the tap and the input, spends the gesture, and iOS
+then does nothing at all: no error, no camera. Android is more permissive, which is what makes this
+a bug that passes every test but the one device that matters (D3).
+
+**The QR library is behind `src/capture/scanner.ts` and nowhere else.** `qr-scanner` uses the
+browser's native `BarcodeDetector` where there is one (Android Chrome) and its own worker elsewhere
+(iOS Safari). An unavailable camera, a refused permission and a missing API all come back as "no
+live camera", and the screen then offers the photograph with no error. Swapping the library touches
+that one module (D40).
 
 **Captured bytes are never resized or re-encoded.** Fiscal QR codes on thermal paper are dense and
 marginal, and a decode miss is by design indistinguishable from a receipt carrying no code — so
