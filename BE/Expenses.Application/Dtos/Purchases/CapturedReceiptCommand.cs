@@ -11,16 +11,20 @@ namespace Expenses.Application.Dtos;
 /// number, the creation timestamp and the total, so none of those needs its own field; what the
 /// payload cannot yield is the JIKR — which only the verification service knows (D24) — and how the
 /// identity was established (D32).
+///
+/// <paramref name="TempKey"/> names the stored image of an image capture. A fiscal capture stored none,
+/// so it is null and <paramref name="FiscalPayload"/> identifies the capture instead; naming neither is
+/// refused (D38).
 /// </summary>
 public sealed record CapturedReceiptCommand(
-    Guid TempKey,
-    Receipt.ExtractionState State,
+    Guid? TempKey,
+    Purchase.ExtractionState State,
     string? FailureReason = null,
 
     /// <summary>Absent from the fiscal code and printed nowhere the server can read it (D24).</summary>
     string? Jikr = null,
 
-    Receipt.FiscalSource FiscalSource = Receipt.FiscalSource.None,
+    FiscalInvoice.FiscalSource FiscalSource = FiscalInvoice.FiscalSource.None,
 
     /// <summary>
     /// The receipt's fiscal QR payload, verbatim, exactly as the capture response carried it.

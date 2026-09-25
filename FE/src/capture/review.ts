@@ -290,7 +290,9 @@ export function confirmationOf(capture: CaptureResult, edits: Edits): RecordPurc
       discountAmount: line.discountAmount,
     })),
     capture: {
-      tempKey: capture.tempKey,
+      // An image capture is identified by its key; a fiscal one stored nothing and has none, so its
+      // payload below identifies it instead (D38).
+      ...(capture.tempKey === null ? {} : { tempKey: capture.tempKey }),
       state: capture.state,
       failureReason: capture.failureReason,
       // Three members where there were six: the payload states the invoice code, the issuer tax

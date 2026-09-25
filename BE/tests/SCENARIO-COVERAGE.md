@@ -97,3 +97,27 @@ Tests that record a line they do not care about now supply the seeded `PCS` unit
 `Piece` constant, a seeded unit in the test class's constructor, or the `Line` helper in
 `HttpAdapterTests`. That is the fixture cost of the rule, not a weakening of those tests: each one
 still asserts what it did before.
+
+## Scenarios added by `add-qr-first-capture`
+
+The fiscal invoice moved off the receipt image and onto the purchase, and a payload can now be
+captured and confirmed with no image at all. The BE scenarios and where they are tested:
+
+| Scenario | Where |
+| --- | --- |
+| "A purchase with a fiscal identity and no image", "A purchase with both", "Deleting the image keeps the fiscal identity", "No state without a receipt" | `Expenses.Domain.Tests/PurchaseReceiptTests`, which also pins the invariant that a state exists exactly when an image or invoice does |
+| "Existing receipts keep their fiscal identity" | `Expenses.Integration.Tests/Persistence/FiscalInvoiceMigrationTests`: old-shape rows migrated forward. It fails if the migration's `UPDATE` of the source columns is removed; that was checked. |
+| "A payload that yields an invoice", "The service returns no invoice", "A payload no identifier can be read from", "Nothing is held after a fiscal capture", "A payload captured on its own" | `Expenses.Application.Tests/Receipts/CaptureFiscalTests`; that the service is not asked, over the real portal client, in `Expenses.Integration.Tests/Api/FiscalCaptureTests.An_unparseable_payload` |
+| "A confirmed fiscal capture becomes a whole purchase", "The date defaults from the payload", "A confirmation naming neither an image nor a payload" | `Expenses.Application.Tests/Purchases/RecordPurchaseTests`; the last also over HTTP and MCP |
+| "Re-run with no image" | `Expenses.Application.Tests/Receipts/RerunExtractionTests.Re_run_with_no_image` |
+| "A receipt scanned twice", "A duplicate can still be confirmed", "A new invoice", "No invoice identification code" | `Expenses.Application.Tests/Receipts/DuplicateInvoiceTests` (both capture paths, supplied, decoded and retrieved codes); the lookup over PostgreSQL in `Persistence/RepositoryTests`; both endpoints in `Api/FiscalCaptureTests.Reading_a_duplicate_warning_on_either_capture_endpoint` |
+| api-surface: "Capturing a payload", "An oversized payload", "A missing payload", "An unparseable payload", "Fiscal capture over HTTP", "Reading a duplicate warning", "No duplicate", "A purchase with a fiscal identity and no image", "Requesting the image of an image-less purchase" | `Expenses.Integration.Tests/Api/FiscalCaptureTests` |
+| api-surface: "MCP confirms a fiscal-only capture", "Confirming a fiscal-only capture over either interface" | `Mcp/McpAdapterTests.An_assistant_confirms_a_fiscal_only_capture_by_its_payload`, with the HTTP half in `FiscalCaptureTests.A_purchase_with_a_fiscal_identity_and_no_image` |
+
+One behaviour change came out of writing these rather than out of the spec directly. A URL carrying
+none of the verification parameters used to be parsed as a bare invoice code. It now yields no
+identifiers: `Extraction/FiscalIdentityTests.An_address_that_is_not_a_verification_address_yields_no_identifiers`
+(design D37).
+
+Four existing assertions follow the `hasReceipt` → `hasReceiptImage` rename (D41). Each still asserts
+what it did before, because every purchase in them either carries an image or carries nothing.

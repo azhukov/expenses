@@ -1,4 +1,4 @@
-﻿using Expenses.Application.Dtos;
+using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Services;
 using Expenses.Application.Tests.Fakes;
@@ -479,11 +479,11 @@ public sealed class RecordPurchaseTests
             s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
-            capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted));
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.Extracted));
 
         Assert.False(result.AlreadyRecorded);
-        Assert.True(result.Purchase.HasReceipt);
-        Assert.Equal(Receipt.ExtractionState.Extracted, _ledger.Purchases[0].Receipt!.State);
+        Assert.True(result.Purchase.HasReceiptImage);
+        Assert.Equal(Purchase.ExtractionState.Extracted, _ledger.Purchases[0].Extraction);
     }
 
     [Fact]
@@ -495,7 +495,7 @@ public sealed class RecordPurchaseTests
             s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
-            capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted));
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.Extracted));
 
         Assert.False(_ledger.HasTemporaryCapture(tempKey));
         Assert.Single(_ledger.Files);
@@ -510,7 +510,7 @@ public sealed class RecordPurchaseTests
             s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 5.00m, UnitCode: Piece)],
-            capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted)));
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.Extracted)));
 
         Assert.Equal(ApplicationErrors.PurchaseReconciliationMismatch, error.Error.Code);
         Assert.Empty(_ledger.Purchases);
@@ -527,7 +527,7 @@ public sealed class RecordPurchaseTests
             s_occurred,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
-            capture: new CapturedReceiptCommand(Guid.NewGuid(), Receipt.ExtractionState.Extracted)));
+            capture: new CapturedReceiptCommand(Guid.NewGuid(), Purchase.ExtractionState.Extracted)));
 
         Assert.Equal(ApplicationErrors.CaptureNotFound, error.Error.Code);
         Assert.Empty(_ledger.Purchases);
@@ -544,7 +544,7 @@ public sealed class RecordPurchaseTests
             [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(
                 tempKey,
-                Receipt.ExtractionState.Extracted,
+                Purchase.ExtractionState.Extracted,
                 FiscalPayload: "https://mapr.tax.gov.me/ic/#/verify?iic=A1B2C3&crtd=2026-08-24T12:50:08+02:00"));
 
         Assert.Equal(new DateTime(2026, 8, 24, 12, 50, 8), result.Purchase.OccurredAt);
@@ -561,7 +561,7 @@ public sealed class RecordPurchaseTests
             [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
             capture: new CapturedReceiptCommand(
                 tempKey,
-                Receipt.ExtractionState.Extracted,
+                Purchase.ExtractionState.Extracted,
                 FiscalPayload: "https://mapr.tax.gov.me/ic/#/verify?iic=A1B2C3&crtd=2026-08-24T12:50:08+02:00"));
 
         Assert.Equal(new DateTime(2026, 8, 25, 9, 0, 0), result.Purchase.OccurredAt);
@@ -576,11 +576,76 @@ public sealed class RecordPurchaseTests
             occurredAt: null,
             8.48m,
             [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
-            capture: new CapturedReceiptCommand(tempKey, Receipt.ExtractionState.Extracted)));
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.Extracted)));
 
         Assert.Equal(ApplicationErrors.PurchaseOccurrenceRequired, error.Error.Code);
         Assert.Empty(_ledger.Purchases);
     }
+
+    /// <summary>receipt-ingestion, "A fiscal-only capture is confirmed by its payload".</summary>
+    [Fact]
+    public async Task A_confirmed_fiscal_capture_becomes_a_whole_purchase()
+    {
+        var result = await Subject.Record(
+            s_occurred,
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
+            capture: new CapturedReceiptCommand(
+                TempKey: null,
+                Purchase.ExtractionState.Extracted,
+                Jikr: "a1b2c3d4-0000-0000-0000-000000000000",
+                FiscalSource: FiscalInvoice.FiscalSource.RetrievedFromService,
+                FiscalPayload: FiscalPayload));
+
+        var purchase = Assert.Single(_ledger.Purchases);
+        Assert.False(result.AlreadyRecorded);
+        Assert.Null(purchase.Receipt);
+        Assert.Equal(Purchase.ExtractionState.Extracted, purchase.Extraction);
+
+        // Parsed again from the payload the caller resubmitted, not taken from anything it echoed
+        // (D30, D38); the identifier only the service knows arrives as submitted (D24).
+        Assert.NotNull(purchase.Fiscal);
+        Assert.Equal(FiscalPayload, purchase.Fiscal.FiscalPayload);
+        Assert.Equal("32AA324CFF5030271E16D59F7F8EF636", purchase.Fiscal.FiscalIkofExtracted);
+        Assert.Equal("a1b2c3d4-0000-0000-0000-000000000000", purchase.Fiscal.FiscalJikrExtracted);
+        Assert.Equal(FiscalInvoice.FiscalSource.RetrievedFromService, purchase.Fiscal.FiscalExtractedSource);
+
+        // Nothing was stored, because there were no bytes to store.
+        Assert.Empty(_ledger.Files);
+    }
+
+    [Fact]
+    public async Task The_date_defaults_from_the_payload()
+    {
+        var result = await Subject.Record(
+            occurredAt: null,
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
+            capture: new CapturedReceiptCommand(
+                TempKey: null,
+                Purchase.ExtractionState.Extracted,
+                FiscalSource: FiscalInvoice.FiscalSource.RetrievedFromService,
+                FiscalPayload: FiscalPayload));
+
+        Assert.Equal(new DateTime(2026, 8, 29, 14, 59, 22), result.Purchase.OccurredAt);
+    }
+
+    [Fact]
+    public async Task A_confirmation_naming_neither_an_image_nor_a_payload()
+    {
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
+            s_occurred,
+            8.48m,
+            [new ExpenseCommand("Groceries", 8.48m, UnitCode: Piece)],
+            capture: new CapturedReceiptCommand(TempKey: null, Purchase.ExtractionState.Extracted)));
+
+        Assert.Equal(ApplicationErrors.CaptureIdentityRequired, error.Error.Code);
+        Assert.Empty(_ledger.Purchases);
+    }
+
+    private const string FiscalPayload =
+        "https://mapr.tax.gov.me/ic/#/verify?iic=32AA324CFF5030271E16D59F7F8EF636"
+        + "&tin=02365928&crtd=2026-08-29T14:59:22+02:00&prc=8.48";
 
     private static byte[] Jpeg(byte seed) => [0xFF, 0xD8, 0xFF, seed, 0x01, 0x02];
 }

@@ -22,7 +22,7 @@ public sealed class CaptureReceiptTests
             "vision", Results.Reconciling("vision")))
             .Capture(Jpeg(1));
 
-        Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, result.State);
         Assert.Empty(_ledger.Purchases);
     }
 
@@ -49,9 +49,9 @@ public sealed class CaptureReceiptTests
             result.State,
             new[]
             {
-                Receipt.ExtractionState.Extracted,
-                Receipt.ExtractionState.NeedsReview,
-                Receipt.ExtractionState.Failed,
+                Purchase.ExtractionState.Extracted,
+                Purchase.ExtractionState.NeedsReview,
+                Purchase.ExtractionState.Failed,
             });
     }
 
@@ -62,7 +62,7 @@ public sealed class CaptureReceiptTests
             "vision", Results.Reconciling("vision")))
             .Capture(Jpeg(1));
 
-        Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, result.State);
         Assert.Equal(2, result.Result?.Candidates.Count);
     }
 
@@ -73,7 +73,7 @@ public sealed class CaptureReceiptTests
             "vision", Results.Failing("vision")))
             .Capture(Jpeg(1));
 
-        Assert.Equal(Receipt.ExtractionState.NeedsReview, result.State);
+        Assert.Equal(Purchase.ExtractionState.NeedsReview, result.State);
         Assert.NotNull(result.Result);
     }
 
@@ -83,7 +83,7 @@ public sealed class CaptureReceiptTests
         var result = await Subject(FakeStep.Silent("vision"))
             .Capture(Jpeg(1));
 
-        Assert.Equal(Receipt.ExtractionState.Failed, result.State);
+        Assert.Equal(Purchase.ExtractionState.Failed, result.State);
         Assert.NotNull(result.FailureReason);
         Assert.Null(result.Result);
     }
@@ -98,7 +98,7 @@ public sealed class CaptureReceiptTests
 
         Assert.Equal("d1b2c3", result.Extracted.Ikof);
         Assert.Equal("9f8e7d", result.Extracted.Jikr);
-        Assert.Equal(Receipt.FiscalSource.DecodedFromCode, result.FiscalSource);
+        Assert.Equal(FiscalInvoice.FiscalSource.DecodedFromCode, result.FiscalSource);
     }
 
     /// <summary>

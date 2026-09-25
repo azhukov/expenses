@@ -15,5 +15,11 @@ public interface IExtractionStep
 {
     string Name { get; }
 
+    /// <summary>
+    /// Whether the step needs the image. A run with no image — a payload captured on its own, or a
+    /// purchase read from one being re-run — never reaches a step that does (D37).
+    /// </summary>
+    bool ReadsImage { get; }
+
     Task<ExtractionStepResult?> Run(ExtractionStepRequest request, CancellationToken cancellationToken = default);
 }

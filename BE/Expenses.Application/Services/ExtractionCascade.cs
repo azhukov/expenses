@@ -20,10 +20,17 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
 {
     private readonly IReadOnlyList<IExtractionStep> _steps = [.. steps];
 
+    /// <summary>
+    /// Runs the steps against an image, or against a payload alone where
+    /// <paramref name="image"/> is null — in which case a step that reads the image is skipped, and
+    /// is not recorded as having run, because it did not (D37). <paramref name="purchaseId"/>
+    /// describes the result where there is no image to carry it.
+    /// </summary>
     public async Task<CascadeOutcome> Run(
-        ReceiptImageContent image,
+        ReceiptImageContent? image,
         FiscalIdentifiers? supplied = null,
         string? suppliedPayload = null,
+        long purchaseId = 0,
         CancellationToken cancellationToken = default)
     {
         var stepsRun = new List<string>();
@@ -35,15 +42,20 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
         // caller's own reading back as a second one would make every supplied identifier look
         // corroborated by itself.
         var established = FiscalIdentifiers.None;
-        var source = Receipt.FiscalSource.None;
+        var source = FiscalInvoice.FiscalSource.None;
 
-        foreach (var step in _steps)
+        foreach (var step in _steps.Where(step => image is not null || !step.ReadsImage))
         {
             // Recorded whether or not it contributed, so the shape of the run is visible rather
             // than inferred (D20).
             stepsRun.Add(step.Name);
 
-            var result = await step.Run(new ExtractionStepRequest(image, known, payload), cancellationToken);
+            var request = new ExtractionStepRequest(image, known, payload)
+            {
+                PurchaseId = image?.PurchaseId ?? purchaseId,
+            };
+
+            var result = await step.Run(request, cancellationToken);
 
             if (result is null)
             {
@@ -85,9 +97,9 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
     /// the source and payload alongside it. An estimate never displaces an exact value because the
     /// step that decodes runs before the step that reads text, not because anything ranks them.
     /// </summary>
-    private static (FiscalIdentifiers Known, Receipt.FiscalSource Source, string? Payload) Merged(
+    private static (FiscalIdentifiers Known, FiscalInvoice.FiscalSource Source, string? Payload) Merged(
         FiscalIdentifiers known,
-        Receipt.FiscalSource source,
+        FiscalInvoice.FiscalSource source,
         string? payload,
         ExtractionStepResult result)
     {
@@ -95,7 +107,7 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
         // the receipt — it is the caller's own, arriving back by another route. Counting it would
         // make every supplied identifier look corroborated by itself, whether it came in with the
         // capture or off the receipt on a re-run (D31, D32).
-        if (result.FiscalSource is Receipt.FiscalSource.SuppliedAtUpload)
+        if (result.FiscalSource is FiscalInvoice.FiscalSource.SuppliedAtUpload)
         {
             return (known, source, payload ?? result.Payload);
         }
@@ -104,9 +116,9 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
         // before it. It answers with the JIKR, which is absent from the fiscal code and printed
         // nowhere the server can read it, so a receipt whose identity the service completed must
         // record that it did (D24).
-        var establishedBy = result.FiscalSource is Receipt.FiscalSource.RetrievedFromService
-            ? Receipt.FiscalSource.RetrievedFromService
-            : source is Receipt.FiscalSource.None ? result.FiscalSource : source;
+        var establishedBy = result.FiscalSource is FiscalInvoice.FiscalSource.RetrievedFromService
+            ? FiscalInvoice.FiscalSource.RetrievedFromService
+            : source is FiscalInvoice.FiscalSource.None ? result.FiscalSource : source;
 
         return (Merge(known, result.Fiscal), establishedBy, payload ?? result.Payload);
     }

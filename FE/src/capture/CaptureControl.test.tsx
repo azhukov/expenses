@@ -1,125 +1,59 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryRouter, RouterProvider } from 'react-router'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CaptureControl } from './CaptureControl'
 
-const navigate = vi.fn()
+/**
+ * Home's capture action. The camera is no longer opened here: the capture screen scans for the
+ * fiscal code first, and holds the photograph control for when that produces no invoice (D40).
+ * The photograph's own scenarios — the rear camera, a direct tap, untouched bytes, an unusual
+ * format — moved with that control, to `routes/Capture.test.tsx`.
+ */
+function renderAtHome() {
+  const router = createMemoryRouter(
+    [
+      { path: '/', element: <CaptureControl /> },
+      { path: '/capture', element: <p>Capture screen</p> },
+    ],
+    { initialEntries: ['/'] },
+  )
 
-vi.mock('react-router', () => ({
-  useNavigate: () => navigate,
-}))
+  render(<RouterProvider router={router} />)
 
-beforeEach(() => {
-  navigate.mockReset()
-})
-
-afterEach(() => {
-  vi.restoreAllMocks()
-})
-
-function captureInput() {
-  return document.querySelector('input[type="file"]') as HTMLInputElement
+  return router
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('Camera opens on activation', () => {
-  it('asks the browser for the rear-facing camera rather than a file browser', () => {
-    render(<CaptureControl />)
+  it('takes the user straight to the capture screen, which opens the camera', async () => {
+    const router = renderAtHome()
 
-    const input = captureInput()
+    await userEvent.click(screen.getByRole('link', { name: /capture a receipt/i }))
 
-    expect(input).toHaveAttribute('accept', 'image/*')
-    expect(input).toHaveAttribute('capture', 'environment')
+    expect(router.state.location.pathname).toBe('/capture')
+    expect(await screen.findByText('Capture screen')).toBeInTheDocument()
   })
 
-  it('labels the control so that it can be activated by name', () => {
-    render(<CaptureControl />)
+  it('carries no camera input of its own', () => {
+    renderAtHome()
 
-    expect(screen.getByLabelText(/capture a receipt/i)).toBe(captureInput())
-  })
-})
-
-describe('No intermediate step precedes the camera', () => {
-  it('activates the file input directly, dispatching no navigation first', async () => {
-    render(<CaptureControl />)
-
-    const input = captureInput()
-    const opened = vi.fn()
-    input.addEventListener('click', opened)
-
-    await userEvent.click(screen.getByLabelText(/capture a receipt/i))
-
-    expect(opened).toHaveBeenCalled()
-    expect(navigate).not.toHaveBeenCalled()
-  })
-
-  it('does not click the input programmatically', () => {
-    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click')
-
-    render(<CaptureControl />)
-
-    expect(clickSpy).not.toHaveBeenCalled()
-  })
-})
-
-describe('Original bytes are preserved', () => {
-  it('hands the capture screen the exact File the camera produced', async () => {
-    render(<CaptureControl />)
-
-    const photograph = new File(['original-bytes'], 'receipt.jpg', { type: 'image/jpeg' })
-
-    await userEvent.upload(captureInput(), photograph)
-
-    expect(navigate).toHaveBeenCalledWith('/capture', { state: { file: photograph } })
-    expect(navigate.mock.calls[0][1].state.file).toBe(photograph)
-  })
-})
-
-describe('An unusual format is not pre-judged', () => {
-  it('carries a format it cannot display forward without reporting an error', async () => {
-    render(<CaptureControl />)
-
-    const photograph = new File(['heic-bytes'], 'IMG_0001.HEIC', { type: 'image/heic' })
-
-    await userEvent.upload(captureInput(), photograph)
-
-    expect(navigate).toHaveBeenCalledWith('/capture', { state: { file: photograph } })
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  })
-})
-
-describe('Capture is abandoned', () => {
-  it('navigates nowhere and submits nothing when the camera is dismissed', async () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-
-    render(<CaptureControl />)
-
-    const input = captureInput()
-    await userEvent.click(screen.getByLabelText(/capture a receipt/i))
-    input.dispatchEvent(new Event('change', { bubbles: true }))
-
-    expect(navigate).not.toHaveBeenCalled()
-    expect(fetchMock).not.toHaveBeenCalled()
-
-    vi.unstubAllGlobals()
+    expect(document.querySelector('input[type="file"]')).toBeNull()
   })
 })
 
 describe('Home does not submit the image', () => {
-  it('writes nothing to the ledger when a photograph is taken', async () => {
+  it('writes nothing to the ledger when the capture action is activated', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
+    renderAtHome()
 
-    render(<CaptureControl />)
-
-    await userEvent.upload(
-      captureInput(),
-      new File(['bytes'], 'receipt.jpg', { type: 'image/jpeg' }),
-    )
+    await userEvent.click(screen.getByRole('link', { name: /capture a receipt/i }))
 
     expect(fetchMock).not.toHaveBeenCalled()
-
-    vi.unstubAllGlobals()
   })
 })

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using Expenses.Application.Dtos;
 
 namespace Expenses.Mcp.Tools;

@@ -12,7 +12,7 @@ public sealed record CascadeOutcome(
     ExtractionStepResult? Result,
     IReadOnlyList<string> StepsRun,
     FiscalIdentifiers Extracted,
-    Receipt.FiscalSource FiscalSource,
+    FiscalInvoice.FiscalSource FiscalSource,
     string? FailureReason = null,
 
     /// <summary>

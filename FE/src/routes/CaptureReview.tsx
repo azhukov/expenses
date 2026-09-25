@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 
 import { useCategories, useUnits } from '../api/queries'
 import type { CaptureResult } from '../api/types'
+import { describeWhen } from '../format/format'
 import {
   asLocalInput,
   asText,
@@ -89,7 +90,11 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
     candidates.map(each => [each.lineNumber, lowConfidence(each.reportedConfidence)]),
   )
 
-  const hasAlert = capture.failureReason !== null || failure !== null || reasons.length > 0
+  const hasAlert =
+    capture.failureReason !== null ||
+    failure !== null ||
+    reasons.length > 0 ||
+    capture.alreadyRecorded !== null
 
   // Marked only once the user has tried to confirm, and recomputed from the current values on
   // every render after that — which is what clears a mark as a value is corrected, with no second
@@ -186,6 +191,17 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
           {failure !== null && (
             <p className={styles.failure} role="alert">
               {failure}
+            </p>
+          )}
+
+          {/*
+           * A warning, not a refusal: the same receipt can be scanned twice by mistake, but two
+           * purchases can also share an invoice on purpose, so the user decides (D39).
+           */}
+          {capture.alreadyRecorded !== null && (
+            <p className={styles.reasons} data-testid="already-recorded">
+              This invoice appears to be recorded already, on a purchase from{' '}
+              {describeWhen(capture.alreadyRecorded.occurredAt)}.
             </p>
           )}
 

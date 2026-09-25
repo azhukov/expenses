@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -49,7 +49,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
         // Retrieving a purchase says where its receipt has got to, in the same read: the receipt is
         // columns on the purchase rather than a row to join (D11) — and already terminal, since
         // extraction ran synchronously at capture.
-        Assert.True(purchase.HasReceipt);
+        Assert.True(purchase.HasReceiptImage);
         Assert.Equal(captured.State, purchase.ExtractionState);
     }
 
@@ -61,7 +61,7 @@ public sealed class CoverageGapTests(PostgresFixture postgres) : IAsyncLifetime
 
         var purchase = await scope.ServiceProvider.GetRequiredService<PurchaseService>().Get(recorded.Purchase.Id);
 
-        Assert.False(purchase.HasReceipt);
+        Assert.False(purchase.HasReceiptImage);
         Assert.Null(purchase.ExtractionState);
     }
 

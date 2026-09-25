@@ -12,16 +12,22 @@ public sealed record PurchaseView(
     decimal Amount,
     long? MerchantId,
     string? MerchantRaw,
-    bool HasReceipt,
+    bool HasReceiptImage,
     IReadOnlyList<ExpenseView> Expenses,
     decimal TotalSaving,
     decimal? SavingPercentage)
 {
     /// <summary>
-    /// Where the attached receipt has got to, so that reading a purchase answers "has the receipt
-    /// been read yet" in the same read. Null when there is no receipt (D11).
+    /// The fiscal invoice the purchase was recorded against, reported apart from its image: a purchase
+    /// read from its fiscal code alone has this and no image (D41).
     /// </summary>
-    public Receipt.ExtractionState? ExtractionState { get; init; }
+    public FiscalInvoiceView? Fiscal { get; init; }
+
+    /// <summary>
+    /// Where the attached receipt has got to, so that reading a purchase answers "has the receipt
+    /// been read yet" in the same read. Null when there is neither an image nor a fiscal invoice (D35).
+    /// </summary>
+    public Purchase.ExtractionState? ExtractionState { get; init; }
 
     public static PurchaseView Of(Purchase purchase) => new(
         purchase.Id,
@@ -34,6 +40,7 @@ public sealed record PurchaseView(
         purchase.TotalSaving,
         purchase.SavingPercentage)
     {
-        ExtractionState = purchase.Receipt?.State,
+        ExtractionState = purchase.Extraction,
+        Fiscal = purchase.Fiscal is { } fiscal ? FiscalInvoiceView.Of(fiscal) : null,
     };
 }

@@ -27,9 +27,9 @@ viewport handling changes.
 
 | # | Check | Why it cannot be automated |
 | --- | --- | --- |
-| 1 | Tapping **Capture a receipt** opens the rear-facing camera directly — not a file browser, not a photo picker — with no screen, prompt or transition first. | iOS grants camera access only to the interaction that requested it; jsdom has no camera and no gesture model. |
-| 2 | Taking a photograph lands on `/capture` showing the file's name, and the OS back gesture returns to home. | Requires a real camera and real history behaviour. |
-| 3 | Dismissing the camera without taking a photograph returns to home unchanged. | Same. |
+| 1 | Tapping **Capture a receipt** opens `/capture` with the rear camera live in a viewfinder, after at most the browser's own permission prompt. Refusing the prompt leaves **Photograph the receipt** on its own, with no error. | Needs a real camera and real permission UI; jsdom has neither. |
+| 2 | Pointing the camera at a fiscal QR code reads it within a few seconds, releases the camera, and shows the fetched invoice for review with no photograph taken. Where the invoice cannot be fetched, the screen says so and offers the photograph. | Needs a real camera, a real code and a real portal. |
+| 3 | **Photograph the receipt** opens the rear-facing camera directly — not a file browser — from that one tap, on iOS as well as Android; dismissing it leaves the capture screen as it was. | iOS grants camera access only to the interaction that requested it (D3); jsdom has no gesture model. |
 | 4 | Scrolling the recent list collapses the browser toolbar, and the capture control stays fully visible and tappable throughout. | `100dvh` resolves against a viewport jsdom does not have. |
 | 5 | The capture control clears the home indicator on a device that has one — no part of it sits under the indicator, and it is tappable along its whole width. | `env(safe-area-inset-bottom)` resolves to zero outside a real device. |
 | 6 | The header is not cut off by the notch, the dynamic island or the rounded corners, in portrait and in landscape. | `env(safe-area-inset-top/left/right)`, as above. |

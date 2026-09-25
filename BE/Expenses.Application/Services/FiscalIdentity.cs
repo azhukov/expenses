@@ -44,8 +44,11 @@ public static class FiscalIdentity
         // the code at all; it is simply not yet known until the portal answers with it (D24).
         string? jikr = Parameter(query, fragment, "jikr");
 
+        // An address with none of the verification parameters is some other QR — a menu, a loyalty
+        // card — not an invoice code, however its path reads. Taking the whole of it as one would ask
+        // the portal about it and stop the server decoding the receipt's real code (D31, D40).
         return ikof is null && jikr is null && issuerTaxNumber is null && createdAt is null
-            ? new FiscalIdentifiers(payload.Trim())
+            ? FiscalIdentifiers.None
             : new FiscalIdentifiers(
                 ikof,
                 jikr,

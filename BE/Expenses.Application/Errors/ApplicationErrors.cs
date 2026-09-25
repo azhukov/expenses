@@ -67,7 +67,9 @@ public static class ApplicationErrors
     public const string ReceiptImageUnsupportedFormat = "receipt_image.unsupported_format";
     public const string ReceiptImageTooLarge = "receipt_image.too_large";
     public const string ReceiptFiscalPayloadTooLong = "receipt_image.fiscal_payload_too_long";
+    public const string ReceiptFiscalPayloadRequired = "receipt_image.fiscal_payload_required";
     public const string CaptureNotFound = "capture.not_found";
+    public const string CaptureIdentityRequired = "capture.identity_required";
 
     public const string ListingPageSizeInvalid = "listing.page_size_invalid";
     public const string ListingRangeInvalid = "listing.range_invalid";

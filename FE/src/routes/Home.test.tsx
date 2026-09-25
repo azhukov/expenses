@@ -49,7 +49,8 @@ function purchase(overrides: Partial<PurchaseView>): PurchaseView {
     amount: 10,
     merchantId: null,
     merchantRaw: null,
-    hasReceipt: false,
+    hasReceiptImage: false,
+    fiscal: null,
     expenses: [],
     totalSaving: 0,
     savingPercentage: null,
@@ -69,7 +70,7 @@ const purchases: PurchaseView[] = [
     amount: 30.25,
     merchantId: 7,
     merchantRaw: 'MERCADONA S.A.',
-    hasReceipt: true,
+    hasReceiptImage: true,
     extractionState: 'Extracted',
     expenses: [expense(1), expense(2)],
   }),
@@ -126,7 +127,7 @@ function renderHome() {
 }
 
 function captureControl() {
-  return screen.getByLabelText(/capture a receipt/i)
+  return screen.getByRole('link', { name: /capture a receipt/i })
 }
 
 beforeEach(() => {
@@ -245,6 +246,33 @@ describe('A purchase carrying a receipt is distinguishable', () => {
     expect(within(rows[0]).getByText(/receipt/i)).toBeInTheDocument()
     expect(within(rows[1]).queryByText(/receipt/i)).not.toBeInTheDocument()
   })
+
+  it('marks a purchase read from its fiscal code alone, which has no image', () => {
+    givenPurchases({
+      data: [
+        purchase({
+          id: 9,
+          merchantRaw: 'MEGAPROMET',
+          hasReceiptImage: false,
+          extractionState: 'Extracted',
+          fiscal: {
+            ikofSupplied: '32AA324CFF5030271E16D59F7F8EF636',
+            ikofExtracted: null,
+            jikrSupplied: null,
+            jikrExtracted: 'a1b2c3d4-0000-0000-0000-000000000000',
+            extractedSource: 'RetrievedFromService',
+            payload: 'https://mapr.tax.gov.me/ic/#/verify?iic=32AA324CFF5030271E16D59F7F8EF636',
+            payloadSource: 'SuppliedAtUpload',
+            corroboration: 'Unverified',
+          },
+        }),
+      ],
+    })
+
+    renderHome()
+
+    expect(within(screen.getByRole('listitem')).getByText(/receipt/i)).toBeInTheDocument()
+  })
 })
 
 describe('Entries are not controls', () => {
@@ -273,9 +301,9 @@ describe('Purchases needing review exist', () => {
   it('reports how many there are', () => {
     givenPurchases({
       data: [
-        purchase({ id: 5, hasReceipt: true, extractionState: 'NeedsReview' }),
-        purchase({ id: 6, hasReceipt: true, extractionState: 'NeedsReview' }),
-        purchase({ id: 7, hasReceipt: true, extractionState: 'Extracted' }),
+        purchase({ id: 5, hasReceiptImage: true, extractionState: 'NeedsReview' }),
+        purchase({ id: 6, hasReceiptImage: true, extractionState: 'NeedsReview' }),
+        purchase({ id: 7, hasReceiptImage: true, extractionState: 'Extracted' }),
       ],
     })
 
@@ -286,7 +314,7 @@ describe('Purchases needing review exist', () => {
 
   it('names the single one in the singular', () => {
     givenPurchases({
-      data: [purchase({ id: 5, hasReceipt: true, extractionState: 'NeedsReview' })],
+      data: [purchase({ id: 5, hasReceiptImage: true, extractionState: 'NeedsReview' })],
     })
 
     renderHome()

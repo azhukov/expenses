@@ -1,3 +1,4 @@
+using Expenses.Domain.Entities;
 using Expenses.Application.Dtos;
 
 namespace Expenses.Api;
@@ -12,7 +13,7 @@ public sealed record RecordPurchaseResponse(
     decimal Amount,
     long? MerchantId,
     string? MerchantRaw,
-    bool HasReceipt,
+    bool HasReceiptImage,
     IReadOnlyList<ExpenseView> Expenses,
     decimal TotalSaving,
     decimal? SavingPercentage,
@@ -20,17 +21,26 @@ public sealed record RecordPurchaseResponse(
     MerchantView? Merchant,
     bool MerchantNewlyAdded)
 {
+    /// <summary>The fiscal invoice the purchase was recorded against, apart from its image (D41).</summary>
+    public FiscalInvoiceView? Fiscal { get; init; }
+
+    public Purchase.ExtractionState? ExtractionState { get; init; }
+
     public static RecordPurchaseResponse Of(RecordPurchaseResult result) => new(
         result.Purchase.Id,
         result.Purchase.OccurredAt,
         result.Purchase.Amount,
         result.Purchase.MerchantId,
         result.Purchase.MerchantRaw,
-        result.Purchase.HasReceipt,
+        result.Purchase.HasReceiptImage,
         result.Purchase.Expenses,
         result.Purchase.TotalSaving,
         result.Purchase.SavingPercentage,
         result.AlreadyRecorded,
         result.Merchant,
-        result.MerchantNewlyAdded);
+        result.MerchantNewlyAdded)
+    {
+        Fiscal = result.Purchase.Fiscal,
+        ExtractionState = result.Purchase.ExtractionState,
+    };
 }

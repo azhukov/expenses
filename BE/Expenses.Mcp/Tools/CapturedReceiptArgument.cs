@@ -14,10 +14,12 @@ namespace Expenses.Mcp.Tools;
 /// rather than fields parsed out of it (D30, D32).
 /// </summary>
 public sealed record CapturedReceiptArgument(
-    [property: Description("The temporary key the capture response returned.")]
-    Guid TempKey,
+    [property: Description(
+        "The temporary key the capture response returned. Omit it for a capture made from a fiscal QR "
+        + "payload alone, which has none; fiscalPayload then identifies the capture.")]
+    Guid? TempKey,
     [property: Description("The extraction outcome the capture response reported: Extracted, NeedsReview or Failed.")]
-    Receipt.ExtractionState State,
+    Purchase.ExtractionState State,
     [property: Description("Why extraction failed, when the state is Failed.")]
     string? FailureReason = null,
     [property: Description(
@@ -25,7 +27,7 @@ public sealed record CapturedReceiptArgument(
         + "the verification service, so it cannot be read back out of the payload.")]
     string? Jikr = null,
     [property: Description("How the fiscal identity was established, as capture reported it.")]
-    Receipt.FiscalSource FiscalSource = Receipt.FiscalSource.None,
+    FiscalInvoice.FiscalSource FiscalSource = FiscalInvoice.FiscalSource.None,
     [property: Description(
         "The receipt's fiscal QR payload verbatim, as capture reported it. The invoice code, issuer "
         + "tax number, creation timestamp and total are read from it server-side; the timestamp is "

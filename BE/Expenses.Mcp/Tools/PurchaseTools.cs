@@ -42,9 +42,11 @@ public sealed class PurchaseTools(PurchaseService purchases)
         a new purchase. Resubmit exactly what the capture response reported (or corrected values,
         where extraction needed fixing): its temporary key and extraction outcome, together with the
         date, amount and expense lines the user is asserting. The promoted image is attached as the
-        purchase's receipt, already in that extraction state; nothing further is extracted. The
-        expense amounts must sum exactly to the purchase amount. The date may be omitted only when
-        the capture's fiscal QR decoded an invoice creation timestamp.
+        purchase's receipt, already in that extraction state; nothing further is extracted. A capture
+        made from a fiscal QR payload alone has no temporary key: omit it and resubmit the payload
+        instead, and the purchase carries that fiscal invoice and no image. A capture naming neither
+        is refused. The expense amounts must sum exactly to the purchase amount. The date may be
+        omitted only when the capture's fiscal QR decoded an invoice creation timestamp.
         """)]
     public async Task<RecordPurchaseToolResult> ConfirmCapture(
         [Description("What the capture response reported, to confirm it.")]

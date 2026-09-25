@@ -23,15 +23,25 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
                 "ck_purchases_merchant_raw_length",
                 "merchant_raw IS NULL OR length(merchant_raw) <= 512");
 
-            // "Has a receipt" is one fact, not four independently nullable ones (D11).
+            // "Has a receipt image" is one fact, not three independently nullable ones (D11). One
+            // line on purpose: a multi-line literal takes the checkout's line endings, and the model
+            // would then differ from its snapshot on every machine but the one that generated it.
             table.HasCheckConstraint(
                 "ck_purchases_receipt_all_or_nothing",
-                """
-                (receipt_storage_key IS NULL AND receipt_content_type IS NULL
-                    AND receipt_size_in_bytes IS NULL AND receipt_state IS NULL)
-                OR (receipt_storage_key IS NOT NULL AND receipt_content_type IS NOT NULL
-                    AND receipt_size_in_bytes IS NOT NULL AND receipt_state IS NOT NULL)
-                """);
+                "(receipt_storage_key IS NULL) = (receipt_content_type IS NULL) "
+                + "AND (receipt_storage_key IS NULL) = (receipt_size_in_bytes IS NULL)");
+
+            // The source columns are what tell EF a fiscal invoice is present, so they are null
+            // together or set together (D36).
+            table.HasCheckConstraint(
+                "ck_purchases_fiscal_all_or_nothing",
+                "(fiscal_extracted_source IS NULL) = (fiscal_payload_source IS NULL)");
+
+            // The state describes what was read, so it exists exactly when an image or a fiscal
+            // invoice does (D35).
+            table.HasCheckConstraint(
+                "ck_purchases_extraction_state_with_receipt",
+                "(receipt_state IS NOT NULL) = (receipt_storage_key IS NOT NULL OR fiscal_payload_source IS NOT NULL)");
 
             table.HasCheckConstraint(
                 "ck_purchases_receipt_storage_key_length",
@@ -52,7 +62,19 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
         // Kept whether or not the merchant resolved, and never erased by a later match (D9, D18).
         builder.Property(purchase => purchase.MerchantRaw).HasColumnName("merchant_raw").HasColumnType("text");
 
+        // On the purchase rather than the image, because a purchase read from its fiscal code alone
+        // has a state and no image (D35). The column names predate that and are kept: renaming
+        // them would buy nothing but a migration that rewrites the table (D36).
+        builder.Property(purchase => purchase.Extraction)
+            .HasColumnName("receipt_state")
+            .HasConversion<int>();
+
+        builder.Property(purchase => purchase.ExtractionFailureReason)
+            .HasColumnName("receipt_failure_reason")
+            .HasColumnType("text");
+
         ConfigureReceipt(builder);
+        ConfigureFiscalInvoice(builder);
 
         // The guarantee itself, rather than a check the application makes: two identical requests
         // arriving together is exactly the case a check-then-insert loses (D4).
@@ -116,49 +138,6 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
 
             receipt.Property(value => value.SizeInBytes).HasColumnName("receipt_size_in_bytes");
 
-            receipt.Property(value => value.State)
-                .HasColumnName("receipt_state")
-                .HasConversion<int>();
-
-            receipt.Property(value => value.FailureReason)
-                .HasColumnName("receipt_failure_reason")
-                .HasColumnType("text");
-
-            // As read, with no format imposed (D10). Held per source so a disagreement can be
-            // reported rather than one value silently preferred (D20).
-            receipt.Property(value => value.FiscalIkofSupplied)
-                .HasColumnName("fiscal_ikof_supplied")
-                .HasColumnType("text");
-
-            receipt.Property(value => value.FiscalIkofExtracted)
-                .HasColumnName("fiscal_ikof_extracted")
-                .HasColumnType("text");
-
-            receipt.Property(value => value.FiscalJikrSupplied)
-                .HasColumnName("fiscal_jikr_supplied")
-                .HasColumnType("text");
-
-            receipt.Property(value => value.FiscalJikrExtracted)
-                .HasColumnName("fiscal_jikr_extracted")
-                .HasColumnType("text");
-
-            receipt.Property(value => value.FiscalExtractedSource)
-                .HasColumnName("fiscal_extracted_source")
-                .HasConversion<int>();
-
-            // The payload verbatim, unbounded in the column because no format is imposed on it and
-            // the length bound belongs at the trust boundary that accepts it, not here (D30, D32).
-            receipt.Property(value => value.FiscalPayload)
-                .HasColumnName("fiscal_payload")
-                .HasColumnType("text");
-
-            receipt.Property(value => value.FiscalPayloadSource)
-                .HasColumnName("fiscal_payload_source")
-                .HasConversion<int>();
-
-            // Derived from the four values above; storing it would be a second source of truth.
-            receipt.Ignore(value => value.Corroboration);
-
             // Not unique: the store is content-addressed, so byte-identical receipts share one file
             // and two purchases may carry the same key. The index is there to answer "is anything
             // else still referencing this file" at deletion time (D11).
@@ -167,5 +146,63 @@ internal sealed class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
         });
 
         builder.Navigation(purchase => purchase.Receipt).IsRequired(false);
+    }
+
+    /// <summary>
+    /// The fiscal invoice, on the same row as the image and independent of it (D35). EF reads an
+    /// optional owned value as absent when every one of its columns is null, so the two source
+    /// columns — never null for an invoice that exists — are what make a present invoice visible,
+    /// and are null for every purchase that has none (D36).
+    /// </summary>
+    private static void ConfigureFiscalInvoice(EntityTypeBuilder<Purchase> builder)
+    {
+        builder.OwnsOne(purchase => purchase.Fiscal, fiscal =>
+        {
+            // As read, with no format imposed (D10). Held per source so a disagreement can be
+            // reported rather than one value silently preferred (D20).
+            fiscal.Property(value => value.FiscalIkofSupplied)
+                .HasColumnName("fiscal_ikof_supplied")
+                .HasColumnType("text");
+
+            fiscal.Property(value => value.FiscalIkofExtracted)
+                .HasColumnName("fiscal_ikof_extracted")
+                .HasColumnType("text");
+
+            fiscal.Property(value => value.FiscalJikrSupplied)
+                .HasColumnName("fiscal_jikr_supplied")
+                .HasColumnType("text");
+
+            fiscal.Property(value => value.FiscalJikrExtracted)
+                .HasColumnName("fiscal_jikr_extracted")
+                .HasColumnType("text");
+
+            fiscal.Property(value => value.FiscalExtractedSource)
+                .HasColumnName("fiscal_extracted_source")
+                .HasConversion<int>();
+
+            // The payload verbatim, unbounded in the column because no format is imposed on it and
+            // the length bound belongs at the trust boundary that accepts it, not here (D30, D32).
+            fiscal.Property(value => value.FiscalPayload)
+                .HasColumnName("fiscal_payload")
+                .HasColumnType("text");
+
+            fiscal.Property(value => value.FiscalPayloadSource)
+                .HasColumnName("fiscal_payload_source")
+                .HasConversion<int>();
+
+            // Both derived from the values above; storing either would be a second source of truth.
+            fiscal.Ignore(value => value.Corroboration);
+            fiscal.Ignore(value => value.IsEmpty);
+
+            // "Is this invoice already recorded" is asked at every capture, of whichever column the
+            // code arrived in (D39). Not unique: a user may confirm through the warning.
+            fiscal.HasIndex(value => value.FiscalIkofSupplied)
+                .HasDatabaseName("ix_purchases_fiscal_ikof_supplied");
+
+            fiscal.HasIndex(value => value.FiscalIkofExtracted)
+                .HasDatabaseName("ix_purchases_fiscal_ikof_extracted");
+        });
+
+        builder.Navigation(purchase => purchase.Fiscal).IsRequired(false);
     }
 }

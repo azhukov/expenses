@@ -109,6 +109,8 @@ internal sealed class InMemoryLedger :
 
     public bool HasTemporaryCapture(Guid key) => _tempFiles.ContainsKey(key);
 
+    public bool HasAnyTemporaryCapture => _tempFiles.Count > 0;
+
     // ---- IUnitOfWork -------------------------------------------------------
 
     public Task SaveChanges(CancellationToken cancellationToken = default)
@@ -171,6 +173,12 @@ internal sealed class InMemoryLedger :
     public Task<int> CountByReceiptStorageKey(string storageKey, CancellationToken cancellationToken = default)
         => Task.FromResult(_purchases.Count(purchase =>
             purchase.Receipt is { } receipt && receipt.StorageKey == storageKey));
+
+    public Task<Purchase?> FindLatestByInvoiceCode(string ikof, CancellationToken cancellationToken = default)
+        => Task.FromResult(_purchases
+            .Where(purchase => purchase.Fiscal is { } fiscal
+                && (fiscal.FiscalIkofSupplied == ikof || fiscal.FiscalIkofExtracted == ikof))
+            .MaxBy(purchase => purchase.OccurredAt));
 
     public Task<IReadOnlyList<Purchase>> List(
         PurchaseListQuery query,

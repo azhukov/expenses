@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { CaptureResult } from '../api/types'
+import { describeWhen } from '../format/format'
 
 import { CaptureReview } from './CaptureReview'
 
@@ -57,6 +58,7 @@ function captured(overrides: Record<string, unknown> = {}): CaptureResult {
     extracted: { ...noFiscal, createdAt: '2026-09-01T10:15:00' },
     fiscalSource: 'DecodedFromCode',
     fiscalPayload: null,
+    alreadyRecorded: null,
     ...overrides,
   }
 }
@@ -232,5 +234,28 @@ describe('The review screen names the extraction engine', () => {
 
     expect(screen.getByTestId('engine')).toHaveTextContent(/no extraction engine reading/i)
     expect(screen.queryByText('vision-gpt')).not.toBeInTheDocument()
+  })
+})
+
+describe('An invoice already recorded is flagged at review', () => {
+  it('states that the invoice appears to be recorded already, with that purchase date, and still confirms', async () => {
+    const occurredAt = '2026-08-29T14:59:22'
+    const { onConfirm, confirm } = show(
+      captured({ alreadyRecorded: { purchaseId: 41, occurredAt } }),
+    )
+
+    const warning = screen.getByTestId('already-recorded')
+    expect(warning).toHaveTextContent(/recorded already/i)
+    expect(warning).toHaveTextContent(describeWhen(occurredAt))
+
+    await userEvent.click(confirm)
+
+    expect(onConfirm).toHaveBeenCalled()
+  })
+
+  it('shows no duplicate warning when the response names no earlier purchase', () => {
+    show()
+
+    expect(screen.queryByTestId('already-recorded')).not.toBeInTheDocument()
   })
 })

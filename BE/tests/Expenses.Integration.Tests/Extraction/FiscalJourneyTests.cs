@@ -31,7 +31,7 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
 
         var result = await Extract(scope, DecoderRegressionTests.DecodableReceipt);
 
-        Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, result.State);
         Assert.True(result.Validation?.Passed);
 
         // The invoice the tax authority holds, verbatim: every line, the merchant, and a total that
@@ -54,7 +54,7 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
         // The identity the code carried, completed by the one only the service knows (D24).
         Assert.Equal(DecoderRegressionTests.Ikof, result.Extracted.Ikof);
         Assert.Equal("d2857c6a-a363-4173-bf9c-dff37f77741a", result.Extracted.Jikr);
-        Assert.Equal(Receipt.FiscalSource.RetrievedFromService, result.FiscalSource);
+        Assert.Equal(FiscalInvoice.FiscalSource.RetrievedFromService, result.FiscalSource);
     }
 
     [Fact]
@@ -73,14 +73,14 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
 
         // The placeholder path, reached exactly as it is for an image with no symbol on it at all,
         // and the portal never asked about an invoice nobody could name.
-        Assert.Equal(Receipt.ExtractionState.Extracted, result.State);
+        Assert.Equal(Purchase.ExtractionState.Extracted, result.State);
         Assert.Equal("placeholder", result.Result?.EngineName);
         Assert.Contains("vision", result.Result!.StepsRun);
         Assert.Empty(portal.Requests);
 
         Assert.Null(result.Extracted.Ikof);
         Assert.Null(result.FailureReason);
-        Assert.Equal(Receipt.FiscalSource.None, result.FiscalSource);
+        Assert.Equal(FiscalInvoice.FiscalSource.None, result.FiscalSource);
     }
 
     private static async Task<CaptureResult> Extract(IServiceScope scope, string fixture)

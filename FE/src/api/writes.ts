@@ -53,6 +53,15 @@ export async function captureReceipt(
 }
 
 /**
+ * Sends a fiscal QR payload read live, on its own, and waits for the invoice the ledger fetches for
+ * it. Nothing is stored, so the result carries no temporary key; a `Failed` result is the cue to ask
+ * for a photograph instead.
+ */
+export function captureFiscal(payload: SuppliedFiscalPayload): Promise<CaptureResult> {
+  return send<CaptureResult>('/receipts/capture-fiscal', { payload })
+}
+
+/**
  * One line of a purchase as it is submitted. `categoryRaw`/`unitRaw` travel beside the matched
  * codes always, because a match must never erase what the receipt printed.
  */
@@ -76,12 +85,14 @@ export interface MerchantRequest {
 }
 
 /**
- * What a client resubmits from a capture response in order to confirm it. Nothing about a capture
+ * What a client resubmits from a capture response in order to confirm it: the temporary key of an
+ * image capture, or the payload of a fiscal one. Nothing about a capture
  * is held server-side, so this echo is the only way the server learns the extraction outcome
  * again — which is why none of it may be re-derived from what the user edited.
  */
 export interface CapturedReceiptRequest {
-  tempKey: string
+  /** Absent for a capture of a fiscal QR payload alone, which stored no image (D38). */
+  tempKey?: string | null
   state: ExtractionState
   failureReason?: string | null
 

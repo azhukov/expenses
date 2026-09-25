@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -52,7 +52,7 @@ public sealed class ReceiptJourneyTests(PostgresFixture postgres) : IAsyncLifeti
         Assert.Equal(HttpStatusCode.Created, recorded.StatusCode);
         var purchase = await ExpensesApi.Read<JsonElement>(recorded);
         long purchaseId = purchase.GetProperty("id").GetInt64();
-        Assert.True(purchase.GetProperty("hasReceipt").GetBoolean());
+        Assert.True(purchase.GetProperty("hasReceiptImage").GetBoolean());
 
         var extraction = await ExpensesApi.Read<JsonElement>(
             await client.GetAsync($"/purchases/{purchaseId}/extraction"));

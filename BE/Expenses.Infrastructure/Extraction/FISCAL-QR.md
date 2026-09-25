@@ -37,19 +37,33 @@ and separately distributed model files, which is why it was not the first move.
 
 ## How a payload reaches the server
 
-Two routes, one parser. A client that read the code at capture sends the payload verbatim as the
-`fiscalQr` form field on `POST /receipts/capture`; where it sends none, the server decodes one from
-the stored image. Either way `FiscalIdentity.From` reads it, so a client and the server cannot drift
-about a format with two traps in it (D30). The endpoint bounds the field at 2048 characters, and an
-unrecognised payload is an ordinary capture carrying no identifiers rather than a bad request.
+Three routes, one parser:
+
+1. **On its own**, as `POST /receipts/capture-fiscal { "payload": "…" }`. This is the normal route
+   for the browser client, which scans the code live before it asks for a photograph. Only the
+   fiscal step runs, because there is no image for the vision engine. If the portal returns the
+   invoice, that is the whole capture: the purchase is confirmed by its payload and carries no
+   image (D37, D38).
+2. **Beside a photograph**, as the `fiscalQr` form field on `POST /receipts/capture`. The client
+   does this when the portal returned no invoice for a payload that did yield identifiers. It never
+   does it for a code that yielded none, such as a menu link. Under D31 a supplied payload stops the
+   server decoding the image, so a stray payload would hide the receipt's real code.
+3. **Decoded by the server** from the stored image, when no payload was sent at all.
+
+Every route goes through `FiscalIdentity.From`, so a client and the server cannot drift about a
+format with two traps in it (D30). Both endpoints bound the payload at 2048 characters. An
+unrecognised payload is an ordinary capture carrying no identifiers, not a bad request. A URL
+carrying none of the verification parameters counts as unrecognised: it is some other QR, not an
+invoice code (D37).
 
 **The payload is parsed and never dereferenced.** It is a URL; it is not fetched. The verification
 service is addressed from `PortalOptions`, and only the payload's parameters are read.
 
-**It is retained on the receipt**, verbatim, whether or not anything could be parsed out of it
-(D32). That is for re-runs above all: decoding a stored photograph reads one symbol in three, so a
-receipt whose code a client read at capture would lose that reading on every later extraction if
-only the parsed identifiers survived. It also leaves an unrecognised format recoverable — the
+**It is retained on the purchase's fiscal invoice**, verbatim, whether or not anything could be
+parsed out of it (D32, D35). That is for re-runs above all. Decoding a stored photograph reads one
+symbol in three, so a purchase whose code a client read at capture would lose that reading on every
+later extraction if only the parsed identifiers survived; and a purchase captured from its code
+alone has no photograph to decode at all. It also leaves an unrecognised format recoverable — the
 response shape below was observed from exactly one invoice, so learning a field later is expected,
 and a discarded payload cannot be re-read.
 
