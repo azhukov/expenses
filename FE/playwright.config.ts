@@ -1,9 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
 
 /**
- * The end-to-end gate. Unlike the vitest suites, nothing here is mocked: the browser drives the
- * built client, which calls the real HTTP host cross-origin at `API_URL`, and that host reads and
- * writes a real PostgreSQL. The stack is `docker compose`'s (see docker-compose.e2e.yml); this
+ * The end-to-end gate. Unlike the vitest suites, nothing in the client or the ledger is mocked: the
+ * browser drives the built client, which calls the real HTTP host cross-origin at `API_URL`, and
+ * that host reads and writes a real PostgreSQL. Only the government fiscal portal is stood in for,
+ * by a stub in the stack. The stack is `docker compose`'s (see docker-compose.e2e.yml); this
  * config only serves the client and points the browser at it.
  *
  * `E2E_BASE_URL` overrides the served client — set it when the app is already running (`./up.sh`)

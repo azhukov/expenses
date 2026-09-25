@@ -1,4 +1,5 @@
-# The stack the end-to-end suite drives: a database and the HTTP host, and nothing else.
+# The stack the end-to-end suite drives: a database, the HTTP host, and a stand-in for the fiscal
+# verification service.
 #
 #   docker compose -f docker-compose.e2e.yml up -d --build
 #   (cd FE && npm run test:e2e)
@@ -16,6 +17,9 @@
 #     a running development stack on 5432 is not in the way
 #   * no named volumes. Every run starts on an empty ledger, which is what makes the suite's
 #     assertions about what is in the month true rather than hopeful.
+#   * the fiscal verification service is a stub (portal), not mapr.tax.gov.me. It holds one recorded
+#     invoice and no other, so a run never depends on a government service being up, and both
+#     fetched and not-fetched fiscal captures are exercised against the same stack.
 
 name: expenses-e2e
 
@@ -48,10 +52,9 @@ services:
       ConnectionStrings__Expenses: 'Host=postgres;Port=5432;Database=expenses;Username=expenses;Password=expenses'
       Receipts__RootPath: /var/lib/expenses/receipts
       TemporaryReceipts__RootPath: /var/lib/expenses/receipts-temp
-      # Port 9 is discard: it accepts nothing and answers nothing. Extraction therefore fails fast
-      # and identically on every run, instead of the suite's outcome depending on whether a
-      # government portal is up. Manual entry after a failed extraction is the path under test.
-      Extraction__Portal__BaseAddress: 'http://127.0.0.1:9'
+      # The stub below, never the government portal: which invoices it holds is fixed, so the
+      # suite's outcome does not depend on whether a government service is up.
+      Extraction__Portal__BaseAddress: 'http://portal:8080'
       Extraction__Portal__TimeoutMilliseconds: 1000
       # `vite preview` on :4173 is already an allowed origin through appsettings.Development.json.
       # Another would be Cors__AllowedOrigins__N, N past the last index there.
@@ -62,9 +65,25 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      portal:
+        condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', 'curl -fsS http://localhost:8080/health/ready > /dev/null']
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 30s
+
+  # The fiscal verification service: one recorded invoice, and "no record" for every other (see
+  # FE/e2e/portal/server.mjs). Not published — only the API asks it, over the compose network.
+  portal:
+    image: node:22-alpine
+    command: ['node', '/portal/server.mjs']
+    volumes:
+      - ./FE/e2e/portal/server.mjs:/portal/server.mjs:ro
+      - ./BE/tests/Expenses.Integration.Tests/Fixtures/verify-32AA324CFF5030271E16D59F7F8EF636.json:/portal/invoice.json:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:8080/health > /dev/null']
+      interval: 2s
+      timeout: 5s
+      retries: 10

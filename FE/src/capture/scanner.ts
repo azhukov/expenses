@@ -34,24 +34,38 @@ export async function startScanning(
       }
 
       finished = true
-      scanner.destroy()
+      release()
       onRead(result.data)
     },
-    { preferredCamera: 'environment', returnDetailedScanResult: true, maxScansPerSecond: 15 },
+    {
+      preferredCamera: 'environment',
+      returnDetailedScanResult: true,
+      maxScansPerSecond: 15,
+      // The library reads only a centred square of the frame, so a code held off-centre is never
+      // read. Outlining that square is what tells the user where to hold it.
+      highlightScanRegion: true,
+    },
   )
+
+  // Destroying the scanner hides its outline but leaves it in the document, beside a video a later
+  // scan may reuse.
+  const release = () => {
+    scanner.destroy()
+    scanner.$overlay?.remove()
+  }
 
   try {
     await scanner.start()
   } catch {
     // Refused, unsupported or unavailable: all mean "no live camera", never an error to show.
-    scanner.destroy()
+    release()
     return null
   }
 
   return {
     stop: () => {
       finished = true
-      scanner.destroy()
+      release()
     },
   }
 }

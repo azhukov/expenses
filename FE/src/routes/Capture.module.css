@@ -5,8 +5,17 @@
   padding: var(--space-4);
 }
 
+/*
+ * The scanner draws its scan-region outline beside the video and places it by the video's offset,
+ * which is measured from the nearest positioned ancestor — this, and nothing wider.
+ */
+.frame {
+  position: relative;
+}
+
 /* The camera fills the width; the height is capped so the photograph control stays in reach. */
 .viewfinder {
+  display: block;
   width: 100%;
   max-height: 60dvh;
   object-fit: cover;
