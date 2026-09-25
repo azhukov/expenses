@@ -12,7 +12,8 @@ namespace Expenses.Infrastructure.Persistence.Migrations;
 /// What changes is what a null means. EF reads an optional owned value as absent only when all its
 /// columns are null, and the old mapping wrote both fiscal source columns as zero for every image,
 /// fiscal code or not — so an image that carried no code would come back with an empty invoice. Those
-/// two columns are cleared where no fiscal value was ever recorded, before the constraints that now
+/// two columns are cleared where no fiscal value was ever recorded, and the payload source a purchase
+/// from before AddReceiptFiscalPayload never got is set to None, before the constraints that now
 /// depend on them are added.
 ///
 /// Rollback: <see cref="Down"/> restores the zeros and the old constraint, which a purchase with a
@@ -35,6 +36,15 @@ public partial class SplitFiscalInvoiceFromReceipt : Migration
             WHERE fiscal_ikof_supplied IS NULL AND fiscal_ikof_extracted IS NULL
               AND fiscal_jikr_supplied IS NULL AND fiscal_jikr_extracted IS NULL
               AND fiscal_payload IS NULL;
+            """);
+
+        // A purchase written before fiscal_payload_source existed has fiscal values and no payload
+        // source; it held no payload, which the mapping records as None rather than null.
+        migrationBuilder.Sql(
+            """
+            UPDATE purchases
+            SET fiscal_payload_source = 0
+            WHERE fiscal_extracted_source IS NOT NULL AND fiscal_payload_source IS NULL;
             """);
 
         migrationBuilder.CreateIndex(
