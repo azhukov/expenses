@@ -58,6 +58,11 @@ public static class ApplicationErrors
     public const string UnitInactive = "unit.inactive";
     public const string UnitCreationNotSupported = "unit.creation_not_supported";
 
+    public const string UnitAliasEmpty = "unit_alias.empty";
+    public const string UnitAliasIsUnitCode = "unit_alias.is_unit_code";
+    public const string UnitAliasConflict = "unit_alias.conflict";
+    public const string UnitAliasNotFound = "unit_alias.not_found";
+
     public const string MerchantNotFound = "merchant.not_found";
     public const string MerchantSearchTermRequired = "merchant.search_term_required";
     public const string MerchantDuplicateTaxId = "merchant.duplicate_tax_id";

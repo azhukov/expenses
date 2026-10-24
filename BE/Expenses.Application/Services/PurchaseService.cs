@@ -11,6 +11,7 @@ public sealed class PurchaseService(
     IPurchaseRepository purchases,
     ICategoryRepository categories,
     IUnitRepository units,
+    IUnitAliasRepository aliases,
     MerchantService merchants,
     ITemporaryReceiptStore tempStore,
     IReceiptImageStore images,
@@ -62,7 +63,7 @@ public sealed class PurchaseService(
             return AlreadyRecorded(already);
         }
 
-        var lines = await ExpenseAssembly.Build(expenses, categories, units, cancellationToken);
+        var lines = await ExpenseAssembly.Build(expenses, categories, units, aliases, cancellationToken);
         Reconcile(amount, lines);
 
         // Resolved only once the submission is known to be new, so a repeated request cannot add a

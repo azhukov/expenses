@@ -17,6 +17,7 @@ internal sealed class InMemoryLedger :
     IPurchaseRepository,
     ICategoryRepository,
     IUnitRepository,
+    IUnitAliasRepository,
     IMerchantRepository,
     IReceiptImageStore,
     ITemporaryReceiptStore,
@@ -28,6 +29,8 @@ internal sealed class InMemoryLedger :
     private readonly List<Category> _categories = [];
     private readonly List<Category> _uncommittedCategories = [];
     private readonly List<Unit> _units = [];
+    private readonly List<UnitAlias> _unitAliases = [];
+    private readonly List<UnitAlias> _uncommittedUnitAliases = [];
     private readonly List<Merchant> _merchants = [];
     private readonly List<Merchant> _uncommittedMerchants = [];
     private readonly Dictionary<string, byte[]> _files = [];
@@ -52,6 +55,9 @@ internal sealed class InMemoryLedger :
 
     public IReadOnlyList<Category> Categories => _categories;
 
+    /// <summary>The aliases committed so far; one added but never saved is not among them.</summary>
+    public IReadOnlyList<UnitAlias> UnitAliases => _unitAliases;
+
     /// <summary>The files the store holds, by storage key.</summary>
     public IReadOnlyDictionary<string, byte[]> Files => _files;
 
@@ -67,6 +73,12 @@ internal sealed class InMemoryLedger :
     {
         _units.Add(unit.WithId(++_nextId));
         return unit;
+    }
+
+    public UnitAlias Given(UnitAlias alias)
+    {
+        _unitAliases.Add(alias.WithId(++_nextId));
+        return alias;
     }
 
     public Merchant Given(Merchant merchant)
@@ -150,6 +162,21 @@ internal sealed class InMemoryLedger :
         }
 
         _uncommittedMerchants.Clear();
+
+        // The unique index on unit_aliases.alias, enforced here too, so a use case that would
+        // write one spelling twice fails in the suite as it would against the database.
+        foreach (var alias in _uncommittedUnitAliases)
+        {
+            if (_unitAliases.Any(existing => existing.Alias == alias.Alias))
+            {
+                _uncommittedUnitAliases.Clear();
+                throw new InvalidOperationException($"unique index ix_unit_aliases_alias: '{alias.Alias}'");
+            }
+
+            _unitAliases.Add(alias.WithId(++_nextId));
+        }
+
+        _uncommittedUnitAliases.Clear();
 
         return Task.CompletedTask;
     }
@@ -247,6 +274,26 @@ internal sealed class InMemoryLedger :
 
     Task<IReadOnlyList<Unit>> IUnitRepository.List(bool includeInactive, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Unit>>([.. _units.Where(unit => includeInactive || unit.IsActive)]);
+
+    // ---- IUnitAliasRepository ----------------------------------------------
+
+    Task<IReadOnlyList<UnitAlias>> IUnitAliasRepository.List(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<UnitAlias>>([.. _unitAliases.OrderBy(alias => alias.Alias, StringComparer.Ordinal)]);
+
+    public Task<UnitAlias?> FindByAlias(string alias, CancellationToken cancellationToken = default)
+        => Task.FromResult(_unitAliases.FirstOrDefault(existing => existing.Alias == alias));
+
+    Task IUnitAliasRepository.Add(UnitAlias alias, CancellationToken cancellationToken)
+    {
+        _uncommittedUnitAliases.Add(alias);
+        return Task.CompletedTask;
+    }
+
+    Task IUnitAliasRepository.Remove(UnitAlias alias, CancellationToken cancellationToken)
+    {
+        _unitAliases.Remove(alias);
+        return Task.CompletedTask;
+    }
 
     // ---- IMerchantRepository -----------------------------------------------
 

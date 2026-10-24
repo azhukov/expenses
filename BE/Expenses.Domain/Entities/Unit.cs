@@ -1,8 +1,9 @@
 namespace Expenses.Domain.Entities;
 
 /// <summary>
-/// Fixed reference data keyed by an immutable <see cref="Code"/> (D8). Not user-creatable in this
-/// change; seeded via <c>HasData</c> because nobody edits it (D15).
+/// Fixed reference data keyed by an immutable <see cref="Code"/> (D8). Not user-creatable; seeded
+/// via <c>HasData</c> because nobody edits it (D15). The spellings a receipt prints for a unit are
+/// not part of it: they are <see cref="UnitAlias"/> rows, which is where the editing happens.
 /// </summary>
 public sealed class Unit
 {

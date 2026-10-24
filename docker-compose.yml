@@ -46,6 +46,8 @@ services:
     build:
       context: ./BE
       dockerfile: Expenses.Api/Dockerfile
+      args:
+        SIXLABORS_LICENSE_KEY: ${SIXLABORS_LICENSE_KEY:-}
     container_name: expenses-api
     environment:
       ASPNETCORE_ENVIRONMENT: Development
@@ -87,6 +89,8 @@ services:
     build:
       context: ./BE
       dockerfile: Expenses.Mcp/Dockerfile
+      args:
+        SIXLABORS_LICENSE_KEY: ${SIXLABORS_LICENSE_KEY:-}
     container_name: expenses-mcp
     environment:
       EXPENSES_MCP_TRANSPORT: http

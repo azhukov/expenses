@@ -28,7 +28,7 @@ public sealed class RecordPurchaseTests
     public RecordPurchaseTests() => _ledger.Given(Unit.Create(Piece, "Piece", "pcs", Unit.UnitKind.Count));
 
     private PurchaseService Subject
-        => new(_ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger);
+        => new(_ledger, _ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger);
 
     [Fact]
     public async Task Manual_single_line_entry()

@@ -177,6 +177,9 @@ export function Capture() {
       // and its recent few from this one query, and a hand-rolled insert would have to reproduce
       // all three (D5).
       await client.invalidateQueries({ queryKey: ['purchases'] })
+
+      // A confirmation may have taught an alias, and the units are otherwise held for an hour.
+      await client.invalidateQueries({ queryKey: ['units'] })
       void navigate('/')
     },
     [client, navigate],

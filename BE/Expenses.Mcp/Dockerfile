@@ -15,7 +15,12 @@ COPY Expenses.Domain/ Expenses.Domain/
 COPY Expenses.Application/ Expenses.Application/
 COPY Expenses.Infrastructure/ Expenses.Infrastructure/
 COPY Expenses.Mcp/ Expenses.Mcp/
-RUN dotnet publish Expenses.Mcp/Expenses.Mcp.csproj -c Release -o /app --no-restore
+# ImageSharp 4 refuses a Release build without a Six Labors license key. It is only checked at
+# build time and stays in this stage, so it never reaches the runtime image. Railway passes the
+# service variable of the same name in as this build arg; compose forwards it from .env.
+ARG SIXLABORS_LICENSE_KEY
+RUN dotnet publish Expenses.Mcp/Expenses.Mcp.csproj -c Release -o /app --no-restore \
+    -p:SixLaborsLicenseKey="$SIXLABORS_LICENSE_KEY"
 
 # The Debian runtime image, not Alpine: InvariantGlobalization is off (Directory.Build.props) and
 # ICU root collation is the whole point of how the database is provisioned (D13).

@@ -11,7 +11,7 @@ public sealed class PurchaseQueryTests
     private readonly InMemoryLedger _ledger = new();
 
     private PurchaseService Subject
-        => new(_ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger);
+        => new(_ledger, _ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger);
 
     [Fact]
     public async Task Retrieve_a_purchase()

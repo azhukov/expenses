@@ -27,7 +27,7 @@ public sealed class CandidateTests
     public CandidateTests() => _piece = _ledger.Given(Unit.Create("PCS", "Piece", "pcs", Unit.UnitKind.Count));
 
     private ReceiptService Subject
-        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([]), _ledger);
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([]), _ledger);
 
     [Fact]
     public async Task Candidates_do_not_change_the_ledger()

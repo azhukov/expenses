@@ -370,6 +370,36 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Expenses.Domain.Entities.UnitAlias", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("alias");
+
+                    b.Property<long>("UnitId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unit_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Alias")
+                        .IsUnique()
+                        .HasDatabaseName("ix_unit_aliases_alias");
+
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_unit_aliases_unit_id");
+
+                    b.ToTable("unit_aliases", (string)null);
+                });
+
             modelBuilder.Entity("Expenses.Domain.Entities.Category", b =>
                 {
                     b.HasOne("Expenses.Domain.Entities.Category", "Parent")
@@ -501,6 +531,15 @@ namespace Expenses.Infrastructure.Persistence.Migrations
                     b.Navigation("Fiscal");
 
                     b.Navigation("Receipt");
+                });
+
+            modelBuilder.Entity("Expenses.Domain.Entities.UnitAlias", b =>
+                {
+                    b.HasOne("Expenses.Domain.Entities.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Expenses.Domain.Entities.Category", b =>

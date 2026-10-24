@@ -704,6 +704,20 @@ describe('Confirming a capture creates the purchase', () => {
       expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['purchases'] })),
     )
   })
+
+  it('invalidates the units, so an alias the confirmation taught appears', async () => {
+    record.mockResolvedValue({ id: 3, alreadyRecorded: false } as never)
+    capture.mockResolvedValue(extracted() as never)
+
+    const { client } = await photographed(image())
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    await userEvent.click(await screen.findByRole('button', { name: /confirm/i }))
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['units'] })),
+    )
+  })
 })
 
 describe('The date defaults from the receipt', () => {

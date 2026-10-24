@@ -94,5 +94,5 @@ public sealed class CaptureFiscalTests
     }
 
     private ReceiptService Subject(params IExtractionStep[] steps)
-        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade(steps), _ledger);
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade(steps), _ledger);
 }

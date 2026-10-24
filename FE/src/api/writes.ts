@@ -5,6 +5,7 @@ import type {
   FiscalSource,
   MerchantView,
   PurchaseView,
+  UnitView,
 } from './types'
 
 /**
@@ -130,4 +131,30 @@ export interface RecordPurchaseResponse extends PurchaseView {
 /** Records a purchase, with its captured receipt attached where one is carried. */
 export function recordPurchase(command: RecordPurchaseRequest): Promise<RecordPurchaseResponse> {
   return send<RecordPurchaseResponse>('/purchases', command)
+}
+
+/** Adds a spelling to a unit, answering with the unit and every alias it now has. */
+export function addUnitAlias(unitCode: string, alias: string): Promise<UnitView> {
+  return send<UnitView>(`/units/${encodeURIComponent(unitCode)}/aliases`, { alias })
+}
+
+/**
+ * Removes a spelling from a unit. Expenses already matched through it are left as they are. Not
+ * through {@link send}: a removal answers with no body at all. The alias travels as a query
+ * parameter because it may carry an inner slash, which a path segment does not round-trip.
+ */
+export async function removeUnitAlias(unitCode: string, alias: string): Promise<void> {
+  const query = new URLSearchParams({ alias })
+  const url = ledgerUrl(`/units/${encodeURIComponent(unitCode)}/aliases?${query.toString()}`)
+  let response: Response
+
+  try {
+    response = await fetch(url, { method: 'DELETE', headers: { accept: 'application/json' } })
+  } catch {
+    throw new LedgerError('The ledger could not be reached.')
+  }
+
+  if (!response.ok) {
+    throw await failureOf(response)
+  }
 }

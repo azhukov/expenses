@@ -57,6 +57,12 @@ public sealed class ExtractionCandidate
     /// </summary>
     public IReadOnlyDictionary<string, decimal> ReportedConfidence { get; private set; }
 
+    /// <summary>
+    /// Records the unit the printed text was matched to after the stage that read it. The printed
+    /// text is left as it is: a match must never erase what the receipt said (D9).
+    /// </summary>
+    public void MatchUnit(long unitId) => UnitId = unitId;
+
     public static ExtractionCandidate Propose(
         int lineNumber,
         string description,

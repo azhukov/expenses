@@ -127,7 +127,7 @@ public sealed class CaptureReceiptTests
     }
 
     private ReceiptService Subject(params IExtractionStep[] steps)
-        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade(steps), _ledger);
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade(steps), _ledger);
 
     private static byte[] Jpeg(byte seed) => [0xFF, 0xD8, 0xFF, seed, 0x01, 0x02];
 }

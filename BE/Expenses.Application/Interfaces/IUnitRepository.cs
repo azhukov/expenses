@@ -4,7 +4,8 @@ namespace Expenses.Application.Interfaces;
 
 /// <summary>
 /// Units are fixed reference data seeded via <c>HasData</c> (D15), so there is no <c>Add</c>:
-/// a user cannot create one in this change.
+/// a user cannot create one. What a user can change is a unit's aliases, through
+/// <see cref="IUnitAliasRepository"/>.
 /// </summary>
 public interface IUnitRepository
 {

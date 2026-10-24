@@ -15,6 +15,8 @@ public sealed class ExpensesDbContext(DbContextOptions<ExpensesDbContext> option
 
     public DbSet<Unit> Units => Set<Unit>();
 
+    public DbSet<UnitAlias> UnitAliases => Set<UnitAlias>();
+
     public DbSet<Merchant> Merchants => Set<Merchant>();
 
     /// <summary>

@@ -117,6 +117,7 @@ function homeRouter() {
     [
       { path: '/', element: <Home /> },
       { path: '/capture', element: <Capture /> },
+      { path: '/units', element: <p>Units screen</p> },
     ],
     { initialEntries: ['/'] },
   )
@@ -148,15 +149,32 @@ describe('Capture is reachable on arrival', () => {
     expect(captureControl()).toBeInTheDocument()
   })
 
-  it('makes it the only control on the screen', () => {
+  /**
+   * The requirement is that nothing is as prominent as capture, not that nothing else exists. This
+   * used to assert capture was the only control; the units screen added a second one, so what is
+   * held now is that there is exactly one other, and that it is kept out of the capture dock.
+   */
+  it('gives no other control the prominence of capture', () => {
     const { container } = renderHome()
 
-    const controls = container.querySelectorAll(
-      'button, a, input, select, textarea, [role="button"]',
-    )
+    const controls = [
+      ...container.querySelectorAll('button, a, input, select, textarea, [role="button"]'),
+    ]
+    const dock = screen.getByTestId('capture-dock')
 
-    expect(controls).toHaveLength(1)
-    expect(controls[0]).toBe(captureControl())
+    expect(controls).toHaveLength(2)
+    expect(controls).toContain(captureControl())
+    expect(within(dock).queryByRole('link', { name: /units/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('Unit aliases can be managed from the client', () => {
+  it('leads to the units screen from home', async () => {
+    renderHome()
+
+    await userEvent.click(screen.getByRole('link', { name: /units/i }))
+
+    expect(await screen.findByText('Units screen')).toBeInTheDocument()
   })
 })
 

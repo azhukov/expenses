@@ -1,0 +1,109 @@
+/*
+ * A plain scrolling list: one card per unit, its aliases as chips, and its own add field. Nothing
+ * here is time-critical the way capture is, so it takes the page's ordinary flow (D11).
+ */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  padding-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+.back {
+  color: var(--colour-accent);
+  text-decoration: none;
+}
+
+.title {
+  font-size: 1.25rem;
+}
+
+.unit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--colour-surface);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+}
+
+.name {
+  font-size: 1rem;
+}
+
+.symbol {
+  color: var(--colour-ink-muted);
+  font-weight: normal;
+}
+
+.none {
+  color: var(--colour-ink-muted);
+}
+
+.aliases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.alias {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  background: var(--colour-page);
+  border: 1px solid var(--colour-line);
+  border-radius: 999px;
+}
+
+/* 44px, the minimum comfortable touch target, even though the glyph is small. */
+.remove {
+  min-width: 44px;
+  min-height: 44px;
+  margin: calc(-1 * var(--space-2)) 0;
+  background: none;
+  border: none;
+  color: var(--colour-ink-muted);
+  font-size: 1.25rem;
+}
+
+.add {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.submit {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  background: var(--colour-accent);
+  color: var(--colour-accent-ink);
+  border: none;
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.failure {
+  color: var(--colour-failure);
+}

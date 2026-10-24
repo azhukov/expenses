@@ -16,27 +16,46 @@ internal static class ExpenseAssembly
         IReadOnlyList<ExpenseCommand> commands,
         ICategoryRepository categories,
         IUnitRepository units,
+        IUnitAliasRepository aliases,
         CancellationToken cancellationToken)
     {
         var lines = new List<Expense>(commands.Count);
+
+        // Loaded only when some line prints a unit, which is the only time it is consulted.
+        var lookup = commands.Any(command => UnitText.Normalise(command.UnitRaw) is not null)
+            ? await UnitLookup.Load(units, aliases, cancellationToken)
+            : null;
 
         foreach (var (command, position) in commands.Select((command, index) => (command, index + 1)))
         {
             long? categoryId = await ResolveCategory(command.CategoryCode, categories, cancellationToken)
                 ?? command.MatchedCategoryId;
             long? unitId = await ResolveUnit(command.UnitCode, units, cancellationToken)
-                ?? command.MatchedUnitId;
+                ?? command.MatchedUnitId
+                ?? lookup?.Match(command.UnitRaw);
 
-            // Checked here rather than in the entity: a unit reaches a line either as a code or as
-            // a match made while extracting, and this is the one place both have been consulted.
-            // The entity cannot state the rule either way, since expenses recorded before it have
-            // no unit and must still load.
+            // Checked here rather than in the entity: a unit reaches a line as a code, as a match
+            // made while extracting, or as the printed text matched now, and this is the one place
+            // all three have been consulted. The entity cannot state the rule either way, since
+            // expenses recorded before it have no unit and must still load.
             if (unitId is null)
             {
                 throw ExpensesException.For(
                     ApplicationErrors.ExpenseUnitRequired,
                     $"Expense line {position} requires a unit.",
                     ("line", position));
+            }
+
+            // A person said what this printed text means, and nothing yet did: that is an alias.
+            // Known text is left alone even when this line chose differently, so one line never
+            // re-points a rule every later receipt relies on. Tracked rather than saved, so it
+            // commits with the expense or not at all (D16).
+            if (lookup is not null
+                && UnitText.Normalise(command.UnitRaw) is { } printed
+                && !lookup.IsKnown(printed))
+            {
+                await aliases.Add(UnitAlias.Create(unitId.Value, printed), cancellationToken);
+                lookup.Remember(printed, unitId.Value);
             }
 
             try

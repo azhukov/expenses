@@ -6,7 +6,9 @@ namespace Expenses.Infrastructure.Persistence.Configurations;
 /// The fixed unit dictionary (D15). Identifiers are part of the seed because <c>HasData</c> owns
 /// these rows: they are model-managed, and nobody edits them. Codes are the stable identity a
 /// receipt line is matched to and an MCP argument names (D8); the verbatim text a receipt printed
-/// is kept beside the match rather than expanding this list (D9).
+/// is kept beside the match rather than expanding this list (D9), and the spellings that match are
+/// unit aliases, a table of their own that users edit. The identifiers here are the ones the
+/// <c>AddUnitAliases</c> migration's starting aliases refer to, so they must not change.
 /// </summary>
 internal static class UnitSeed
 {

@@ -44,6 +44,8 @@ services:
     build:
       context: ./BE
       dockerfile: Expenses.Api/Dockerfile
+      args:
+        SIXLABORS_LICENSE_KEY: ${SIXLABORS_LICENSE_KEY:-}
     environment:
       # Development because that is the environment in which this host applies migrations (D15),
       # and an empty database is the point of this stack.

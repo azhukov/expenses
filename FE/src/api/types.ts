@@ -212,4 +212,6 @@ export interface UnitView {
   symbol: string
   kind: UnitKind
   isActive: boolean
+  /** The spellings a receipt may print for this unit, normalised: lower case, trimmed. */
+  aliases: string[]
 }

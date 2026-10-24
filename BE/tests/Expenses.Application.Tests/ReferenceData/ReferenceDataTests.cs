@@ -16,7 +16,7 @@ public sealed class ReferenceDataTests
 
     private CategoryService Categories => new(_ledger, _ledger);
 
-    private UnitService Units => new(_ledger);
+    private UnitService Units => new(_ledger, _ledger, _ledger);
 
     [Fact]
     public async Task Create_a_category()

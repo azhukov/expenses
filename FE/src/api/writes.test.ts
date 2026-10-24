@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LedgerError } from './client'
-import { captureFiscal, captureReceipt, recordPurchase } from './writes'
+import {
+  addUnitAlias,
+  captureFiscal,
+  captureReceipt,
+  recordPurchase,
+  removeUnitAlias,
+} from './writes'
 
 const fetchMock = vi.fn()
 
@@ -236,5 +242,81 @@ describe('Recording a purchase', () => {
       code: 'purchase.reconciliation_mismatch',
       message: 'The lines do not sum to the amount.',
     })
+  })
+})
+
+const pack = {
+  id: 2,
+  code: 'PACK',
+  name: 'Pack',
+  symbol: 'pack',
+  kind: 'Count' as const,
+  isActive: true,
+  aliases: ['kut', 'pak'],
+}
+
+describe('Managing unit aliases', () => {
+  it('posts a new alias as JSON to the unit it belongs to', async () => {
+    respondWith(pack, { ok: true, status: 200 })
+
+    await addUnitAlias('PACK', 'kut')
+
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(path).toBe('http://ledger.test:9000/units/PACK/aliases')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({ alias: 'kut' })
+  })
+
+  it('returns the unit with its aliases as the ledger now holds them', async () => {
+    respondWith(pack, { ok: true, status: 200 })
+
+    await expect(addUnitAlias('PACK', 'kut')).resolves.toEqual(pack)
+  })
+
+  it('surfaces a conflicting alias in the ledger error the rest of the client uses', async () => {
+    respondWith(
+      {
+        code: 'unit_alias.conflict',
+        message: "The alias 'kom' already belongs to Piece (PCS); remove it there first.",
+        fields: {},
+      },
+      { ok: false, status: 409 },
+    )
+
+    const failure = await addUnitAlias('PACK', 'kom').catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(LedgerError)
+    expect(failure).toMatchObject({ code: 'unit_alias.conflict', status: 409 })
+  })
+
+  it('removes an alias with a DELETE naming it as a query parameter', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 204, json: async () => null })
+
+    await removeUnitAlias('PCS', 't/k')
+
+    // A query parameter, not a path segment: an alias may carry an inner slash (design D8).
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(path).toBe('http://ledger.test:9000/units/PCS/aliases?alias=t%2Fk')
+    expect(init.method).toBe('DELETE')
+  })
+
+  it('surfaces a removal the ledger refused', async () => {
+    respondWith(
+      { code: 'unit_alias.not_found', message: 'The unit PACK has no alias kom.', fields: {} },
+      { ok: false, status: 404 },
+    )
+
+    const failure = await removeUnitAlias('PACK', 'kom').catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({ code: 'unit_alias.not_found', status: 404 })
+  })
+
+  it('invents no error code when the removal never reaches the ledger', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+
+    const failure = await removeUnitAlias('PCS', 'kd').catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(LedgerError)
+    expect((failure as LedgerError).code).toBeNull()
   })
 })

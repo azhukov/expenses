@@ -11,11 +11,11 @@ needs no quoting in hand-written SQL: `select occurred_at from purchases`. Index
 names were already lower snake_case behind their `ix_` / `ck_` / `FK_` prefixes and are unaffected —
 nothing writes them by hand except a migration.
 
-Five tables in two zones:
+Six tables in two zones:
 
 - **Ledger** — `purchases`, `expenses`. What a person confirmed. A purchase carries its receipt
   reference and extraction state inline, in its own columns.
-- **Reference data** — `categories`, `units`, `merchants`. Seeded, user-extensible, retired via `is_active` rather than deleted.
+- **Reference data** — `categories`, `units`, `unit_aliases`, `merchants`. Seeded, user-extensible, retired via `is_active` rather than deleted — except `unit_aliases`, whose rows are simply removed: an alias only affects later matching, never an expense already recorded.
 
 There is no ingestion zone. Two things that used to be stored are not:
 
@@ -36,6 +36,7 @@ erDiagram
     merchants |o--o{ purchases : "merchant_id (restrict)"
     categories |o--o{ expenses : "category_id (restrict)"
     units |o--o{ expenses : "unit_id (restrict)"
+    units ||--o{ unit_aliases : "unit_id (restrict)"
     categories |o--o{ categories : "parent_id (restrict)"
     merchants |o--o{ merchants : "parent_id (restrict)"
 
@@ -90,6 +91,12 @@ erDiagram
         boolean is_active
     }
 
+    unit_aliases {
+        bigint id PK "identity"
+        bigint unit_id FK "restrict"
+        text alias UK "normalised; never a unit's code; starting set inserted once by AddUnitAliases"
+    }
+
     merchants {
         bigint id PK "identity"
         text name "<= 256 chars; gin trigram"
@@ -124,6 +131,7 @@ reference to it.
 | `ix_purchases_occurred_at_amount` | The same amount cannot be recorded twice at the same instant — the duplicate-submission guard. |
 | `ix_categories_code`, `ix_units_code` | Reference codes are the stable vocabulary, so renaming a name never breaks a reference. |
 | `ix_merchants_tax_id` | Unique where `tax_id IS NOT NULL`; merchants without one are unconstrained. |
+| `ix_unit_aliases_alias` | One printed spelling maps to one unit. Aliases are stored normalised (lower case, trimmed, end periods and slashes removed), so a plain index is the whole rule. |
 
 `ix_purchases_receipt_storage_key` is a plain, non-unique index: it exists so that "does any other
 purchase still reference this file" is a lookup rather than a scan at deletion time.

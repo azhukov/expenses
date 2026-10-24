@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Link } from 'react-router'
 
 import { LedgerError } from '../api/client'
 import { useMerchants, usePurchases } from '../api/queries'
@@ -32,6 +33,14 @@ export function Home() {
   return (
     <div className={styles.page} data-testid="page">
       <MonthHeader total={monthTotal(month)} />
+
+      {/* Deliberately quiet: capture stays the one prominent control on this screen. */}
+      <nav className={styles.tools}>
+        <Link to="/units" className={styles.tool}>
+          Units
+        </Link>
+      </nav>
+
       <ReviewBanner count={reviewCount(month)} />
 
       <main className={styles.recent} data-testid="recent">

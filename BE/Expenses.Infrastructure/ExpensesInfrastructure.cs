@@ -34,7 +34,9 @@ public static class ExpensesInfrastructure
 
             // Categories are seeded and user-editable, so they are upserted by code rather than
             // declared as model-managed rows: a rename and a user's own categories both survive a
-            // re-run (D15). Units go the other way, by HasData, because nobody edits them.
+            // re-run (D15). Units go the other way, by HasData, because nobody edits them. Unit
+            // aliases are neither: the migration that creates them inserts the starting set once,
+            // so one the user removed is not restored here.
             .UseAsyncSeeding((context, _, cancellationToken) =>
                 CategorySeed.Apply((ExpensesDbContext)context, cancellationToken))
             .UseSeeding((context, _) =>
@@ -43,6 +45,7 @@ public static class ExpensesInfrastructure
         services.AddScoped<IPurchaseRepository, PurchaseRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IUnitRepository, UnitRepository>();
+        services.AddScoped<IUnitAliasRepository, UnitAliasRepository>();
         services.AddScoped<IMerchantRepository, MerchantRepository>();
         services.AddScoped<IUnitOfWork, ExpensesUnitOfWork>();
 

@@ -18,6 +18,7 @@ public sealed class ReceiptService(
     IExtractionCandidateStore candidates,
     ICategoryRepository categories,
     IUnitRepository units,
+    IUnitAliasRepository aliases,
     ExtractionCascade cascade,
     IUnitOfWork unitOfWork,
     ExtractionOptions? options = null)
@@ -73,6 +74,34 @@ public sealed class ReceiptService(
     }
 
     /// <summary>
+    /// Every stage reports the unit as printed and none resolves it; this is the one place that does,
+    /// for every extraction path and any stage yet to come. It runs before the result is judged,
+    /// stored or shown, so a stored re-run is already matched when it is read or confirmed. A line a
+    /// stage matched itself is left as the stage had it, and the printed text is never touched (D9).
+    /// </summary>
+    private async Task MatchUnits(ExtractionStepResult? result, CancellationToken cancellationToken)
+    {
+        var unmatched = result?.Candidates
+            .Where(candidate => candidate.UnitId is null && candidate.UnitRaw is not null)
+            .ToList();
+
+        if (unmatched is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var lookup = await UnitLookup.Load(units, aliases, cancellationToken);
+
+        foreach (var candidate in unmatched)
+        {
+            if (lookup.Match(candidate.UnitRaw) is { } unitId)
+            {
+                candidate.MatchUnit(unitId);
+            }
+        }
+    }
+
+    /// <summary>
     /// Captures an image with no purchase behind it: stores it temporarily and runs extraction
     /// synchronously against it. Persists nothing to the database вЂ” not even the temporary key, which
     /// exists only as the filename the temporary store gave it.
@@ -93,6 +122,7 @@ public sealed class ReceiptService(
         var supplied = suppliedFiscalIdentifiers ?? FiscalIdentifiers.None;
 
         var outcome = await cascade.Run(image, supplied, fiscalPayload, cancellationToken: cancellationToken);
+        await MatchUnits(outcome.Result, cancellationToken);
         var (state, validation, _) = Judge(outcome.Result);
 
         return new CaptureResult(
@@ -132,6 +162,7 @@ public sealed class ReceiptService(
         var supplied = FiscalIdentity.From(payload);
 
         var outcome = await cascade.Run(image: null, supplied, payload, cancellationToken: cancellationToken);
+        await MatchUnits(outcome.Result, cancellationToken);
         var (state, validation, _) = Judge(outcome.Result);
 
         return new CaptureResult(
@@ -226,7 +257,7 @@ public sealed class ReceiptService(
                 ("purchaseId", purchaseId));
         }
 
-        var lines = await ExpenseAssembly.Build(commands, categories, units, cancellationToken);
+        var lines = await ExpenseAssembly.Build(commands, categories, units, aliases, cancellationToken);
 
         try
         {
@@ -283,6 +314,7 @@ public sealed class ReceiptService(
             : FiscalIdentity.From(payload);
 
         var outcome = await cascade.Run(content, supplied, payload, purchase.Id, cancellationToken);
+        await MatchUnits(outcome.Result, cancellationToken);
         var (state, _, _) = Judge(outcome.Result);
 
         // A purchase read from an image may learn its invoice only now, from a code this run
@@ -346,9 +378,11 @@ public sealed class ReceiptService(
     /// confirmation, because a match must never erase what the receipt printed (D9) вЂ” and because
     /// the candidate itself does not survive, the expense is where that text then lives.
     ///
-    /// No unit code is passed and none is invented: the only unit a candidate has is the one a
-    /// stage matched. Where a stage matched none, confirming without edited lines is refused
-    /// rather than defaulted to a count unit, which would state something the receipt did not.
+    /// No unit code is passed and none is invented: the unit a candidate has is the one its printed
+    /// text was matched to after extraction. Where that matched nothing, the printed text is tried
+    /// once more when the line is saved — an alias may have been added since — and where it still
+    /// matches nothing, confirming without edited lines is refused rather than defaulted to a count
+    /// unit, which would state something the receipt did not.
     /// </summary>
     private static ExpenseCommand AsCommand(ExtractionCandidate candidate) => new(
         candidate.Description,

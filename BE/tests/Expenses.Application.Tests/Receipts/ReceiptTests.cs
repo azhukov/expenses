@@ -19,7 +19,7 @@ public sealed class ReceiptTests
     private readonly InMemoryLedger _ledger = new();
 
     private ReceiptService Delete
-        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([]), _ledger);
+        => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([]), _ledger);
 
     [Fact]
     public async Task Manual_purchase_has_no_image()
