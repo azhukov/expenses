@@ -2,12 +2,8 @@ using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
 using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
+using ImageMagick;
 using Microsoft.Extensions.DependencyInjection;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
-using ZXing;
-using ZXing.Common;
 
 namespace Expenses.Integration.Tests.Extraction;
 
@@ -32,7 +28,7 @@ public sealed class FiscalDecodingTests(PostgresFixture postgres)
         await using var services = postgres.Services();
         var decoder = services.GetRequiredService<IFiscalCodeDecoder>();
 
-        string? payload = await decoder.Decode(new ReceiptImageContent(1, "image/png", QrCode(VerificationUrl)));
+        string? payload = await decoder.Decode(new ReceiptImageContent(1, "image/png", QrImage.Png(VerificationUrl)));
         var decoded = payload is null ? null : FiscalIdentity.From(payload);
 
         // The identifiers a fiscal code carries, marked by the caller as decoded rather than read
@@ -44,6 +40,21 @@ public sealed class FiscalDecodingTests(PostgresFixture postgres)
         Assert.Equal("A1B2C3D4E5F6", decoded?.Ikof);
         Assert.Null(decoded?.Jikr);
         Assert.Equal("2026-08-24T12:50:08+02:00", decoded?.CreatedAt);
+    }
+
+    [Fact]
+    public async Task Decoding_reads_a_heic_photograph()
+    {
+        await using var services = postgres.Services();
+        var decoder = services.GetRequiredService<IFiscalCodeDecoder>();
+
+        // What an iPhone camera produces by default, and used to be skipped as unreadable. The
+        // fixture carries the same verification URL as above; it is a file rather than rendered
+        // here because ImageMagick ships without an HEVC encoder and can only read the format.
+        byte[] heic = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "fiscal-qr.heic"));
+        string? payload = await decoder.Decode(new ReceiptImageContent(1, "image/heic", heic));
+
+        Assert.Equal("A1B2C3D4E5F6", payload is null ? null : FiscalIdentity.From(payload).Ikof);
     }
 
     [Fact]
@@ -84,39 +95,10 @@ public sealed class FiscalDecodingTests(PostgresFixture postgres)
         Assert.Null(outcome);
     }
 
-    /// <summary>
-    /// Renders the symbol from ZXing's own bit matrix, so the test depends on nothing beyond the
-    /// encoder the decoder is paired with.
-    /// </summary>
-    private static byte[] QrCode(string payload)
-    {
-        var matrix = new BarcodeWriterGeneric
-        {
-            Format = BarcodeFormat.QR_CODE,
-            Options = new EncodingOptions { Width = 600, Height = 600, Margin = 4 },
-        }.Encode(payload);
-
-        using var image = new Image<Rgba32>(matrix.Width, matrix.Height);
-        for (int y = 0; y < matrix.Height; y++)
-        {
-            for (int x = 0; x < matrix.Width; x++)
-            {
-                image[x, y] = matrix[x, y] ? Color.Black.ToPixel<Rgba32>() : Color.White.ToPixel<Rgba32>();
-            }
-        }
-
-        using var buffer = new MemoryStream();
-        image.Save(buffer, new PngEncoder());
-
-        return buffer.ToArray();
-    }
-
     private static byte[] Blank()
     {
-        using var image = new Image<Rgba32>(200, 200, Color.White.ToPixel<Rgba32>());
-        using var buffer = new MemoryStream();
-        image.Save(buffer, new PngEncoder());
+        using var image = new MagickImage(MagickColors.White, 200, 200);
 
-        return buffer.ToArray();
+        return image.ToByteArray(MagickFormat.Png);
     }
 }

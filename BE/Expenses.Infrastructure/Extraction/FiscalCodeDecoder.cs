@@ -1,9 +1,8 @@
 using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
 using Expenses.Infrastructure.Receipts;
-using SixLabors.ImageSharp.PixelFormats;
+using ImageMagick;
 using ZXingCpp;
-using Image = SixLabors.ImageSharp.Image;
 
 namespace Expenses.Infrastructure.Extraction;
 
@@ -25,18 +24,32 @@ internal sealed class FiscalCodeDecoder : IFiscalCodeDecoder
         ReceiptImageContent image,
         CancellationToken cancellationToken = default)
     {
-        // Neither format is an image ImageSharp reads; both are simply a miss, which the caller
-        // already treats as ordinary.
-        if (image.ContentType is ReceiptContent.Pdf or ReceiptContent.Heic)
+        // The reader is pinned to the format the bytes were sniffed as on arrival, so ImageMagick
+        // never picks a coder of its own from user-supplied content. A PDF is a miss: rendering one
+        // would need Ghostscript in the image, and nothing may depend on a hit anyway.
+        MagickFormat? format = image.ContentType switch
+        {
+            ReceiptContent.Jpeg => MagickFormat.Jpeg,
+            ReceiptContent.Png => MagickFormat.Png,
+            ReceiptContent.WebP => MagickFormat.WebP,
+            ReceiptContent.Heic => MagickFormat.Heic,
+            _ => null,
+        };
+
+        if (format is null)
         {
             return Task.FromResult<string?>(null);
         }
 
-        // zxing-cpp reads luminance. Decoding straight to L8 is both what it wants and less
-        // memory than a colour frame of a 12-megapixel photograph.
-        using var luminance = Image.Load<L8>(image.Content);
-        byte[] pixels = new byte[luminance.Width * luminance.Height];
-        luminance.CopyPixelDataTo(pixels);
+        // zxing-cpp reads luminance, so the frame is reduced to a single grey channel before its
+        // pixels are copied out.
+        using var luminance = new MagickImage(image.Content, new MagickReadSettings { Format = format.Value });
+        luminance.Grayscale();
+        int width = (int)luminance.Width;
+        int height = (int)luminance.Height;
+        using var pixelCollection = luminance.GetPixels();
+        byte[] pixels = pixelCollection.ToByteArray("R")
+            ?? throw new InvalidOperationException("ImageMagick returned no pixels for a decoded image.");
 
         var reader = new BarcodeReader
         {
@@ -48,7 +61,7 @@ internal sealed class FiscalCodeDecoder : IFiscalCodeDecoder
         };
 
         var decoded = reader
-            .From(new ImageView(pixels, luminance.Width, luminance.Height, ImageFormat.Lum, 0, 0))
+            .From(new ImageView(pixels, width, height, ImageFormat.Lum, 0, 0))
             .FirstOrDefault(barcode => barcode.IsValid && barcode.Text.Length > 0);
 
         // The payload as the symbol carries it. Reading identifiers out of it happens in one place,

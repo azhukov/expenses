@@ -1,6 +1,4 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
+using ImageMagick;
 using ZXing;
 using ZXing.Common;
 
@@ -12,6 +10,10 @@ namespace Expenses.Integration.Tests.Harness;
 /// </summary>
 public static class QrImage
 {
+    /// <summary>
+    /// Renders the symbol from ZXing's own bit matrix, so a test depends on nothing beyond the
+    /// encoder the decoder is paired with.
+    /// </summary>
     public static byte[] Png(string payload)
     {
         var matrix = new BarcodeWriterGeneric
@@ -20,21 +22,21 @@ public static class QrImage
             Options = new EncodingOptions { Width = 600, Height = 600, Margin = 4 },
         }.Encode(payload);
 
-        using var image = new Image<Rgba32>(matrix.Width, matrix.Height);
-        var black = Color.Black.ToPixel<Rgba32>();
-        var white = Color.White.ToPixel<Rgba32>();
-
+        byte[] pixels = new byte[matrix.Width * matrix.Height * 3];
         for (int y = 0; y < matrix.Height; y++)
         {
             for (int x = 0; x < matrix.Width; x++)
             {
-                image[x, y] = matrix[x, y] ? black : white;
+                byte shade = matrix[x, y] ? (byte)0 : (byte)255;
+                int offset = ((y * matrix.Width) + x) * 3;
+                pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = shade;
             }
         }
 
-        using var buffer = new MemoryStream();
-        image.Save(buffer, new PngEncoder());
+        using var image = new MagickImage(
+            pixels,
+            new PixelReadSettings((uint)matrix.Width, (uint)matrix.Height, StorageType.Char, PixelMapping.RGB));
 
-        return buffer.ToArray();
+        return image.ToByteArray(MagickFormat.Png);
     }
 }

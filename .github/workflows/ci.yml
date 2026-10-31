@@ -238,9 +238,6 @@ jobs:
       # Kestrel is listening (D15).
       - name: Start the stack
         run: docker compose -f docker-compose.e2e.yml up -d --build --wait
-        env:
-          # The image is a Release build, which ImageSharp 4 refuses without a license key.
-          SIXLABORS_LICENSE_KEY: ${{ secrets.SIXLABORS_LICENSE_KEY }}
 
       # `vite preview` serves this address to the page, which calls the API on it cross-origin. The
       # bundle built above does not contain it, so it is decided here and not at build time.
