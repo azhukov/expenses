@@ -158,3 +158,29 @@ export async function removeUnitAlias(unitCode: string, alias: string): Promise<
     throw await failureOf(response)
   }
 }
+
+/**
+ * Deletes every purchase, provided the ledger still holds exactly `expectedCount` of them, and
+ * resolves to how many went. The count travels as a query parameter, because DELETE bodies are
+ * dropped by too many intermediaries. A ledger that changed since it was counted refuses with
+ * `purchase.clear.count_mismatch` and deletes nothing.
+ */
+export async function clearLedger(expectedCount: number): Promise<number> {
+  const query = new URLSearchParams({ expectedCount: String(expectedCount) })
+  const url = ledgerUrl(`/purchases?${query.toString()}`)
+  let response: Response
+
+  try {
+    response = await fetch(url, { method: 'DELETE', headers: { accept: 'application/json' } })
+  } catch {
+    throw new LedgerError('The ledger could not be reached.')
+  }
+
+  if (!response.ok) {
+    throw await failureOf(response)
+  }
+
+  const { deleted } = (await response.json()) as { deleted: number }
+
+  return deleted
+}

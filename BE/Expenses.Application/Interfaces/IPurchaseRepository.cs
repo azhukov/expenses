@@ -37,4 +37,18 @@ public interface IPurchaseRepository
     Task<IReadOnlyList<Purchase>> List(PurchaseListQuery query, CancellationToken cancellationToken = default);
 
     Task Add(Purchase purchase, CancellationToken cancellationToken = default);
+
+    /// <summary>How many purchases the ledger holds, across every date.</summary>
+    Task<int> Count(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes every purchase, with its expense lines, receipt reference and fiscal identity, but only
+    /// when the ledger holds exactly <paramref name="expected"/> of them. The count and the delete are
+    /// one transaction that no other write can interleave with, so a purchase recorded after the
+    /// caller counted is never deleted unseen. On a mismatch nothing is deleted and the outcome
+    /// carries the count found. This is the one write that commits on its own rather than through
+    /// <see cref="IUnitOfWork"/>, because the bulk delete bypasses tracking and the lock has to
+    /// cover the count (D2 of add-clear-all-expenses).
+    /// </summary>
+    Task<PurchaseClearOutcome> DeleteAllIfCountIs(int expected, CancellationToken cancellationToken = default);
 }

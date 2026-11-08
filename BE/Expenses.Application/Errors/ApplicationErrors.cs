@@ -46,6 +46,9 @@ public static class ApplicationErrors
 
     // Raised above the domain.
     public const string PurchaseNotFound = "purchase.not_found";
+    public const string PurchaseClearExpectedCountRequired = "purchase.clear.expected_count_required";
+    public const string PurchaseClearExpectedCountInvalid = "purchase.clear.expected_count_invalid";
+    public const string PurchaseClearCountMismatch = "purchase.clear.count_mismatch";
 
     public const string CategoryNotFound = "category.not_found";
     public const string CategoryDuplicateCode = "category.duplicate_code";

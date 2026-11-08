@@ -63,6 +63,9 @@ internal sealed class InMemoryLedger :
 
     public IReadOnlyList<Category> RemovedCategories => _removedCategories;
 
+    /// <summary>Storage keys whose deletion fails, as a locked or vanished file would on disk.</summary>
+    public HashSet<string> UndeletableFiles { get; } = new(StringComparer.Ordinal);
+
     public Category Given(Category category)
     {
         _categories.Add(category.WithId(++_nextId));
@@ -231,6 +234,34 @@ internal sealed class InMemoryLedger :
         return Task.CompletedTask;
     }
 
+    public Task<int> Count(CancellationToken cancellationToken = default)
+        => Task.FromResult(_purchases.Count);
+
+    /// <summary>
+    /// All or nothing, as the real transaction is. Expense lines, the receipt reference and the fiscal
+    /// identity belong to the purchase object, so removing it removes them.
+    /// </summary>
+    public Task<PurchaseClearOutcome> DeleteAllIfCountIs(int expected, CancellationToken cancellationToken = default)
+    {
+        if (_purchases.Count != expected)
+        {
+            return Task.FromResult(PurchaseClearOutcome.Mismatch(_purchases.Count));
+        }
+
+        var outcome = new PurchaseClearOutcome(
+            _purchases.Count,
+            Deleted: true,
+            [.. _purchases.Select(purchase => purchase.Id)],
+            [.. _purchases
+                .Select(purchase => purchase.Receipt?.StorageKey)
+                .OfType<string>()
+                .Distinct(StringComparer.Ordinal)]);
+
+        _purchases.Clear();
+
+        return Task.FromResult(outcome);
+    }
+
     // ---- ICategoryRepository ----------------------------------------------
 
     Task<Category?> ICategoryRepository.FindById(long id, CancellationToken cancellationToken)
@@ -361,6 +392,11 @@ internal sealed class InMemoryLedger :
 
     public Task Delete(string storageKey, CancellationToken cancellationToken = default)
     {
+        if (UndeletableFiles.Contains(storageKey))
+        {
+            throw new IOException($"The file '{storageKey}' could not be deleted.");
+        }
+
         _files.Remove(storageKey);
         return Task.CompletedTask;
     }

@@ -90,4 +90,13 @@ public sealed class PurchaseTools(PurchaseService purchases)
         [Description("How many purchases to return. At most 200.")] int? take = null,
         CancellationToken cancellationToken = default)
         => await purchases.List(from, to, skip, take, cancellationToken);
+
+    [McpServerTool(Name = "count_purchases")]
+    [Description("""
+        Returns how many purchases the ledger holds, across every date. Use it when the user asks
+        how many purchases have been recorded in total. It changes nothing; clearing the ledger is
+        not available over this interface.
+        """)]
+    public async Task<PurchaseCountToolResult> CountPurchases(CancellationToken cancellationToken = default)
+        => new(await purchases.Count(cancellationToken));
 }

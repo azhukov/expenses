@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 
 import { LedgerError } from '../api/client'
 import { useMerchants, usePurchases } from '../api/queries'
 import { CaptureControl } from '../capture/CaptureControl'
+import { ClearLedgerDialog } from '../components/ClearLedgerDialog'
 import { MonthHeader } from '../components/MonthHeader'
 import { RecentList } from '../components/RecentList'
 import { ReviewBanner } from '../components/ReviewBanner'
@@ -27,6 +28,7 @@ export function Home() {
   const range = useMemo(() => currentMonthRange(), [])
   const purchases = usePurchases(range)
   const merchants = useMerchants()
+  const [isClearing, setIsClearing] = useState(false)
 
   const month = purchases.data ?? []
 
@@ -39,6 +41,10 @@ export function Home() {
         <Link to="/units" className={styles.tool}>
           Units
         </Link>
+        {/* Offered even when this month is empty: Home cannot see the months before it. */}
+        <button type="button" className={styles.tool} onClick={() => setIsClearing(true)}>
+          Clear all
+        </button>
       </nav>
 
       <ReviewBanner count={reviewCount(month)} />
@@ -56,6 +62,8 @@ export function Home() {
       <div className={styles.capture} data-testid="capture-dock">
         <CaptureControl />
       </div>
+
+      {isClearing ? <ClearLedgerDialog onClose={() => setIsClearing(false)} /> : null}
     </div>
   )
 }

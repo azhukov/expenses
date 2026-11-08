@@ -34,7 +34,7 @@ public sealed class UnitLearningTests
     }
 
     private PurchaseService Purchases
-        => new(_ledger, _ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger);
+        => new(_ledger, _ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger, _ledger);
 
     private ReceiptService Receipts
         => new(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([]), _ledger);

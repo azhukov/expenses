@@ -74,4 +74,49 @@ internal sealed class PurchaseRepository(ExpensesDbContext context) : IPurchaseR
 
     public async Task Add(Purchase purchase, CancellationToken cancellationToken = default)
         => await context.Purchases.AddAsync(purchase, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<int> Count(CancellationToken cancellationToken = default)
+        => await context.Purchases.CountAsync(cancellationToken);
+
+    /// <summary>
+    /// One transaction: lock <c>purchases</c> against writes (reads still proceed), count, and either
+    /// roll back on a mismatch or read the ids and distinct receipt keys and bulk-delete. The database
+    /// cascades <c>expenses</c>; receipt and fiscal data are columns on the row (D2 of
+    /// add-clear-all-expenses).
+    /// </summary>
+    public async Task<PurchaseClearOutcome> DeleteAllIfCountIs(int expected, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        // SHARE ROW EXCLUSIVE conflicts with the ROW EXCLUSIVE every insert, update and delete takes,
+        // and with itself, but not with reads. A write already in flight is waited for and then
+        // counted; one that starts later waits for the commit and lands in the empty ledger.
+        await context.Database.ExecuteSqlRawAsync(
+            "LOCK TABLE purchases IN SHARE ROW EXCLUSIVE MODE",
+            cancellationToken);
+
+        int count = await context.Purchases.CountAsync(cancellationToken);
+
+        if (count != expected)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return PurchaseClearOutcome.Mismatch(count);
+        }
+
+        var ids = await context.Purchases
+            .Select(purchase => purchase.Id)
+            .ToListAsync(cancellationToken);
+
+        var storageKeys = await context.Purchases
+            .Where(purchase => purchase.Receipt!.StorageKey != null)
+            .Select(purchase => purchase.Receipt!.StorageKey)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        await context.Purchases.ExecuteDeleteAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new PurchaseClearOutcome(count, Deleted: true, ids, storageKeys);
+    }
 }

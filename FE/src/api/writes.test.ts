@@ -5,6 +5,7 @@ import {
   addUnitAlias,
   captureFiscal,
   captureReceipt,
+  clearLedger,
   recordPurchase,
   removeUnitAlias,
 } from './writes'
@@ -318,5 +319,44 @@ describe('Managing unit aliases', () => {
 
     expect(failure).toBeInstanceOf(LedgerError)
     expect((failure as LedgerError).code).toBeNull()
+  })
+})
+
+describe('Clearing the ledger', () => {
+  it('sends a DELETE carrying the number of purchases it expects to delete', async () => {
+    respondWith({ deleted: 12 }, { ok: true, status: 200 })
+
+    await expect(clearLedger(12)).resolves.toBe(12)
+
+    // A query parameter rather than a body: DELETE bodies are dropped by too many intermediaries.
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(path).toBe('http://ledger.test:9000/purchases?expectedCount=12')
+    expect(init.method).toBe('DELETE')
+    expect(init.body).toBeUndefined()
+  })
+
+  it('surfaces a stale count with the code and message the ledger sent', async () => {
+    respondWith(
+      {
+        code: 'purchase.clear.count_mismatch',
+        message: 'The ledger holds 13 purchases, not 12. Nothing was deleted.',
+        fields: { expectedCount: 12, currentCount: 13 },
+      },
+      { ok: false, status: 409 },
+    )
+
+    const failure = await clearLedger(12).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(LedgerError)
+    expect((failure as LedgerError).code).toBe('purchase.clear.count_mismatch')
+    expect((failure as LedgerError).message).toBe(
+      'The ledger holds 13 purchases, not 12. Nothing was deleted.',
+    )
+  })
+
+  it('reports a ledger it could not reach', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+
+    await expect(clearLedger(1)).rejects.toThrow('The ledger could not be reached.')
   })
 })

@@ -59,4 +59,39 @@ public sealed class PurchasesController : ControllerBase
         [FromQuery] int? take,
         [FromServices] PurchaseService purchases,
         CancellationToken cancellationToken) => Ok(await purchases.List(from, to, skip ?? 0, take, cancellationToken));
+
+    /// <summary>How many purchases the ledger holds, across every date.</summary>
+    [HttpGet("count")]
+    [EndpointName("CountPurchases")]
+    public async Task<ActionResult<PurchaseCountResponse>> Count(
+        [FromServices] PurchaseService purchases,
+        CancellationToken cancellationToken) => Ok(new PurchaseCountResponse(await purchases.Count(cancellationToken)));
+
+    /// <summary>
+    /// Deletes every purchase, provided the caller states how many it expects to delete and the
+    /// ledger still holds exactly that many. HTTP-only on purpose: no MCP tool clears the ledger
+    /// (D5 of add-clear-all-expenses). The expected count is a query parameter because DELETE bodies
+    /// are dropped by too many intermediaries, and it is bound as nullable so that a missing one is
+    /// refused by the use case, in its own words, rather than by model binding.
+    /// </summary>
+    [HttpDelete]
+    [EndpointName("ClearPurchases")]
+    public async Task<ActionResult<ClearLedgerResponse>> Clear(
+        [FromQuery] int? expectedCount,
+        [FromServices] PurchaseService purchases,
+        [FromServices] ILogger<PurchasesController> logger,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchases.ClearAll(expectedCount, cancellationToken);
+
+        foreach (string storageKey in result.ReceiptFilesNotRemoved)
+        {
+            // Unreferenced and safe to discard; logged because the Application ring cannot log.
+            logger.LogWarning(
+                "Cleared the ledger but could not delete the receipt file {StorageKey}; it is unreferenced and safe to remove.",
+                storageKey);
+        }
+
+        return Ok(new ClearLedgerResponse(result.Deleted));
+    }
 }

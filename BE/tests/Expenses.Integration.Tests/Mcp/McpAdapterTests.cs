@@ -62,6 +62,22 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         });
     }
 
+    /// <summary>
+    /// api-surface, "Clearing is not offered over MCP". Clearing the ledger is HTTP-only on purpose:
+    /// an assistant can read the count and hand it straight back, so no guard would stop one that
+    /// decided to clear (D5 of add-clear-all-expenses). Counting is offered.
+    /// </summary>
+    [Fact]
+    public async Task Clearing_is_not_offered_over_mcp()
+    {
+        var names = (await _mcp.Client.ListToolsAsync()).Select(tool => tool.Name).ToList();
+
+        Assert.Contains("count_purchases", names);
+        Assert.DoesNotContain(names, name =>
+            name.Contains("delete", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("clear", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public async Task Image_bytes_are_never_accepted_as_a_tool_argument()
     {

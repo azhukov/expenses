@@ -62,7 +62,8 @@ public static class ErrorHandling
         ApplicationErrors.CategoryDuplicateCode
             or ApplicationErrors.MerchantDuplicateTaxId
             or ApplicationErrors.UnitAliasConflict
-            or ApplicationErrors.UnitAliasIsUnitCode => StatusCodes.Status409Conflict,
+            or ApplicationErrors.UnitAliasIsUnitCode
+            or ApplicationErrors.PurchaseClearCountMismatch => StatusCodes.Status409Conflict,
 
         ApplicationErrors.ReceiptImageTooLarge => StatusCodes.Status413PayloadTooLarge,
         ApplicationErrors.ReceiptImageUnsupportedFormat => StatusCodes.Status415UnsupportedMediaType,

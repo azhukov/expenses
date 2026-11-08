@@ -39,6 +39,12 @@ Seventeen tools in four groups. Every one delegates to a use case and validates 
 | `record_purchase` | `occurredAt`, `amount`, `expenses[]`, `merchant?` | summary sentence, `alreadyRecorded`, `merchantNewlyAdded`, the purchase |
 | `get_purchase` | `id` | one purchase with its lines, merchant, discounts and total saving |
 | `list_purchases` | `from?`, `to?`, `skip`, `take?` (≤200) | purchases in an inclusive date range, most recent first |
+| `count_purchases` | none | `count`: how many purchases the ledger holds, across every date |
+
+**Clearing the ledger is not available over MCP.** HTTP can delete every purchase
+(`DELETE /purchases?expectedCount=N`), but no tool does, by design: an assistant could read
+`count_purchases` and hand the number straight back, so the expected-count guard would not stop one
+that decided to clear (D5 of `add-clear-all-expenses`). `count_purchases` itself changes nothing.
 
 `record_purchase` is **idempotent by natural key**: a purchase whose date, time and amount match one
 already recorded is returned as it stands rather than duplicated, and `alreadyRecorded` says so

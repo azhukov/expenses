@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { listCategories, listMerchants, listPurchases, listUnits } from './reads'
+import { countPurchases, listCategories, listMerchants, listPurchases, listUnits } from './reads'
 
 const fetchMock = vi.fn()
 
@@ -41,5 +41,13 @@ describe('The read functions address the API', () => {
     await expect(listUnits()).resolves.toEqual([])
 
     expect(requestedPath()).toBe('http://ledger.test:9000/units')
+  })
+
+  it('asks how many purchases the ledger holds, across every date', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ count: 12 }) })
+
+    await expect(countPurchases()).resolves.toBe(12)
+
+    expect(requestedPath()).toBe('http://ledger.test:9000/purchases/count')
   })
 })

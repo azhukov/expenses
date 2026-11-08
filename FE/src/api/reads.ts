@@ -28,3 +28,10 @@ export function listCategories(): Promise<CategoryView[]> {
 export function listUnits(): Promise<UnitView[]> {
   return read<UnitView[]>('/units')
 }
+
+/** How many purchases the ledger holds, across every date, not only the month Home shows. */
+export async function countPurchases(): Promise<number> {
+  const { count } = await read<{ count: number }>('/purchases/count')
+
+  return count
+}

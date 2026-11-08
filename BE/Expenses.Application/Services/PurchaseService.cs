@@ -15,7 +15,8 @@ public sealed class PurchaseService(
     MerchantService merchants,
     ITemporaryReceiptStore tempStore,
     IReceiptImageStore images,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    IExtractionCandidateStore candidates)
 {
     /// <summary>The page size a caller gets when it asks for none.</summary>
     public const int DefaultPageSize = 50;
@@ -149,6 +150,85 @@ public sealed class PurchaseService(
         // Reading a purchase answers "has the receipt been read yet" in the same read: the receipt
         // is columns on the purchase, not a row to join (D11).
         return PurchaseView.Of(purchase);
+    }
+
+    /// <summary>How many purchases the ledger holds, across every date.</summary>
+    public Task<int> Count(CancellationToken cancellationToken = default)
+        => purchases.Count(cancellationToken);
+
+    /// <summary>
+    /// Deletes every purchase, but only when the caller states how many it expects to delete and the
+    /// ledger still holds exactly that many (D1 of add-clear-all-expenses). In order: a missing
+    /// <paramref name="expectedCount"/> is <see cref="ApplicationErrors.PurchaseClearExpectedCountRequired"/>;
+    /// a negative one is <see cref="ApplicationErrors.PurchaseClearExpectedCountInvalid"/>; a stale one is
+    /// <see cref="ApplicationErrors.PurchaseClearCountMismatch"/>, naming the count found, with nothing
+    /// deleted. After the delete commits, candidates held for the deleted purchases are discarded and
+    /// each receipt file no remaining purchase references is deleted — the reference first, then the
+    /// file, as for a single receipt (D3). A file that cannot be deleted does not fail the clear; it
+    /// is reported in the result. Categories, units, aliases, merchants and temporary captures are not
+    /// touched.
+    /// </summary>
+    public async Task<ClearLedgerResult> ClearAll(int? expectedCount, CancellationToken cancellationToken = default)
+    {
+        if (expectedCount is not { } expected)
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.PurchaseClearExpectedCountRequired,
+                "State how many purchases you expect to delete. Nothing was deleted.",
+                ("expectedCount", null));
+        }
+
+        if (expected < 0)
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.PurchaseClearExpectedCountInvalid,
+                "The number of purchases to delete cannot be negative. Nothing was deleted.",
+                ("expectedCount", expected));
+        }
+
+        var outcome = await purchases.DeleteAllIfCountIs(expected, cancellationToken);
+
+        if (!outcome.Deleted)
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.PurchaseClearCountMismatch,
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The ledger holds {outcome.CountBefore} purchases, not {expected}. Nothing was deleted."),
+                ("expectedCount", expected),
+                ("currentCount", outcome.CountBefore));
+        }
+
+        foreach (long id in outcome.PurchaseIds)
+        {
+            await candidates.Discard(id, cancellationToken);
+        }
+
+        // The references are gone and committed, so whatever happens below can only leave an
+        // unreferenced file, never a reference to an absent one (D11). The re-count protects a file
+        // a purchase recorded right after the clear has already started to share again.
+        List<string> notRemoved = [];
+
+        foreach (string storageKey in outcome.ReceiptStorageKeys)
+        {
+            if (await purchases.CountByReceiptStorageKey(storageKey, cancellationToken) > 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                await images.Delete(storageKey, cancellationToken);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // The ledger is already cleared; failing now would report an error for a clear that
+                // happened. The leftover is unreferenced and safe to discard, so it is reported.
+                notRemoved.Add(storageKey);
+            }
+        }
+
+        return new ClearLedgerResult(outcome.CountBefore, notRemoved);
     }
 
     /// <summary>Date-range filtering, most recent first, paged. Both bounds are inclusive dates.</summary>

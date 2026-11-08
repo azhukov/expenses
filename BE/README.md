@@ -97,6 +97,25 @@ store stops the host rather than surfacing at the first upload.
 **A database dump is no longer a complete backup.** Back the receipt root up beside it, from the
 same point in time; neither is reproducible from the other.
 
+## Clearing the ledger
+
+`GET /purchases/count` returns `{ "count": N }` across every date. `DELETE /purchases?expectedCount=N`
+deletes every purchase, with its expense lines, fiscal identity and receipt reference, and returns
+`{ "deleted": N }`. Categories, units, unit aliases (learned ones included), merchants and temporary
+captures are left alone. The deletion cannot be undone.
+
+The expected count is the guard. If it is missing or negative, the request is refused with 400
+(`purchase.clear.expected_count_required` / `purchase.clear.expected_count_invalid`). If the ledger
+no longer holds exactly that many, it is refused with 409 (`purchase.clear.count_mismatch`), and
+the message names the current count. A refused clear deletes nothing. The count and the delete run
+in one transaction holding `SHARE ROW EXCLUSIVE` on `purchases`, so a purchase recorded at the same
+moment is either counted or lands after the clear. It is never deleted unseen.
+
+Receipt files are removed after the commit, under the same sharing rule as a single receipt
+deletion. A file that cannot be deleted is logged at warning level by the API host and left behind;
+it is unreferenced and safe to remove by hand. Clearing is HTTP-only, and no MCP tool offers it (see
+[Expenses.Mcp/README.md](Expenses.Mcp/README.md)).
+
 ## Migrations
 
 Migrations live in `Expenses.Infrastructure/Persistence/Migrations`. An

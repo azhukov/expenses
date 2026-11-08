@@ -1,11 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { listCategories, listMerchants, listPurchases, listUnits, type DateRange } from './reads'
+import {
+  countPurchases,
+  listCategories,
+  listMerchants,
+  listPurchases,
+  listUnits,
+  type DateRange,
+} from './reads'
 
 const HOUR = 60 * 60 * 1000
 
 export const queryKeys = {
+  /** Every month's purchases share this prefix, so one invalidation refreshes them all. */
+  allPurchases: ['purchases'] as const,
   purchases: (range: DateRange) => ['purchases', range.from, range.to] as const,
+  purchaseCount: ['purchase-count'] as const,
   merchants: ['merchants'] as const,
   categories: ['categories'] as const,
   units: ['units'] as const,
@@ -48,5 +58,17 @@ export function useUnits() {
     queryKey: queryKeys.units,
     queryFn: listUnits,
     staleTime: HOUR,
+  })
+}
+
+/**
+ * The whole ledger's count, read only while a clear is being confirmed and never served stale: the
+ * number shown is the number the clear will be told to expect.
+ */
+export function usePurchaseCount() {
+  return useQuery({
+    queryKey: queryKeys.purchaseCount,
+    queryFn: countPurchases,
+    staleTime: 0,
   })
 }

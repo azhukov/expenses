@@ -165,3 +165,28 @@ passing again once it was restored:
 At the end of the change: `Expenses.Domain.Tests` 100 passed; `Expenses.Application.Tests` 217
 passed; `Expenses.Integration.Tests` 219 passed and 1 skipped (`ClaudeVisionGoldenPathTests`,
 manual only because it calls the paid API); the FE suite 224 passed in 16 files.
+
+## Scenarios added by `add-clear-all-expenses`
+
+| Scenario | Where |
+| --- | --- |
+| purchase-recording: "Counting a populated ledger", "Counting an empty ledger", "Clearing a populated ledger", "Reference data survives a clear", "Clearing an empty ledger", "No expected number is given", "A negative expected number", "The ledger changed since it was counted", "Re-recording a cleared purchase" | `Expenses.Application.Tests/Purchases/ClearLedgerTests` |
+| purchase-recording: "An interrupted clear deletes nothing"; storage side of "Clearing a populated ledger", "Reference data survives a clear", "The ledger changed since it was counted"; the lock (a write in flight is counted, not lost) | `Expenses.Integration.Tests/Persistence/PurchaseClearStorageTests`, each test on a database of its own |
+| receipt-ingestion: "Receipt files go with the cleared purchases", "Candidates go with the cleared purchases", "Confirming a capture taken before a clear", "Scanning a cleared invoice again"; a file that cannot be deleted does not fail the clear | `ClearLedgerTests`; the first and third also end to end in `Expenses.Integration.Tests/Api/LedgerClearTests.Receipt_files_go_and_pending_captures_stay` |
+| receipt-ingestion: "Interrupted file removal leaves no broken reference" | Not directly executable: the order (commit, then delete files) is what guarantees it, and `ClearLedgerTests.A_file_that_cannot_be_deleted_does_not_fail_the_clear` shows a failed removal leaves the ledger cleared and the file reported |
+| api-surface: "Counting over HTTP", "Counting over MCP" (asserted equal to HTTP), "Clearing over HTTP", "A clear without an expected number over HTTP", "A stale clear over HTTP", "Clearing from an allowed browser origin" | `Expenses.Integration.Tests/Api/LedgerClearTests`, each test on a database of its own |
+| api-surface: "Clearing is not offered over MCP" | `Mcp/McpAdapterTests.Clearing_is_not_offered_over_mcp` |
+| browser-client: "The control is reachable from home", "Activating the control deletes nothing", "Confirming clears the ledger" (the home side: empty state and zero total), "Cancelling changes nothing" | `FE/src/routes/Home.test.tsx` |
+| browser-client: "Nothing to clear", "The number to be deleted is shown", "Confirming clears the ledger", "Cancelling changes nothing", "The count cannot be read", "Something was recorded meanwhile", "The ledger cannot be reached" | `FE/src/components/ClearLedgerDialog.test.tsx`; the requests themselves in `FE/src/api/reads.test.ts` and `writes.test.ts` |
+
+The clearing tests never touch the shared suite database. A clear there would delete what every
+other class arranged, so each test provisions a database of its own with `ProvisionAnother`.
+
+Every test was seen failing before its implementation existed: on `NotImplementedException` stubs
+for the use cases and the repository, on 405/404 before the endpoints, and on the missing module,
+functions and button in the client.
+
+At the end of the change: `Expenses.Domain.Tests` 100 passed; `Expenses.Application.Tests` 231
+passed; `Expenses.Integration.Tests` 233 passed and 1 skipped (`ClaudeVisionGoldenPathTests`,
+manual only); the FE suite 241 passed in 17 files.
+

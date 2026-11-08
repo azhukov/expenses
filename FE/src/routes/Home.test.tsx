@@ -1,20 +1,29 @@
-import type { UseQueryResult } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider, type UseQueryResult } from '@tanstack/react-query'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LedgerError } from '../api/client'
-import { useCategories, useMerchants, usePurchases } from '../api/queries'
+import { useCategories, useMerchants, usePurchaseCount, usePurchases } from '../api/queries'
 import type { ExpenseView, MerchantView, PurchaseView } from '../api/types'
 import { Capture } from './Capture'
 import { Home } from './Home'
 
-vi.mock('../api/queries', () => ({
+vi.mock('../api/queries', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api/queries')>()),
   usePurchases: vi.fn(),
+  usePurchaseCount: vi.fn(),
   useMerchants: vi.fn(),
   useCategories: vi.fn(),
 }))
+
+vi.mock('../api/writes', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api/writes')>()),
+  clearLedger: vi.fn(),
+}))
+
+const { clearLedger } = await import('../api/writes')
 
 const now = new Date()
 
@@ -124,7 +133,27 @@ function homeRouter() {
 }
 
 function renderHome() {
-  return render(<RouterProvider router={homeRouter()} />)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  return render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={homeRouter()} />
+    </QueryClientProvider>,
+  )
+}
+
+function givenLedgerCount(count: number) {
+  vi.mocked(usePurchaseCount).mockReturnValue({
+    data: count,
+    isPending: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof usePurchaseCount>)
+}
+
+function clearAllControl() {
+  return screen.getByRole('button', { name: /clear all/i })
 }
 
 function captureControl() {
@@ -136,6 +165,7 @@ beforeEach(() => {
   givenPurchases({ data: purchases })
   givenMerchants({ data: merchants })
   vi.mocked(useCategories).mockReturnValue(referenceQuery({ data: [] }))
+  givenLedgerCount(purchases.length)
 })
 
 afterEach(() => {
@@ -151,8 +181,9 @@ describe('Capture is reachable on arrival', () => {
 
   /**
    * The requirement is that nothing is as prominent as capture, not that nothing else exists. This
-   * used to assert capture was the only control; the units screen added a second one, so what is
-   * held now is that there is exactly one other, and that it is kept out of the capture dock.
+   * used to assert capture was the only control; the units screen added a second one, and clearing
+   * the ledger a third (add-clear-all-expenses). What is held is that the others are exactly those
+   * two quiet tools, and that both are kept out of the capture dock.
    */
   it('gives no other control the prominence of capture', () => {
     const { container } = renderHome()
@@ -161,10 +192,14 @@ describe('Capture is reachable on arrival', () => {
       ...container.querySelectorAll('button, a, input, select, textarea, [role="button"]'),
     ]
     const dock = screen.getByTestId('capture-dock')
+    const tools = screen.getByRole('navigation')
 
-    expect(controls).toHaveLength(2)
+    expect(controls).toHaveLength(3)
     expect(controls).toContain(captureControl())
+    expect(within(tools).getByRole('link', { name: /units/i })).toBeInTheDocument()
+    expect(within(tools).getByRole('button', { name: /clear all/i })).toBeInTheDocument()
     expect(within(dock).queryByRole('link', { name: /units/i })).not.toBeInTheDocument()
+    expect(within(dock).queryByRole('button', { name: /clear all/i })).not.toBeInTheDocument()
   })
 })
 
@@ -175,6 +210,53 @@ describe('Unit aliases can be managed from the client', () => {
     await userEvent.click(screen.getByRole('link', { name: /units/i }))
 
     expect(await screen.findByText('Units screen')).toBeInTheDocument()
+  })
+})
+
+describe('The ledger can be cleared from the home screen', () => {
+  it('offers a "Clear all" control alongside the other tools', () => {
+    renderHome()
+
+    expect(
+      within(screen.getByRole('navigation')).getByRole('button', { name: /clear all/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('opens a confirmation step and deletes nothing by itself', async () => {
+    renderHome()
+
+    await userEvent.click(clearAllControl())
+
+    expect(screen.getByRole('alertdialog', { name: /clear all purchases/i })).toBeInTheDocument()
+    expect(clearLedger).not.toHaveBeenCalled()
+  })
+
+  it('shows the empty ledger and a zero month total once a clear succeeds', async () => {
+    vi.mocked(clearLedger).mockImplementation(async expected => {
+      givenPurchases({ data: [] })
+      givenLedgerCount(0)
+      return expected
+    })
+    renderHome()
+
+    await userEvent.click(clearAllControl())
+    await userEvent.click(screen.getByRole('button', { name: 'Delete 3 purchases' }))
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(clearLedger).toHaveBeenCalledWith(3)
+    expect(screen.getByText(/nothing recorded yet/i)).toBeInTheDocument()
+    expect(screen.getByText('€0.00')).toBeInTheDocument()
+  })
+
+  it('leaves the purchases as they were when cancelled', async () => {
+    renderHome()
+
+    await userEvent.click(clearAllControl())
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(clearLedger).not.toHaveBeenCalled()
+    expect(screen.getAllByRole('listitem')).toHaveLength(3)
   })
 })
 

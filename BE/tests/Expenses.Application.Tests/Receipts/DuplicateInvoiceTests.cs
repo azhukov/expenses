@@ -110,7 +110,7 @@ public sealed class DuplicateInvoiceTests
             .CaptureFiscal(Payload);
         Assert.NotNull(captured.AlreadyRecorded);
 
-        var recorded = await new PurchaseService(_ledger, _ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger)
+        var recorded = await new PurchaseService(_ledger, _ledger, _ledger, _ledger, new MerchantService(_ledger, _ledger), _ledger, _ledger, _ledger, _ledger)
             .Record(
                 s_first.AddMinutes(1),
                 8.48m,
