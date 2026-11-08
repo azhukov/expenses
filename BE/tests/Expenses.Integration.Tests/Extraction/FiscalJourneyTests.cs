@@ -13,7 +13,7 @@ namespace Expenses.Integration.Tests.Extraction;
 ///
 /// Scenarios from receipt-ingestion: "A deterministic result ends the cascade", "The placeholder
 /// does not run behind a retrieved invoice", "Invoice detail is retrieved and mapped",
-/// "A miss does not degrade the receipt".
+/// "A miss does not degrade the receipt", "A fiscal invoice's units are matched".
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetime
@@ -55,6 +55,40 @@ public sealed class FiscalJourneyTests(PostgresFixture postgres) : IAsyncLifetim
         Assert.Equal(DecoderRegressionTests.Ikof, result.Extracted.Ikof);
         Assert.Equal("d2857c6a-a363-4173-bf9c-dff37f77741a", result.Extracted.Jikr);
         Assert.Equal(FiscalInvoice.FiscalSource.RetrievedFromService, result.FiscalSource);
+    }
+
+    /// <summary>
+    /// receipt-ingestion, "Extracted unit text is matched to a unit": "A fiscal invoice's units are
+    /// matched", end to end against the stored invoice — KOM through the starting alias, KG by its
+    /// code, and the printed text kept beside each match.
+    /// </summary>
+    [Fact]
+    public async Task A_fiscal_invoices_units_are_matched()
+    {
+        await using var portal = await FiscalPortalStub.Answering();
+        await using var services = postgres.Services(("Extraction:Portal:BaseAddress", portal.BaseAddress));
+        using var scope = services.CreateScope();
+
+        var units = await scope.ServiceProvider.GetRequiredService<UnitService>().List();
+        long piece = units.Single(unit => unit.Code == "PCS").Id;
+        long kilogram = units.Single(unit => unit.Code == "KG").Id;
+
+        var result = await Extract(scope, DecoderRegressionTests.DecodableReceipt);
+        var candidates = result.Result!.Candidates;
+
+        Assert.Equal(14, candidates.Count);
+        Assert.All(candidates, candidate => Assert.Equal(
+            candidate.UnitRaw switch
+            {
+                "KOM" => piece,
+                "KG" => kilogram,
+                _ => throw new InvalidOperationException($"Unexpected printed unit '{candidate.UnitRaw}'."),
+            },
+            candidate.UnitId));
+
+        // The printed text is kept as printed, not replaced by the match.
+        Assert.Equal(8, candidates.Count(candidate => candidate.UnitRaw == "KOM"));
+        Assert.Equal(6, candidates.Count(candidate => candidate.UnitRaw == "KG"));
     }
 
     [Fact]

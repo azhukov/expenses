@@ -121,3 +121,47 @@ identifiers: `Extraction/FiscalIdentityTests.An_address_that_is_not_a_verificati
 
 Four existing assertions follow the `hasReceipt` → `hasReceiptImage` rename (D41). Each still asserts
 what it did before, because every purchase in them either carries an image or carries nothing.
+
+## Scenarios added by `add-unit-aliases`
+
+Printed unit text is now matched to a unit through aliases, both during extraction and when a line
+is saved, and an unknown spelling the user resolves is learned. Paths below are relative to `BE/tests`
+unless they start with `FE/`.
+
+| Scenario | Where |
+| --- | --- |
+| reference-data: "Spellings that differ only in form are one alias", "Inner characters are significant", "Text that normalises to nothing" | `Expenses.Application.Tests/ReferenceData/UnitTextTests` (the normaliser); "Text that normalises to nothing" also as a refusal in `UnitAliasManagementTests` and as a 400 in `Expenses.Integration.Tests/Api/HttpAdapterTests.Alias_rejections_carry_their_status_and_the_standard_error_shape` |
+| reference-data: "The alias is stored normalised", "Adding an alias", "Adding an alias the unit already has", "Adding an alias to an unknown unit", "Adding an alias to a deactivated unit", "An alias may not repeat a unit code", "One alias, one unit", "A unit with several aliases", "Removing an alias", "Removing an alias from the wrong unit", "Removing an alias leaves history unchanged", "Units are listed with their aliases", "Adding an alias does not change the unit" | `Expenses.Application.Tests/ReferenceData/UnitAliasManagementTests`, asserting on error codes; an empty alias refused by the entity in `Expenses.Domain.Tests/UnitAliasTests` |
+| reference-data: "One alias, one unit" (storage side) | `Expenses.Integration.Tests/Persistence/UnitAliasStorageTests.One_alias_one_unit`: the unique index refuses the row |
+| reference-data: "Starting aliases are present", "A removed starting alias stays removed", "A user alias survives restart" | `Persistence/UnitAliasStorageTests`, each on a database of its own, with a restart being the real migrate-and-seed path |
+| reference-data: "Unit codes match in normalised form", "An alias of an inactive unit does not match" | `Expenses.Application.Tests/Receipts/UnitMatchingTests` |
+| receipt-ingestion: "A fiscal invoice's units are matched", "Vision-extracted units are matched", "A code match is preferred to an alias", "Unknown text leaves the line unmatched", "A re-run uses the aliases as they now stand" | `Receipts/UnitMatchingTests`, across `Capture`, `CaptureFiscal` and `RerunExtraction`; "A fiscal invoice's units are matched" also end to end against the stored invoice in `Expenses.Integration.Tests/Extraction/FiscalJourneyTests` |
+| receipt-ingestion: "Unit text is preserved alongside a match" | `Expenses.Domain.Tests/ExtractionCandidateTests` |
+| receipt-ingestion: "A receipt whose units all match can be confirmed unchanged"; purchase-recording: "Printed unit text alone satisfies the rule", "A supplied unit code overrides the printed text", "An expense without a unit is rejected" (now: unknown printed text and no code), "An unknown spelling is learned", "Learning applies to direct recording", "A known alias is not overridden", "A matched unit teaches nothing", "A code teaches nothing", "The earlier line decides within one save", "A rejected save teaches nothing", "History is not re-matched" | `Expenses.Application.Tests/Purchases/UnitLearningTests` |
+| api-surface: "Listing units over HTTP carries aliases", "Adding an alias over HTTP", "Removing an alias over HTTP", "Aliases are addressed in normalised form", "Units cannot be created through alias operations" | `Expenses.Integration.Tests/Api/HttpAdapterTests`; the 409, 400 and 404 mappings in `.Alias_rejections_carry_their_status_and_the_standard_error_shape` |
+| api-surface: "Listing units over MCP carries aliases", "Adding an alias over MCP", "Removing an alias over MCP", "Repeating an add is safe", and "Aliases are addressed in normalised form" over MCP | `Mcp/McpAdapterTests` |
+| api-surface: "A conflicting alias is rejected the same way on both interfaces" | `Ledger/CrossAdapterTests` |
+| browser-client: "The units screen lists aliases", "Adding an alias", "Removing an alias", "A conflicting alias is reported in place", "Aliases can be read when they cannot be changed" | `FE/src/routes/Units.test.tsx`; the requests themselves in `FE/src/api/writes.test.ts` |
+| browser-client: "The units screen is reachable from home" | `FE/src/routes/Home.test.tsx` |
+| browser-client: "A learned alias appears" | `FE/src/routes/Capture.test.tsx`: a confirmed capture invalidates the units query. That the server learned the alias is `UnitLearningTests.An_unknown_spelling_is_learned`. |
+
+The alias tests in the integration suite share one database with every other test class. A test
+that removes the starting alias `kd`, or adds `kut`, puts it back in a `finally`, so no other test
+sees a different dictionary.
+
+Several of these tests passed on their first run, because the code they cover went in before
+them: the storage tests (the mapping and migration of tasks 2.x), the two listing tests and the
+end-to-end fiscal match. Each was then seen failing against a deliberate break of that code and
+passing again once it was restored:
+
+| Break | Tests that failed |
+| --- | --- |
+| The migration's unique index on `alias` dropped | `One_alias_one_unit` |
+| The starting `kom` row dropped | `Starting_aliases_are_present`, and `One_alias_one_unit`, which relies on it |
+| Startup seeding re-inserting `st` and deleting `kut` | `A_removed_starting_alias_stays_removed`, `A_user_alias_survives_restart` |
+| `UnitView` built with no aliases | `Listing_units_over_http_carries_aliases`, `Listing_units_over_mcp_carries_aliases` |
+| Extraction matching switched off | `FiscalJourneyTests.A_fiscal_invoices_units_are_matched` |
+
+At the end of the change: `Expenses.Domain.Tests` 100 passed; `Expenses.Application.Tests` 217
+passed; `Expenses.Integration.Tests` 219 passed and 1 skipped (`ClaudeVisionGoldenPathTests`,
+manual only because it calls the paid API); the FE suite 224 passed in 16 files.

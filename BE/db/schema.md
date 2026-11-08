@@ -135,6 +135,8 @@ reference to it.
 
 `ix_purchases_receipt_storage_key` is a plain, non-unique index: it exists so that "does any other
 purchase still reference this file" is a lookup rather than a scan at deletion time.
+`ix_unit_aliases_unit_id` is plain too: it backs the foreign key, so restricting a unit's deletion
+does not scan the aliases.
 
 ## Check constraints
 

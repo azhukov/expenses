@@ -28,6 +28,10 @@ const server = spawn(
   [
     fileURLToPath(new URL('../node_modules/vite/bin/vite.js', import.meta.url)),
     'preview',
+    // Bind the address the requests below go to. Left to `localhost`, Node on Windows resolves it
+    // to ::1 and nothing answers on 127.0.0.1. The Host headers sent are unaffected.
+    '--host',
+    '127.0.0.1',
     '--port',
     String(port),
     '--strictPort',

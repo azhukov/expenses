@@ -8,7 +8,8 @@ namespace Expenses.Integration.Tests.Mcp;
 /// <summary>
 /// Scenarios from api-surface: "MCP tool surface", "A repeated tool call is not an error", "Receipt
 /// upload is HTTP-only", "Merchants are addressed unambiguously over MCP", "Extraction results are
-/// legible over both interfaces", "Errors carry enough detail to be acted on".
+/// legible over both interfaces", "Errors carry enough detail to be acted on", "Unit aliases are
+/// available over both interfaces".
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
@@ -44,6 +45,8 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Contains("list_purchases", names);
         Assert.Contains("list_categories", names);
         Assert.Contains("list_units", names);
+        Assert.Contains("add_unit_alias", names);
+        Assert.Contains("remove_unit_alias", names);
         Assert.Contains("list_merchants", names);
         Assert.Contains("search_merchants", names);
         Assert.Contains("get_extraction", names);
@@ -274,6 +277,87 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
 
         Assert.Contains("capture.identity_required", error, StringComparison.Ordinal);
     }
+
+    /// <summary>api-surface, "Unit aliases are available over both interfaces".</summary>
+    [Fact]
+    public async Task Listing_units_over_mcp_carries_aliases()
+    {
+        var units = await Call("list_units", new Dictionary<string, object?>());
+
+        Assert.Contains("kom", Aliases(units, "PCS"));
+        Assert.All(units.EnumerateArray(), unit =>
+            Assert.Equal(JsonValueKind.Array, unit.GetProperty("aliases").ValueKind));
+    }
+
+    [Fact]
+    public async Task Adding_an_alias_over_mcp()
+    {
+        try
+        {
+            var unit = await Call("add_unit_alias", AliasArguments("PACK", "kut"));
+
+            Assert.Equal("PACK", unit.GetProperty("code").GetString());
+            Assert.Contains("kut", unit.GetProperty("aliases").EnumerateArray().Select(alias => alias.GetString()));
+        }
+        finally
+        {
+            await _mcp.Client.CallToolAsync("remove_unit_alias", AliasArguments("PACK", "kut"));
+        }
+    }
+
+    [Fact]
+    public async Task Removing_an_alias_over_mcp()
+    {
+        try
+        {
+            var result = await _mcp.Client.CallToolAsync("remove_unit_alias", AliasArguments("PCS", "kd"));
+
+            Assert.True(result.IsError is not true, "Removing an alias the unit has should succeed.");
+            var units = await Call("list_units", new Dictionary<string, object?> { ["includeInactive"] = true });
+            Assert.DoesNotContain(
+                "kd",
+                units.EnumerateArray().SelectMany(unit => unit.GetProperty("aliases").EnumerateArray().Select(alias => alias.GetString())));
+        }
+        finally
+        {
+            await _mcp.Client.CallToolAsync("add_unit_alias", AliasArguments("PCS", "kd"));
+        }
+    }
+
+    [Fact]
+    public async Task Aliases_are_addressed_in_normalised_form_over_mcp()
+    {
+        try
+        {
+            var result = await _mcp.Client.CallToolAsync("remove_unit_alias", AliasArguments("PCS", "KD."));
+
+            Assert.True(result.IsError is not true, "'KD.' should address the alias 'kd'.");
+            Assert.DoesNotContain("kd", Aliases(await Call("list_units", new Dictionary<string, object?>()), "PCS"));
+        }
+        finally
+        {
+            await _mcp.Client.CallToolAsync("add_unit_alias", AliasArguments("PCS", "kd"));
+        }
+    }
+
+    [Fact]
+    public async Task Repeating_an_add_is_safe()
+    {
+        var first = await Call("add_unit_alias", AliasArguments("PCS", "kom"));
+        var second = await Call("add_unit_alias", AliasArguments("PCS", "kom"));
+
+        Assert.Single(first.GetProperty("aliases").EnumerateArray(), alias => alias.GetString() == "kom");
+        Assert.Single(second.GetProperty("aliases").EnumerateArray(), alias => alias.GetString() == "kom");
+    }
+
+    private static Dictionary<string, object?> AliasArguments(string unitCode, string alias)
+        => new() { ["unitCode"] = unitCode, ["alias"] = alias };
+
+    private static List<string?> Aliases(JsonElement units, string code)
+        => [.. units.EnumerateArray()
+            .Single(unit => unit.GetProperty("code").GetString() == code)
+            .GetProperty("aliases").EnumerateArray()
+            .Select(alias => alias.GetString())];
 
     private async Task<long> GivenExtractedReceipt()
     {

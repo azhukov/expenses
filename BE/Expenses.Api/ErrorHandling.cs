@@ -60,7 +60,9 @@ public static class ErrorHandling
         _ when code.EndsWith(".not_found", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
 
         ApplicationErrors.CategoryDuplicateCode
-            or ApplicationErrors.MerchantDuplicateTaxId => StatusCodes.Status409Conflict,
+            or ApplicationErrors.MerchantDuplicateTaxId
+            or ApplicationErrors.UnitAliasConflict
+            or ApplicationErrors.UnitAliasIsUnitCode => StatusCodes.Status409Conflict,
 
         ApplicationErrors.ReceiptImageTooLarge => StatusCodes.Status413PayloadTooLarge,
         ApplicationErrors.ReceiptImageUnsupportedFormat => StatusCodes.Status415UnsupportedMediaType,

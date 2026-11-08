@@ -157,6 +157,37 @@ public sealed class CrossAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             overMcp.EnumerateArray().Select(unit => unit.GetProperty("code").GetString()));
     }
 
+    /// <summary>api-surface, "Unit aliases are available over both interfaces".</summary>
+    [Fact]
+    public async Task A_conflicting_alias_is_rejected_the_same_way_on_both_interfaces()
+    {
+        var overHttp = await _http.PostAsJsonAsync("/units/PACK/aliases", new { alias = "kom" });
+        var httpError = await ExpensesApi.Read<JsonElement>(overHttp);
+
+        var overMcp = await _mcp.Client.CallToolAsync("add_unit_alias", new Dictionary<string, object?>
+        {
+            ["unitCode"] = "PACK",
+            ["alias"] = "kom",
+        });
+
+        string mcpMessage = string.Join(
+            " ",
+            overMcp.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Select(block => block.Text));
+
+        Assert.Equal(HttpStatusCode.Conflict, overHttp.StatusCode);
+        Assert.True(overMcp.IsError);
+
+        Assert.Equal("unit_alias.conflict", httpError.GetProperty("code").GetString());
+        Assert.Contains("unit_alias.conflict", mcpMessage, StringComparison.Ordinal);
+
+        // Both name the alias and the unit it already maps to.
+        foreach (string message in new[] { httpError.GetProperty("message").GetString()!, mcpMessage })
+        {
+            Assert.Contains("kom", message, StringComparison.Ordinal);
+            Assert.Contains("PCS", message, StringComparison.Ordinal);
+        }
+    }
+
     private async Task<JsonElement> CallMcp(string tool, IReadOnlyDictionary<string, object?> arguments)
     {
         var result = await _mcp.Client.CallToolAsync(tool, arguments);

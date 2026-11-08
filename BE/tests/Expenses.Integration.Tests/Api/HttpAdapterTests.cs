@@ -10,7 +10,7 @@ namespace Expenses.Integration.Tests.Api;
 /// Scenarios from api-surface: "HTTP interface for the browser client", "Receipt upload is
 /// HTTP-only", "Errors carry enough detail to be acted on", "Merchant and discount are carried by
 /// both interfaces", "Extraction results are legible over both interfaces", "Fiscal identifiers may
-/// accompany an upload".
+/// accompany an upload", "Unit aliases are available over both interfaces".
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
@@ -394,6 +394,127 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, download.StatusCode);
         Assert.Single(purchase.GetProperty("expenses").EnumerateArray());
     }
+
+    /// <summary>api-surface, "Unit aliases are available over both interfaces".</summary>
+    [Fact]
+    public async Task Listing_units_over_http_carries_aliases()
+    {
+        var units = await ListUnits();
+
+        Assert.Contains("kom", Aliases(units, "PCS"));
+        Assert.Contains("kgr", Aliases(units, "KG"));
+
+        // A unit with no aliases is listed with none, not without the property.
+        Assert.All(units.EnumerateArray(), unit =>
+            Assert.Equal(JsonValueKind.Array, unit.GetProperty("aliases").ValueKind));
+    }
+
+    [Fact]
+    public async Task Adding_an_alias_over_http()
+    {
+        try
+        {
+            var response = await AddAlias("PACK", "kut");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var unit = await ExpensesApi.Read<JsonElement>(response);
+            Assert.Equal("PACK", unit.GetProperty("code").GetString());
+            Assert.Contains("kut", unit.GetProperty("aliases").EnumerateArray().Select(alias => alias.GetString()));
+        }
+        finally
+        {
+            await _client.DeleteAsync("/units/PACK/aliases?alias=kut");
+        }
+    }
+
+    [Fact]
+    public async Task Removing_an_alias_over_http()
+    {
+        try
+        {
+            var response = await _client.DeleteAsync("/units/PCS/aliases?alias=kd");
+
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            // No longer mapped to any unit, not merely moved off this one.
+            var units = await ListUnits(includeInactive: true);
+            Assert.DoesNotContain(
+                "kd",
+                units.EnumerateArray().SelectMany(unit => unit.GetProperty("aliases").EnumerateArray().Select(alias => alias.GetString())));
+        }
+        finally
+        {
+            await AddAlias("PCS", "kd");
+        }
+    }
+
+    [Fact]
+    public async Task Aliases_are_addressed_in_normalised_form()
+    {
+        try
+        {
+            var response = await _client.DeleteAsync($"/units/PCS/aliases?alias={Uri.EscapeDataString("KD.")}");
+
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            Assert.DoesNotContain("kd", Aliases(await ListUnits(), "PCS"));
+        }
+        finally
+        {
+            await AddAlias("PCS", "kd");
+        }
+    }
+
+    [Fact]
+    public async Task Units_cannot_be_created_through_alias_operations()
+    {
+        var response = await AddAlias("NO_SUCH_UNIT", "kut");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("unit.not_found", (await ExpensesApi.Read<JsonElement>(response)).GetProperty("code").GetString());
+        Assert.DoesNotContain(
+            "NO_SUCH_UNIT",
+            (await ListUnits(includeInactive: true)).EnumerateArray().Select(unit => unit.GetProperty("code").GetString()));
+    }
+
+    /// <summary>
+    /// A conflict is 409 in the standard error shape, naming the alias and the unit it already maps
+    /// to; so is an alias spelling a unit's code. An alias that normalises to nothing is 400.
+    /// </summary>
+    [Fact]
+    public async Task Alias_rejections_carry_their_status_and_the_standard_error_shape()
+    {
+        var conflict = await AddAlias("PACK", "kom");
+
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        var error = await ExpensesApi.Read<JsonElement>(conflict);
+        Assert.Equal("unit_alias.conflict", error.GetProperty("code").GetString());
+        Assert.Equal("kom", error.GetProperty("fields").GetProperty("alias").GetString());
+        Assert.Equal("PCS", error.GetProperty("fields").GetProperty("unitCode").GetString());
+        Assert.Contains("PCS", error.GetProperty("message").GetString()!, StringComparison.Ordinal);
+
+        var isCode = await AddAlias("PCS", "kg");
+        Assert.Equal(HttpStatusCode.Conflict, isCode.StatusCode);
+        Assert.Equal("unit_alias.is_unit_code", (await ExpensesApi.Read<JsonElement>(isCode)).GetProperty("code").GetString());
+
+        var empty = await AddAlias("PCS", " ./ ");
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        Assert.Equal("unit_alias.empty", (await ExpensesApi.Read<JsonElement>(empty)).GetProperty("code").GetString());
+
+        var missing = await _client.DeleteAsync("/units/PACK/aliases?alias=kom");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal("unit_alias.not_found", (await ExpensesApi.Read<JsonElement>(missing)).GetProperty("code").GetString());
+    }
+
+    private async Task<HttpResponseMessage> AddAlias(string unitCode, string alias)
+        => await _client.PostAsJsonAsync($"/units/{unitCode}/aliases", new { alias });
+
+    private async Task<JsonElement> ListUnits(bool includeInactive = false)
+        => await ExpensesApi.Read<JsonElement>(await _client.GetAsync($"/units?includeInactive={includeInactive}"));
+
+    private static List<string?> Aliases(JsonElement units, string code)
+        => [.. units.EnumerateArray()
+            .Single(unit => unit.GetProperty("code").GetString() == code)
+            .GetProperty("aliases").EnumerateArray()
+            .Select(alias => alias.GetString())];
 
     private async Task<HttpResponseMessage> Record(object command)
         => await _client.PostAsJsonAsync("/purchases", command, ExpensesApi.Json);

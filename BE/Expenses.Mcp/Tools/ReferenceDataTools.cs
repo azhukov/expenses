@@ -25,13 +25,46 @@ public sealed class ReferenceDataTools(CategoryService categories, UnitService u
 
     [McpServerTool(Name = "list_units")]
     [Description("""
-        Lists the units a quantity can be expressed in, with their codes, symbols and whether each
-        measures mass, volume or a count. Units are fixed; they cannot be created.
+        Lists the units a quantity can be expressed in, with their codes, symbols, whether each
+        measures mass, volume or a count, and its aliases: the spellings a receipt may print for it
+        (such as "kom" for PCS). Units are fixed; they cannot be created. Aliases can be added and
+        removed.
         """)]
     public async Task<IReadOnlyList<UnitView>> ListUnits(
         [Description("Include units that have been retired.")] bool includeInactive = false,
         CancellationToken cancellationToken = default)
         => await units.List(includeInactive, cancellationToken);
+
+    [McpServerTool(Name = "add_unit_alias")]
+    [Description("""
+        Teaches the ledger a spelling a receipt prints for a unit, so lines printed that way are
+        matched to the unit from then on. Use it when the user says a printed unit such as "kut" or
+        "kom" means one of the units. Adding an alias the unit already has succeeds and changes
+        nothing, so repeating the call is safe. An alias that already belongs to another unit, or
+        that is a unit's code, is refused; remove it from the other unit first. Returns the unit
+        with its aliases.
+        """)]
+    public async Task<UnitView> AddUnitAlias(
+        [Description("The code of the unit, such as PCS or KG. Units are never created by this tool.")] string unitCode,
+        [Description("The printed spelling, in any case; it is stored lower-case, without surrounding periods or slashes.")] string alias,
+        CancellationToken cancellationToken = default)
+        => await units.AddAlias(unitCode, alias, cancellationToken);
+
+    [McpServerTool(Name = "remove_unit_alias")]
+    [Description("""
+        Removes a spelling from a unit, for instance one that was learned by mistake, so printed
+        text in that spelling is no longer matched to the unit. Expenses already recorded keep
+        their unit. Fails if the unit has no such alias.
+        """)]
+    public async Task<string> RemoveUnitAlias(
+        [Description("The code of the unit the alias belongs to, such as PCS.")] string unitCode,
+        [Description("The spelling to remove, in any case.")] string alias,
+        CancellationToken cancellationToken = default)
+    {
+        await units.RemoveAlias(unitCode, alias, cancellationToken);
+
+        return $"Removed the alias '{alias}' from the unit {unitCode}.";
+    }
 
     [McpServerTool(Name = "create_category")]
     [Description("""
