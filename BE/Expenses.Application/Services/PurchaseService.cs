@@ -257,14 +257,7 @@ public sealed class PurchaseService(
                 ("skip", skip));
         }
 
-        if (from is { } lower && to is { } upper && upper < lower)
-        {
-            throw ExpensesException.For(
-                ApplicationErrors.ListingRangeInvalid,
-                "The end of the range falls before its start.",
-                ("from", lower),
-                ("to", upper));
-        }
+        RejectInvertedRange(from, to);
 
         // Both bounds are inclusive dates, as a user reads them; the repository turns the upper
         // bound into an exclusive instant so that a purchase late on the last day is included.
@@ -273,6 +266,73 @@ public sealed class PurchaseService(
             cancellationToken);
 
         return [.. listed.Select(purchase => PurchaseView.Of(purchase))];
+    }
+
+    /// <summary>
+    /// Every expense line of the purchases in an inclusive date range, or of every purchase when no
+    /// range is given, as export rows (D1 of add-csv-export). An inverted range is rejected with the
+    /// listing's own error. Purchases come oldest first, lines in the order they were recorded, and
+    /// merchant, category and unit are named — deactivated ones included — falling back to the
+    /// verbatim text where nothing was matched. Unpaged, and it changes nothing.
+    /// </summary>
+    public async Task<IReadOnlyList<ExportLine>> Export(
+        DateOnly? from = null,
+        DateOnly? to = null,
+        CancellationToken cancellationToken = default)
+    {
+        RejectInvertedRange(from, to);
+
+        var exported = await purchases.ListForExport(from, to, cancellationToken);
+
+        // One read of each dictionary, whatever the row count. Inactive entries are included: a
+        // purchase made at a merchant since retired still happened there.
+        var merchantNames = (await merchants.List(includeInactive: true, cancellationToken))
+            .ToDictionary(merchant => merchant.Id, merchant => merchant.Name);
+        var categoryNames = (await categories.List(includeInactive: true, cancellationToken))
+            .ToDictionary(category => category.Id, category => category.Name);
+        var unitSymbols = (await units.List(includeInactive: true, cancellationToken))
+            .ToDictionary(unit => unit.Id, unit => unit.Symbol);
+
+        return [.. exported.SelectMany(purchase =>
+        {
+            string? merchant = NameOf(purchase.MerchantId, merchantNames) ?? purchase.MerchantRaw;
+
+            // The database does not promise the order an included collection arrives in; the
+            // identifier is the order the lines were recorded in.
+            return purchase.Expenses
+                .OrderBy(expense => expense.Id)
+                .Select(expense => new ExportLine(
+                    purchase.Id,
+                    purchase.OccurredAt,
+                    merchant,
+                    expense.Description,
+                    expense.Quantity,
+                    NameOf(expense.UnitId, unitSymbols) ?? expense.UnitRaw,
+                    expense.UnitPrice,
+                    expense.ListUnitPrice,
+                    expense.DiscountAmount,
+                    NameOf(expense.CategoryId, categoryNames) ?? expense.CategoryRaw,
+                    expense.Amount));
+        })];
+    }
+
+    /// <summary>
+    /// The one statement of what an inverted range is and how it is reported, shared by the listing
+    /// and the export so that the same request gets the same answer from either (ledger-export).
+    /// </summary>
+    private static string? NameOf(long? id, Dictionary<long, string> names)
+        => id is { } known && names.TryGetValue(known, out string? name) ? name : null;
+
+    private static void RejectInvertedRange(DateOnly? from, DateOnly? to)
+    {
+        if (from is { } lower && to is { } upper && upper < lower)
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.ListingRangeInvalid,
+                "The end of the range falls before its start.",
+                ("from", lower),
+                ("to", upper));
+        }
     }
 
     /// <summary>

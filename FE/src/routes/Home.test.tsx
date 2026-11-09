@@ -18,12 +18,18 @@ vi.mock('../api/queries', async importOriginal => ({
   useCategories: vi.fn(),
 }))
 
+vi.mock('../api/reads', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api/reads')>()),
+  exportPurchases: vi.fn(),
+}))
+
 vi.mock('../api/writes', async importOriginal => ({
   ...(await importOriginal<typeof import('../api/writes')>()),
   clearLedger: vi.fn(),
 }))
 
 const { clearLedger } = await import('../api/writes')
+const { exportPurchases } = await import('../api/reads')
 
 const now = new Date()
 
@@ -181,9 +187,9 @@ describe('Capture is reachable on arrival', () => {
 
   /**
    * The requirement is that nothing is as prominent as capture, not that nothing else exists. This
-   * used to assert capture was the only control; the units screen added a second one, and clearing
-   * the ledger a third (add-clear-all-expenses). What is held is that the others are exactly those
-   * two quiet tools, and that both are kept out of the capture dock.
+   * used to assert capture was the only control; the units screen added a second one, clearing the
+   * ledger a third (add-clear-all-expenses), and exporting it a fourth (add-csv-export). What is held
+   * is that the others are exactly those three quiet tools, and that all are kept out of the dock.
    */
   it('gives no other control the prominence of capture', () => {
     const { container } = renderHome()
@@ -194,11 +200,13 @@ describe('Capture is reachable on arrival', () => {
     const dock = screen.getByTestId('capture-dock')
     const tools = screen.getByRole('navigation')
 
-    expect(controls).toHaveLength(3)
+    expect(controls).toHaveLength(4)
     expect(controls).toContain(captureControl())
     expect(within(tools).getByRole('link', { name: /units/i })).toBeInTheDocument()
+    expect(within(tools).getByRole('button', { name: /export/i })).toBeInTheDocument()
     expect(within(tools).getByRole('button', { name: /clear all/i })).toBeInTheDocument()
     expect(within(dock).queryByRole('link', { name: /units/i })).not.toBeInTheDocument()
+    expect(within(dock).queryByRole('button', { name: /export/i })).not.toBeInTheDocument()
     expect(within(dock).queryByRole('button', { name: /clear all/i })).not.toBeInTheDocument()
   })
 })
@@ -210,6 +218,35 @@ describe('Unit aliases can be managed from the client', () => {
     await userEvent.click(screen.getByRole('link', { name: /units/i }))
 
     expect(await screen.findByText('Units screen')).toBeInTheDocument()
+  })
+})
+
+describe('The ledger can be exported from the home screen', () => {
+  it('offers an "Export" control alongside the other tools', () => {
+    renderHome()
+
+    expect(
+      within(screen.getByRole('navigation')).getByRole('button', { name: /export/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('opens an export step and downloads nothing by itself', async () => {
+    renderHome()
+
+    await userEvent.click(screen.getByRole('button', { name: /export/i }))
+
+    expect(screen.getByRole('dialog', { name: /export/i })).toBeInTheDocument()
+    expect(exportPurchases).not.toHaveBeenCalled()
+  })
+
+  it('closes the export step when cancelled', async () => {
+    renderHome()
+
+    await userEvent.click(screen.getByRole('button', { name: /export/i }))
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(exportPurchases).not.toHaveBeenCalled()
   })
 })
 

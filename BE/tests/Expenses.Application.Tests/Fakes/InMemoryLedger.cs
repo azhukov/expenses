@@ -228,6 +228,23 @@ internal sealed class InMemoryLedger :
         return Task.FromResult<IReadOnlyList<Purchase>>(matching);
     }
 
+    public Task<IReadOnlyList<Purchase>> ListForExport(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken cancellationToken = default)
+    {
+        var matching = _purchases
+            .Where(purchase => from is not { } lower
+                || purchase.OccurredAt >= lower.ToDateTime(TimeOnly.MinValue))
+            .Where(purchase => to is not { } upper
+                || purchase.OccurredAt < upper.AddDays(1).ToDateTime(TimeOnly.MinValue))
+            .OrderBy(purchase => purchase.OccurredAt)
+            .ThenBy(purchase => purchase.Id)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<Purchase>>(matching);
+    }
+
     public Task Add(Purchase purchase, CancellationToken cancellationToken = default)
     {
         _uncommittedPurchases.Add(purchase);

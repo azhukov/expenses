@@ -49,31 +49,48 @@ internal sealed class PurchaseRepository(ExpensesDbContext context) : IPurchaseR
     public async Task<IReadOnlyList<Purchase>> List(
         PurchaseListQuery query,
         CancellationToken cancellationToken = default)
-    {
-        var purchases = context.Purchases.AsQueryable();
-
-        if (query.From is { } from)
-        {
-            var start = from.ToDateTime(TimeOnly.MinValue);
-            purchases = purchases.Where(purchase => purchase.OccurredAt >= start);
-        }
-
-        if (query.To is { } to)
-        {
-            var endExclusive = to.AddDays(1).ToDateTime(TimeOnly.MinValue);
-            purchases = purchases.Where(purchase => purchase.OccurredAt < endExclusive);
-        }
-
-        return await purchases
+        => await InRange(context.Purchases, query.From, query.To)
             .OrderByDescending(purchase => purchase.OccurredAt)
             .ThenByDescending(purchase => purchase.Id)
             .Skip(query.Skip)
             .Take(query.Take)
             .ToListAsync(cancellationToken);
-    }
+
+    /// <inheritdoc />
+    /// <remarks>Untracked: an export reads, and nothing it reads is written back.</remarks>
+    public async Task<IReadOnlyList<Purchase>> ListForExport(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken cancellationToken = default)
+        => await InRange(context.Purchases.AsNoTracking(), from, to)
+            .OrderBy(purchase => purchase.OccurredAt)
+            .ThenBy(purchase => purchase.Id)
+            .ToListAsync(cancellationToken);
 
     public async Task Add(Purchase purchase, CancellationToken cancellationToken = default)
         => await context.Purchases.AddAsync(purchase, cancellationToken);
+
+    /// <summary>
+    /// The one statement of the inclusive range, shared by the listing and the export: the upper
+    /// date becomes an exclusive instant at the start of the following day, so the last day counts
+    /// whole.
+    /// </summary>
+    private static IQueryable<Purchase> InRange(IQueryable<Purchase> purchases, DateOnly? from, DateOnly? to)
+    {
+        if (from is { } lower)
+        {
+            var start = lower.ToDateTime(TimeOnly.MinValue);
+            purchases = purchases.Where(purchase => purchase.OccurredAt >= start);
+        }
+
+        if (to is { } upper)
+        {
+            var endExclusive = upper.AddDays(1).ToDateTime(TimeOnly.MinValue);
+            purchases = purchases.Where(purchase => purchase.OccurredAt < endExclusive);
+        }
+
+        return purchases;
+    }
 
     /// <inheritdoc />
     public async Task<int> Count(CancellationToken cancellationToken = default)

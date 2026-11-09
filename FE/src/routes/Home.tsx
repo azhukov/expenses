@@ -5,6 +5,7 @@ import { LedgerError } from '../api/client'
 import { useMerchants, usePurchases } from '../api/queries'
 import { CaptureControl } from '../capture/CaptureControl'
 import { ClearLedgerDialog } from '../components/ClearLedgerDialog'
+import { ExportDialog } from '../components/ExportDialog'
 import { MonthHeader } from '../components/MonthHeader'
 import { RecentList } from '../components/RecentList'
 import { ReviewBanner } from '../components/ReviewBanner'
@@ -29,6 +30,7 @@ export function Home() {
   const purchases = usePurchases(range)
   const merchants = useMerchants()
   const [isClearing, setIsClearing] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   const month = purchases.data ?? []
 
@@ -41,7 +43,10 @@ export function Home() {
         <Link to="/units" className={styles.tool}>
           Units
         </Link>
-        {/* Offered even when this month is empty: Home cannot see the months before it. */}
+        {/* Both offered even when this month is empty: Home cannot see the months before it. */}
+        <button type="button" className={styles.tool} onClick={() => setIsExporting(true)}>
+          Export
+        </button>
         <button type="button" className={styles.tool} onClick={() => setIsClearing(true)}>
           Clear all
         </button>
@@ -62,6 +67,8 @@ export function Home() {
       <div className={styles.capture} data-testid="capture-dock">
         <CaptureControl />
       </div>
+
+      {isExporting ? <ExportDialog onClose={() => setIsExporting(false)} /> : null}
 
       {isClearing ? <ClearLedgerDialog onClose={() => setIsClearing(false)} /> : null}
     </div>

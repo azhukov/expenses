@@ -1,4 +1,4 @@
-import { read } from './client'
+import { read, readBlob } from './client'
 import type { CategoryView, MerchantView, PurchaseView, UnitView } from './types'
 
 /** A range of occurrence dates, as the API's `DateOnly` query parameters: `yyyy-MM-dd`. */
@@ -34,4 +34,16 @@ export async function countPurchases(): Promise<number> {
   const { count } = await read<{ count: number }>('/purchases/count')
 
   return count
+}
+
+/**
+ * The ledger as a CSV file, for every purchase or an inclusive range: the bytes the ledger wrote,
+ * untouched, for the caller to save (ledger-export).
+ */
+export function exportPurchases(range?: DateRange): Promise<Blob> {
+  const query = range
+    ? `?${new URLSearchParams({ from: range.from, to: range.to }).toString()}`
+    : ''
+
+  return readBlob(`/purchases/export${query}`, 'text/csv')
 }

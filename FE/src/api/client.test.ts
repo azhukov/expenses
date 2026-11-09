@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { LedgerError, read, send } from './client'
+import { LedgerError, read, readBlob, send } from './client'
 
 const fetchMock = vi.fn()
 
@@ -171,5 +171,44 @@ describe('Writing to the ledger', () => {
     expect(failure).toBeInstanceOf(LedgerError)
     expect((failure as LedgerError).code).toBeNull()
     expect((failure as LedgerError).message).toMatch(/could not be reached/i)
+  })
+})
+
+describe('Reading a file from the ledger', () => {
+  it('asks for the file in the given form and returns its bytes unaltered', async () => {
+    const body = new Blob(['﻿purchase_id\r\n'], { type: 'text/csv' })
+    fetchMock.mockResolvedValue({ ok: true, status: 200, blob: async () => body })
+
+    const file = await readBlob('/purchases/export', 'text/csv')
+
+    expect(file).toBe(body)
+    expect(fetchMock).toHaveBeenCalledWith('http://ledger.test:9000/purchases/export', {
+      headers: { accept: 'text/csv' },
+    })
+  })
+
+  it("reports a rejected request in the ledger's own words", async () => {
+    respondWith(
+      { code: 'listing.range_invalid', message: 'The end of the range falls before its start.' },
+      { ok: false, status: 400 },
+    )
+
+    const failure = await readBlob('/purchases/export', 'text/csv').catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(LedgerError)
+    expect(failure).toMatchObject({
+      code: 'listing.range_invalid',
+      message: 'The end of the range falls before its start.',
+      status: 400,
+    })
+  })
+
+  it('reports a request that never reached the ledger', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+
+    const failure = await readBlob('/purchases/export', 'text/csv').catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(LedgerError)
+    expect((failure as LedgerError).message).toBe('The ledger could not be reached.')
   })
 })

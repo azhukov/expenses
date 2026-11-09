@@ -1,0 +1,143 @@
+/*
+ * The same modal frame as clearing the ledger: it covers the capture dock so nothing behind it can
+ * be tapped mid-choice, and respects the safe-area insets the page does (D11).
+ */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-4);
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+  background: rgb(22 24 29 / 0.45);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 28rem;
+  padding: var(--space-5);
+  background: var(--colour-surface);
+  border-radius: var(--radius);
+}
+
+.title {
+  font-size: 1.125rem;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.legend {
+  margin-bottom: var(--space-2);
+  color: var(--colour-ink-muted);
+}
+
+/* The whole row is the target, at the 44px every control keeps. */
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-left: var(--space-5);
+}
+
+.month {
+  flex: 1 1 auto;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.step {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.25rem;
+  background: transparent;
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+}
+
+.range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-left: var(--space-5);
+}
+
+.date {
+  display: flex;
+  flex: 1 1 8rem;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.date input {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+}
+
+.date input[aria-invalid='true'] {
+  border-color: var(--colour-failure);
+}
+
+.range .failure {
+  flex-basis: 100%;
+}
+
+.failure {
+  color: var(--colour-failure);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.cancel,
+.confirm {
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+}
+
+.cancel {
+  background: transparent;
+  border: 1px solid var(--colour-line);
+}
+
+/* Nothing is lost by exporting, so the confirm is the accent, not the failure colour of a clear. */
+.confirm {
+  background: var(--colour-accent);
+  color: var(--colour-accent-ink);
+  border: none;
+}
+
+.step:disabled,
+.cancel:disabled,
+.confirm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

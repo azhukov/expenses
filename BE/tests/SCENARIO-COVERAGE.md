@@ -190,3 +190,37 @@ At the end of the change: `Expenses.Domain.Tests` 100 passed; `Expenses.Applicat
 passed; `Expenses.Integration.Tests` 233 passed and 1 skipped (`ClaudeVisionGoldenPathTests`,
 manual only); the FE suite 241 passed in 17 files.
 
+## Scenarios added by `add-csv-export`
+
+| Scenario | Where |
+| --- | --- |
+| ledger-export: "Export everything", "Export one month", "Only a start is given", "Nothing in the range", "An export is not paged", "An inverted range is rejected" (same code, fields and message as the listing) | `Expenses.Application.Tests/Purchases/ExportLedgerTests` |
+| ledger-export: "Export everything" (storage side), "The last day is included whole", a start alone and an end alone, more than a listing page returned whole | `Expenses.Integration.Tests/Persistence/PurchaseExportStorageTests`, each test on a database of its own |
+| ledger-export: "A purchase with three lines", "Optional values that are absent" | `ExportLedgerTests` |
+| ledger-export: "The header row" | `Expenses.Integration.Tests/Api/LedgerCsvTests.The_header_row`, and over HTTP in `LedgerExportTests.Exporting_everything_over_http` |
+| ledger-export: "Matched references are named", "Unmatched references fall back to what was printed", "A deactivated merchant is still named" (category and unit too), "Neither a reference nor verbatim text" | `ExportLedgerTests` |
+| ledger-export: "Oldest first", "Lines keep their recorded order"; purchases at the same moment in recorded order | `ExportLedgerTests`; the database ordering in `PurchaseExportStorageTests` |
+| ledger-export: "Text with commas and quotes survives" (round trip through an independent RFC 4180 reader), "Non-Latin text survives", "Numbers use an invariant form" (under sr-Latn-ME, de-DE, fr-FR and en-US), "Quantities carry no trailing zeros", "Occurrence is written as recorded", "A purchase recorded by date alone" | `Expenses.Integration.Tests/Api/LedgerCsvTests` |
+| api-surface: "Exporting everything over HTTP", "Exporting a range over HTTP", "An open-ended range is named for its open end", "An inverted range over HTTP", "A malformed date over HTTP", "Exporting from an allowed browser origin"; exporting changes nothing | `Expenses.Integration.Tests/Api/LedgerExportTests` |
+| api-surface: "Exporting is not offered over MCP" | `Mcp/McpAdapterTests.Exporting_is_not_offered_over_mcp` |
+| api-surface: "Same operation over either interface", "Same validation outcome", "Duplicate guard spans interfaces" (restated unchanged, because the parity requirement they belong to was modified) | `Expenses.Integration.Tests/Ledger/CrossAdapterTests`, unchanged and still passing |
+| browser-client: "The control is reachable from home", "Activating the control downloads nothing", "Cancelling sends nothing" (the home side) | `FE/src/routes/Home.test.tsx` |
+| browser-client: "The current month is the default", "Exporting a month", "Exporting everything", "Exporting a date range", "An incomplete range cannot be sent", "An inverted range is refused before sending", "An export in progress", "The file is the ledger's file", "The ledger rejects the export", "The ledger cannot be reached", "Cancelling sends nothing" | `FE/src/components/ExportDialog.test.tsx` |
+| browser-client: "Files are named for what was chosen"; month ranges, leap years and the year boundary | `FE/src/month/month.test.ts`, the month label in `FE/src/format/format.test.ts` |
+| browser-client: the request itself (path, range, `accept: text/csv`, bytes returned unaltered, errors in the ledger's words) | `FE/src/api/reads.test.ts`, `FE/src/api/client.test.ts` |
+
+Every test was seen failing before its implementation existed: on `NotImplementedException` stubs
+for the use case, the repository read and the CSV writer, on 404 before the endpoint, and on
+"Not implemented" stubs in the client. The one exception is
+`McpAdapterTests.Exporting_is_not_offered_over_mcp`, which asserts an absence and so passed from
+the first run; like its clearing sibling, it is a guard against a tool being added later.
+
+Two tests changed during the change, both because the first version specified something the system
+could not do. The quantity test first expected `2.50` for `2.50m` ("as recorded"). The `quantity`
+column stores three places whatever is supplied, so a stored `1` reads back as `1.000`. Quantities
+are now written without trailing zeros, and the spec says so. The malformed-date test caught a 406:
+`[Produces("text/csv")]` forced the binding error into CSV negotiation (design D4).
+
+At the end of the change: `Expenses.Domain.Tests` 100 passed; `Expenses.Application.Tests` 249
+passed; `Expenses.Integration.Tests` 261 passed and 1 skipped (`ClaudeVisionGoldenPathTests`,
+manual only); the FE suite 272 passed in 18 files.

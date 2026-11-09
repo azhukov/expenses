@@ -78,6 +78,20 @@ public sealed class McpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
             || name.Contains("clear", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// api-surface, "Exporting is not offered over MCP". A file is of no use to an assistant, which
+    /// reads the same rows through the listing tool in a shape it can reason about (D5 of
+    /// add-csv-export).
+    /// </summary>
+    [Fact]
+    public async Task Exporting_is_not_offered_over_mcp()
+    {
+        var names = (await _mcp.Client.ListToolsAsync()).Select(tool => tool.Name).ToList();
+
+        Assert.Contains("list_purchases", names);
+        Assert.DoesNotContain(names, name => name.Contains("export", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public async Task Image_bytes_are_never_accepted_as_a_tool_argument()
     {

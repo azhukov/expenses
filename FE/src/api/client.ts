@@ -80,6 +80,28 @@ export async function read<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /**
+ * One GET whose body is a file rather than JSON, returned as the bytes the ledger sent. A failure is
+ * still reported as {@link read} reports one, because the ledger answers a rejected request in its
+ * usual JSON error shape whatever was asked for.
+ */
+export async function readBlob(path: string, accept: string): Promise<Blob> {
+  const url = ledgerUrl(path)
+  let response: Response
+
+  try {
+    response = await fetch(url, { headers: { accept } })
+  } catch {
+    throw new LedgerError('The ledger could not be reached.')
+  }
+
+  if (!response.ok) {
+    throw await failureOf(response)
+  }
+
+  return response.blob()
+}
+
+/**
  * The failure side of a response, in the ledger's own words where it gave any. Shared by every
  * call that talks to the API, so that a write never grows an error vocabulary a read does not have.
  */

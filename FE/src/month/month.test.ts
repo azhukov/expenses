@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ExtractionState, PurchaseView } from '../api/types'
-import { currentMonthRange, monthTotal, recentPurchases, reviewCount } from './month'
+import {
+  currentMonth,
+  currentMonthRange,
+  exportFileName,
+  exportRange,
+  monthRange,
+  monthTotal,
+  nextMonth,
+  previousMonth,
+  recentPurchases,
+  reviewCount,
+} from './month'
 
 function purchase(
   id: number,
@@ -114,5 +125,73 @@ describe('The recent slice', () => {
 
     expect(recentPurchases(many)).toHaveLength(8)
     expect(recentPurchases(many)[0].id).toBe(20)
+  })
+})
+
+describe('A month is a date range from its first to its last day', () => {
+  it('spans September 2026', () => {
+    expect(monthRange({ year: 2026, month: 9 })).toEqual({ from: '2026-09-01', to: '2026-09-30' })
+  })
+
+  it('ends February on the 29th in a leap year and on the 28th otherwise', () => {
+    expect(monthRange({ year: 2028, month: 2 })).toEqual({ from: '2028-02-01', to: '2028-02-29' })
+    expect(monthRange({ year: 2026, month: 2 })).toEqual({ from: '2026-02-01', to: '2026-02-28' })
+  })
+
+  it('takes the current month from the device date', () => {
+    expect(currentMonth(new Date(2026, 9, 31, 23, 59))).toEqual({ year: 2026, month: 10 })
+  })
+})
+
+describe('Months step one at a time across the year boundary', () => {
+  it('steps back from January into the previous December', () => {
+    expect(previousMonth({ year: 2026, month: 1 })).toEqual({ year: 2025, month: 12 })
+  })
+
+  it('steps forward from December into the next January', () => {
+    expect(nextMonth({ year: 2025, month: 12 })).toEqual({ year: 2026, month: 1 })
+  })
+
+  it('steps within a year', () => {
+    expect(previousMonth({ year: 2026, month: 10 })).toEqual({ year: 2026, month: 9 })
+    expect(nextMonth({ year: 2026, month: 9 })).toEqual({ year: 2026, month: 10 })
+  })
+})
+
+describe('What an export choice asks the ledger for', () => {
+  it('asks for no range when everything is chosen', () => {
+    expect(exportRange({ kind: 'all' })).toBeUndefined()
+  })
+
+  it('asks for the whole of a chosen month', () => {
+    expect(exportRange({ kind: 'month', month: { year: 2026, month: 9 } })).toEqual({
+      from: '2026-09-01',
+      to: '2026-09-30',
+    })
+  })
+
+  it('asks for a chosen range as given', () => {
+    expect(exportRange({ kind: 'range', from: '2026-10-05', to: '2026-10-12' })).toEqual({
+      from: '2026-10-05',
+      to: '2026-10-12',
+    })
+  })
+})
+
+describe('Files are named for what was chosen', () => {
+  it('names everything, a month and a range', () => {
+    expect(exportFileName({ kind: 'all' })).toBe('expenses-all.csv')
+    expect(exportFileName({ kind: 'month', month: { year: 2026, month: 10 } })).toBe(
+      'expenses-2026-10.csv',
+    )
+    expect(exportFileName({ kind: 'range', from: '2026-10-05', to: '2026-10-12' })).toBe(
+      'expenses-2026-10-05-to-2026-10-12.csv',
+    )
+  })
+
+  it('pads a single-digit month', () => {
+    expect(exportFileName({ kind: 'month', month: { year: 2026, month: 3 } })).toBe(
+      'expenses-2026-03.csv',
+    )
   })
 })

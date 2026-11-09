@@ -74,3 +74,16 @@ export function describeWhen(occurredAt: string, now: Date = new Date()): string
       return date.format(occurred)
   }
 }
+
+/** A calendar month: `month` runs 1 to 12, as a reader counts, not as `Date` does. */
+export interface CalendarMonth {
+  year: number
+  month: number
+}
+
+const monthName = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' })
+
+/** A month as a reader names it: "October 2026". */
+export function formatMonth(month: CalendarMonth): string {
+  return monthName.format(new Date(month.year, month.month - 1, 1))
+}

@@ -46,6 +46,11 @@ Seventeen tools in four groups. Every one delegates to a use case and validates 
 `count_purchases` and hand the number straight back, so the expected-count guard would not stop one
 that decided to clear (D5 of `add-clear-all-expenses`). `count_purchases` itself changes nothing.
 
+**Exporting the ledger is not available over MCP.** HTTP serves the ledger as a CSV file
+(`GET /purchases/export?from=&to=`), but no tool does. A file is of no use to an assistant, and
+`list_purchases` already returns every value the file holds, in a shape it can reason about (D5 of
+`add-csv-export`).
+
 `record_purchase` is **idempotent by natural key**: a purchase whose date, time and amount match one
 already recorded is returned as it stands rather than duplicated, and `alreadyRecorded` says so
 (D3). That is a success, not an error — an assistant that retries after a timeout gets the original

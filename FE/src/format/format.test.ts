@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { describeWhen, formatAmount, parseOccurredAt } from './format'
+import { describeWhen, formatAmount, formatMonth, parseOccurredAt } from './format'
 
 describe('An amount is formatted', () => {
   it('shows euro with two decimal places', () => {
@@ -69,5 +69,12 @@ describe('An offset-less timestamp is local wall-clock time', () => {
 
     expect(occurred.getHours()).toBe(21)
     expect(occurred.getDate()).toBe(3)
+  })
+})
+
+describe('A month is named for reading', () => {
+  it('names the month and year in full', () => {
+    expect(formatMonth({ year: 2026, month: 10 })).toBe('October 2026')
+    expect(formatMonth({ year: 2027, month: 1 })).toBe('January 2027')
   })
 })

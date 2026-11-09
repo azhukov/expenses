@@ -60,6 +60,27 @@ public sealed class PurchasesController : ControllerBase
         [FromServices] PurchaseService purchases,
         CancellationToken cancellationToken) => Ok(await purchases.List(from, to, skip ?? 0, take, cancellationToken));
 
+    /// <summary>
+    /// The ledger as a CSV file, for every purchase or an inclusive date range (D4 of add-csv-export).
+    /// HTTP-only: an assistant reads the same rows through the listing. The body is built whole
+    /// before anything is sent, so an inverted range still leaves as the standard JSON error. The CSV
+    /// is described as the success response rather than declared with <c>[Produces]</c>, which would
+    /// force a binding failure to be negotiated as CSV and refused with 406 instead of reported.
+    /// </summary>
+    [HttpGet("export")]
+    [EndpointName("ExportPurchases")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "text/csv")]
+    public async Task<IActionResult> Export(
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromServices] PurchaseService purchases,
+        CancellationToken cancellationToken)
+    {
+        var lines = await purchases.Export(from, to, cancellationToken);
+
+        return File(LedgerCsv.Write(lines), "text/csv; charset=utf-8", ExportFileName(from, to));
+    }
+
     /// <summary>How many purchases the ledger holds, across every date.</summary>
     [HttpGet("count")]
     [EndpointName("CountPurchases")]
@@ -94,4 +115,16 @@ public sealed class PurchasesController : ControllerBase
 
         return Ok(new ClearLedgerResponse(result.Deleted));
     }
+
+    /// <summary>
+    /// Named for the range so that two downloads do not overwrite each other. A presentation detail
+    /// of HTTP rather than a ledger rule, which is why it is here.
+    /// </summary>
+    private static string ExportFileName(DateOnly? from, DateOnly? to)
+        => from is null && to is null
+            ? "expenses-all.csv"
+            : $"expenses-{Bound(from, "earliest")}-to-{Bound(to, "latest")}.csv";
+
+    private static string Bound(DateOnly? date, string open)
+        => date?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? open;
 }

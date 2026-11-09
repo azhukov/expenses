@@ -36,6 +36,17 @@ public interface IPurchaseRepository
     /// <summary>Most recent first, paged. Ordering belongs here because the database does it.</summary>
     Task<IReadOnlyList<Purchase>> List(PurchaseListQuery query, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Every purchase in an inclusive occurrence date range, unpaged, with its expenses: oldest first,
+    /// and by identifier among purchases at the same moment, so they come out in the order they were
+    /// recorded. Either bound may be absent. An export reads a range whole, which is why this is not
+    /// <see cref="List"/> with a large page (D2 of add-csv-export).
+    /// </summary>
+    Task<IReadOnlyList<Purchase>> ListForExport(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken cancellationToken = default);
+
     Task Add(Purchase purchase, CancellationToken cancellationToken = default);
 
     /// <summary>How many purchases the ledger holds, across every date.</summary>

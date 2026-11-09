@@ -4,3 +4,19 @@ GET {{Expenses.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+# The ledger as CSV (add-csv-export). Everything, one month, and an open-ended range.
+GET {{Expenses.Api_HostAddress}}/purchases/export
+Accept: text/csv
+
+###
+
+GET {{Expenses.Api_HostAddress}}/purchases/export?from=2026-10-01&to=2026-10-31
+Accept: text/csv
+
+###
+
+GET {{Expenses.Api_HostAddress}}/purchases/export?from=2026-10-15
+Accept: text/csv
+
+###

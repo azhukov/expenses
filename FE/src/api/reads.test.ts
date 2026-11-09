@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { countPurchases, listCategories, listMerchants, listPurchases, listUnits } from './reads'
+import {
+  countPurchases,
+  exportPurchases,
+  listCategories,
+  listMerchants,
+  listPurchases,
+  listUnits,
+} from './reads'
 
 const fetchMock = vi.fn()
 
@@ -49,5 +56,28 @@ describe('The read functions address the API', () => {
     await expect(countPurchases()).resolves.toBe(12)
 
     expect(requestedPath()).toBe('http://ledger.test:9000/purchases/count')
+  })
+})
+
+describe('The export addresses the API', () => {
+  const csv = new Blob(['purchase_id'], { type: 'text/csv' })
+
+  beforeEach(() => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, blob: async () => csv })
+  })
+
+  it('asks for everything when given no range, as CSV', async () => {
+    await expect(exportPurchases()).resolves.toBe(csv)
+
+    expect(requestedPath()).toBe('http://ledger.test:9000/purchases/export')
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ headers: { accept: 'text/csv' } })
+  })
+
+  it('asks for an inclusive range', async () => {
+    await exportPurchases({ from: '2026-10-05', to: '2026-10-12' })
+
+    expect(requestedPath()).toBe(
+      'http://ledger.test:9000/purchases/export?from=2026-10-05&to=2026-10-12',
+    )
   })
 })

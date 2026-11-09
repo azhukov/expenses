@@ -116,6 +116,34 @@ deletion. A file that cannot be deleted is logged at warning level by the API ho
 it is unreferenced and safe to remove by hand. Clearing is HTTP-only, and no MCP tool offers it (see
 [Expenses.Mcp/README.md](Expenses.Mcp/README.md)).
 
+## Exporting the ledger
+
+`GET /purchases/export` returns every purchase as CSV. `?from=YYYY-MM-DD&to=YYYY-MM-DD` limits it to
+an inclusive occurrence range, and either bound may be given alone. A month is its first to its
+last day. The response is `text/csv; charset=utf-8`, offered as an attachment named
+`expenses-all.csv`, `expenses-{from}-to-{to}.csv`, or with `earliest`/`latest` standing in for a
+missing bound. Nothing in the ledger changes.
+
+There is one row per **expense line**, in this column order:
+`purchase_id, occurred_at, merchant, description, quantity, unit, unit_price, list_unit_price,
+discount_amount, category, amount`. The purchase total is not repeated on each line, so summing
+`amount` gives the right total for any range. Merchant, category and unit are names (the unit's
+symbol), with deactivated ones still named. Where nothing was matched, the verbatim receipt text
+is used. Purchases come oldest first, with lines in the order they were recorded.
+
+The dialect is fixed:
+- UTF-8 with a byte-order mark, which Excel needs to read `č`, `ć` and Cyrillic.
+- Commas, CRLF row endings and RFC 4180 quoting.
+- Invariant `.` decimals. Money carries two places, and quantities carry no trailing zeros.
+- `occurred_at` as `yyyy-MM-dd HH:mm:ss`, with no timezone conversion.
+
+An inverted range is refused with 400 `listing.range_invalid`, the listing's own error. A date that
+is not a date is refused with 400 `request_invalid`. Both come back as JSON, not CSV.
+
+Text is exported as it was recorded. A description beginning with `=`, `+`, `-` or `@` is not
+escaped, so Excel may treat it as a formula (design Risks of `add-csv-export`). Export is HTTP-only
+(see [Expenses.Mcp/README.md](Expenses.Mcp/README.md)).
+
 ## Migrations
 
 Migrations live in `Expenses.Infrastructure/Persistence/Migrations`. An
