@@ -278,7 +278,7 @@ Configuration:
 | `Extraction:ConfidenceThreshold` | `0.70` | Below this, an unverifiable value marks the image for review. |
 | `Extraction:Placeholder:Outcome` | `Reconciling` | `Reconciling`, `NonReconciling`, `LowConfidence` or `Failure` — see below. |
 | `Extraction:Portal:BaseAddress` | `https://mapr.tax.gov.me` | The fiscal verification service stage 2 asks. |
-| `Extraction:Portal:TimeoutMilliseconds` | `5000` | Past this, retrieval produced nothing and the cascade goes on. |
+| `Extraction:Portal:TimeoutMilliseconds` | `20000` | Past this, retrieval produced nothing and the cascade goes on. The portal answers in about 10 s (measured 2026-11-14), so keep this well above that. |
 | `Extraction:Vision:ModelId` | `claude-sonnet-5` | The Claude model asked to read the receipt image. |
 | `Extraction:Vision:ApiKey` | *(none)* | Never committed — supplied via environment or user-secrets. Empty means the stage produces nothing, not a startup failure. |
 | `Extraction:Vision:BaseAddress` | `https://api.anthropic.com` | Where the Messages API request (`/v1/messages`) is sent. |
