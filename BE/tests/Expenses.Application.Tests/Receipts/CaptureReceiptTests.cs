@@ -9,7 +9,7 @@ namespace Expenses.Application.Tests.Receipts;
 /// <summary>
 /// Scenarios from receipt-ingestion: "An image can be captured with no purchase behind it",
 /// "A captured image is held temporarily until confirmed", "Extraction lifecycle", "Fiscal receipt
-/// identity is captured when present".
+/// identity is captured when present", and "Why no invoice was obtained is diagnosed" (D45).
 /// </summary>
 public sealed class CaptureReceiptTests
 {
@@ -124,6 +124,23 @@ public sealed class CaptureReceiptTests
         // Nothing read the image for a second opinion, so there is no extracted reading to
         // contradict the supplied one.
         Assert.Null(result.Extracted.Ikof);
+    }
+
+    [Fact]
+    public async Task The_fiscal_diagnosis_is_reported_with_an_image_capture()
+    {
+        var diagnosis = new FiscalDiagnosis(
+            FiscalDiagnosisKind.NoPayload,
+            "No fiscal code was supplied, and none could be read from the image.");
+
+        var result = await Subject(
+                FakeStep.Diagnosing("fiscal", diagnosis),
+                FakeStep.Producing("vision", Results.Reconciling("vision")).ReadingImage())
+            .Capture(Jpeg(1));
+
+        // The vision step read the receipt. The diagnosis says why the invoice did not come first.
+        Assert.Equal(Purchase.ExtractionState.Extracted, result.State);
+        Assert.Equal(diagnosis, result.FiscalDiagnosis);
     }
 
     private ReceiptService Subject(params IExtractionStep[] steps)

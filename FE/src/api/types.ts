@@ -176,6 +176,38 @@ export interface CaptureResult {
    * for review, never a refusal.
    */
   alreadyRecorded: AlreadyRecordedInvoice | null
+  /**
+   * Why the receipt's fiscal code did or did not produce the invoice. Informational only. It never
+   * changes `state`. Absent from a server that predates it, which the screen treats like null.
+   */
+  fiscalDiagnosis?: FiscalDiagnosis | null
+}
+
+/** The closed set of reasons the fiscal path did or did not produce an invoice. */
+export type FiscalDiagnosisKind =
+  | 'NoPayload'
+  | 'NotFiscal'
+  | 'IncompleteIdentifiers'
+  | 'PortalUnreachable'
+  | 'PortalRejected'
+  | 'NoRecord'
+  | 'UnparseableResponse'
+  | 'Retrieved'
+
+/** A verification parameter a fiscal code must carry for the service to be asked about it. */
+export type FiscalParameter = 'iic' | 'tin' | 'crtd'
+
+/** Why the fiscal path produced, or did not produce, the invoice, with what each kind calls for. */
+export interface FiscalDiagnosis {
+  kind: FiscalDiagnosisKind
+  /** Short and in English. For logs, and as a fallback where no message is written for the kind. */
+  detail: string
+  /** Set for `IncompleteIdentifiers`. */
+  missingParameters: FiscalParameter[] | null
+  /** Set for `PortalRejected`. */
+  portalStatus: number | null
+  /** Set for `UnparseableResponse`: at most 200 characters of what the service answered. */
+  responseExcerpt: string | null
 }
 
 /** The purchase a capture's invoice appears to be recorded against already. */

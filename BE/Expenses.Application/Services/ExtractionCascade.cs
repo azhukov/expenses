@@ -44,6 +44,10 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
         var established = FiscalIdentifiers.None;
         var source = FiscalInvoice.FiscalSource.None;
 
+        // Carried, not read. Only the fiscal step reports one, and what it means is that step's
+        // business (D45).
+        FiscalDiagnosis? diagnosis = null;
+
         foreach (var step in _steps.Where(step => image is not null || !step.ReadsImage))
         {
             // Recorded whether or not it contributed, so the shape of the run is visible rather
@@ -62,6 +66,8 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
                 continue;
             }
 
+            diagnosis ??= result.Diagnosis;
+
             // Field by field, first writer wins. With one step able to decode and one able to read
             // printed text, running in that order, step order supplies the ranking that an
             // exactness ladder used to compute (D29).
@@ -78,7 +84,8 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
                 stepsRun,
                 established,
                 source,
-                Payload: payload);
+                Payload: payload,
+                Diagnosis: diagnosis);
         }
 
         // The only failure there is: nothing read the receipt. A result that read lines is never a
@@ -89,7 +96,8 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
             established,
             source,
             "No extraction step produced a result for this image.",
-            payload);
+            payload,
+            diagnosis);
     }
 
     /// <summary>

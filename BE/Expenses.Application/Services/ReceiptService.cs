@@ -138,7 +138,10 @@ public sealed class ReceiptService(
             // Handed back so the caller can resubmit it at confirmation, which is the only point at
             // which a receipt exists to retain it (D32). Nothing is held server-side meanwhile.
             fiscalPayload ?? outcome.Payload,
-            await AlreadyRecorded(outcome.Extracted.Ikof ?? supplied.Ikof, cancellationToken));
+            await AlreadyRecorded(outcome.Extracted.Ikof ?? supplied.Ikof, cancellationToken),
+
+            // Why the fiscal code did or did not produce the invoice. A report only, never a verdict (D45).
+            outcome.Diagnosis);
     }
 
     /// <summary>
@@ -175,7 +178,10 @@ public sealed class ReceiptService(
             outcome.Extracted,
             outcome.FiscalSource,
             payload,
-            await AlreadyRecorded(outcome.Extracted.Ikof ?? supplied.Ikof, cancellationToken));
+            await AlreadyRecorded(outcome.Extracted.Ikof ?? supplied.Ikof, cancellationToken),
+
+            // Why the fiscal code did or did not produce the invoice. A report only, never a verdict (D45).
+            outcome.Diagnosis);
     }
 
     /// <summary>

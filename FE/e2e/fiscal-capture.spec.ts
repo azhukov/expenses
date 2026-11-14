@@ -21,6 +21,9 @@ test.use({
 /** The one invoice the stub portal holds (BE/tests/.../Fixtures/verify-32AA….json). */
 const recordedIkof = '32AA324CFF5030271E16D59F7F8EF636'
 
+/** The invoice code the stub portal refuses with a 500 (e2e/portal/server.mjs). */
+const refusedIkof = 'E2EPORTALREFUSES500'
+
 function payloadFor(ikof: string): string {
   return (
     `https://mapr.tax.gov.me/ic/#/verify?iic=${ikof}` +
@@ -112,8 +115,8 @@ test('a code whose invoice cannot be fetched falls back to a photograph that car
   await page.getByRole('link', { name: 'Capture a receipt' }).click()
 
   // The stub portal has no record of this invoice, so the code is read, sent on its own, and comes
-  // back with no invoice ("The invoice is not fetched").
-  await expect(page.getByText(/could not fetch the invoice/i)).toBeVisible({ timeout: 20_000 })
+  // back with no invoice ("The invoice is not fetched"), and the screen says that is why (D47).
+  await expect(page.getByText(/no record of this invoice/i)).toBeVisible({ timeout: 20_000 })
   expect(captured.get('/receipts/capture-fiscal')?.fiscalPayload).toBe(payload)
 
   await page.getByLabel('Photograph the receipt').setInputFiles(receipt)
@@ -125,4 +128,19 @@ test('a code whose invoice cannot be fetched falls back to a photograph that car
   const upload = captured.get('/receipts/capture')
   expect(upload?.fiscalPayload).toBe(payload)
   expect(upload?.supplied.ikof).toMatch(/^E2E/)
+})
+
+test('a code the fiscal service refuses names the refusal and still offers a photograph', async ({
+  page,
+}) => {
+  const captured = await aimedAt(page, payloadFor(refusedIkof))
+
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Capture a receipt' }).click()
+
+  // "The verification service refused or answered unreadably": the reason, with its status, in
+  // place of one sentence for every cause.
+  await expect(page.getByText(/refused the request \(HTTP 500\)/i)).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByLabel('Photograph the receipt')).toBeAttached()
+  expect(captured.get('/receipts/capture-fiscal')?.state).toBe('Failed')
 })

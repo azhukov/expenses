@@ -19,4 +19,10 @@ public sealed record CascadeOutcome(
     /// The fiscal QR payload the run holds — supplied with the capture, or decoded during it. Null
     /// where none was obtained (D32).
     /// </summary>
-    string? Payload = null);
+    string? Payload = null,
+
+    /// <summary>
+    /// The first fiscal diagnosis any step reported, whether or not the run read lines. Null where no
+    /// step reported one (D45).
+    /// </summary>
+    FiscalDiagnosis? Diagnosis = null);

@@ -10,7 +10,8 @@ namespace Expenses.Application.Tests.Receipts;
 /// Scenarios from receipt-ingestion, "A fiscal QR payload can be captured with no image": "A payload
 /// that yields an invoice", "The service returns no invoice", "A payload no identifier can be read
 /// from", "Nothing is held after a fiscal capture"; and from "Fiscal receipt identity is captured when
-/// present": "A payload captured on its own".
+/// present": "A payload captured on its own"; and from "Why no invoice was obtained is diagnosed":
+/// the diagnosis is reported with the capture (D45).
 /// </summary>
 public sealed class CaptureFiscalTests
 {
@@ -91,6 +92,21 @@ public sealed class CaptureFiscalTests
         Assert.False(_ledger.HasAnyTemporaryCapture);
         Assert.Empty(_ledger.Purchases);
         Assert.Equal(0, _ledger.SaveCount);
+    }
+
+    [Fact]
+    public async Task The_fiscal_diagnosis_is_reported_with_the_capture()
+    {
+        var diagnosis = new FiscalDiagnosis(
+            FiscalDiagnosisKind.PortalRejected,
+            "The verification service answered 500 Internal Server Error.",
+            PortalStatus: 500);
+
+        var result = await Subject(FakeStep.Diagnosing("fiscal", diagnosis)).CaptureFiscal(Payload);
+
+        // Informational only: the outcome is Failed exactly as it was before there was a reason (D45).
+        Assert.Equal(Purchase.ExtractionState.Failed, result.State);
+        Assert.Equal(diagnosis, result.FiscalDiagnosis);
     }
 
     private ReceiptService Subject(params IExtractionStep[] steps)

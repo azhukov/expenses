@@ -92,7 +92,13 @@ public sealed class FiscalDecodingTests(PostgresFixture postgres)
             new ReceiptImageContent(1, "image/png", [0x01, 0x02, 0x03]),
             FiscalIdentifiers.None));
 
-        Assert.Null(outcome);
+        // Exactly what a miss is. The step no longer answers null: it answers with nothing found
+        // and the reason, which hands the run on just as null did (D44).
+        Assert.NotNull(outcome);
+        Assert.False(outcome.ProducedLines);
+        Assert.True(outcome.Fiscal.IsEmpty);
+        Assert.Null(outcome.Payload);
+        Assert.Equal(FiscalDiagnosisKind.NoPayload, outcome.Diagnosis?.Kind);
     }
 
     private static byte[] Blank()

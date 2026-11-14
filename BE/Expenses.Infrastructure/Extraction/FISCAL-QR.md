@@ -133,6 +133,29 @@ The response recorded once from the real portal is committed as
 `Fixtures/verify-32AA324CFF5030271E16D59F7F8EF636.json`. It is the only sanctioned copy, and no test
 reaches the network (D26).
 
+## Why no invoice: the fiscal diagnosis
+
+Every failure on this path is still "a step that produced nothing" (D26): the run continues, and
+the photograph is still offered. What changed is that the reason is no longer thrown away. Every
+capture response carries a `fiscalDiagnosis` with one kind from a closed set (D42–D45). Every kind
+from the portal client other than `Retrieved` is also logged at Warning (D46). So a user's "it told
+me to photograph it" can be matched with a log line by the invoice code.
+
+| Kind | Where it is decided | What it means | What to do |
+|---|---|---|---|
+| `NoPayload` | `FiscalStep` | No payload was supplied, and the decoder found none in the image (or threw). | Expected on a photo without a readable code. Vision reads the receipt. |
+| `NotFiscal` | `FiscalStep` | A code was read but carries none of `iic`/`tin`/`crtd`: a menu, a loyalty card, a payment QR. | Rescan the receipt's own code. The client shows the text read. |
+| `IncompleteIdentifiers` | `FiscalPortalClient` | Some of `iic`/`tin`/`crtd` are present but not all three; `missingParameters` names the absent ones. | Usually a misread or a new ERP format. Compare the payload with "What the QR carries". |
+| `PortalUnreachable` | `FiscalPortalClient` | Network error, or no answer within `Extraction:Portal:TimeoutMilliseconds`. | Try again later. Check the host's outbound access to the portal. |
+| `PortalRejected` | `FiscalPortalClient` | The portal answered a non-success status; `portalStatus` carries it. | 5xx means the portal is having trouble. 4xx may mean the contract above changed. |
+| `NoRecord` | `FiscalPortalClient` | 200 with an empty body: the portal knows no such invoice. | Common for a receipt issued minutes ago, before the till has reported it. Retry later. |
+| `UnparseableResponse` | `FiscalPortalClient`, `FiscalStep` | 200, but not the JSON shape above, no lines, or a line the ledger refuses while mapping it. `responseExcerpt` holds at most 200 characters. | The contract may have changed. Capture the excerpt and compare it with the fixture. |
+| `Retrieved` | `FiscalPortalClient` | The invoice was fetched, or reused from an earlier answer. | Nothing. |
+
+Only successes are cached. A failure is asked about afresh by the next capture, which is what makes
+"retry later" useful advice. The diagnosis is never persisted on a purchase, and it is not part of
+the MCP surface, because capture is HTTP-only.
+
 ## What this does not answer
 
 - **Retention is unknown.** Whether the portal still answers for an old receipt has not been tested.

@@ -6,11 +6,17 @@
 // That split is what lets the suite drive both halves of QR-first capture against one stack: a code
 // carrying the recorded IIC is fetched and goes straight to review, and any other code is not, and
 // falls back to a photograph. No run reaches mapr.tax.gov.me.
+//
+// One more invoice code is reserved: the service refuses it with a 500, as the real portal does on a
+// bad day. That is what lets the suite see the capture screen name the reason (D47).
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 
 const invoice = readFileSync('/portal/invoice.json', 'utf8')
 const { iic: recordedIic } = JSON.parse(invoice)
+
+/** The invoice code the stub refuses outright. Kept in step with fiscal-capture.spec.ts. */
+const refusedIic = 'E2EPORTALREFUSES500'
 
 createServer((request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
@@ -29,6 +35,11 @@ createServer((request, response) => {
   request.on('end', () => {
     // Form-encoded, as the ledger sends it: iic, dateTimeCreated, tin.
     const iic = new URLSearchParams(body).get('iic')
+
+    if (iic === refusedIic) {
+      response.writeHead(500).end()
+      return
+    }
 
     response.writeHead(200, { 'Content-Type': 'application/json' })
     response.end(iic === recordedIic ? invoice : '')

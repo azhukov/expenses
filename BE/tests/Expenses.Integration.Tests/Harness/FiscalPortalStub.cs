@@ -58,6 +58,14 @@ public sealed class FiscalPortalStub : IAsyncDisposable
             await context.Response.WriteAsync(string.Empty);
         });
 
+    /// <summary>A service that answers 200 with a body of its own choosing: malformed, or a changed shape.</summary>
+    public static Task<FiscalPortalStub> AnsweringWith(string body)
+        => Start(async context =>
+        {
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(body);
+        });
+
     public static Task<FiscalPortalStub> Failing(HttpStatusCode status)
         => Start(context =>
         {

@@ -19,6 +19,10 @@ namespace Expenses.Infrastructure.Extraction;
 /// behind it runs exactly as it would for a receipt carrying no code at all (D26). Where a payload
 /// was obtained but the invoice was not, what was decoded still travels forward — a known-true
 /// total and issuer identity are worth having even when the portal is not (D23).
+///
+/// It never answers null. Each path returns a result carrying the reason the invoice was or was
+/// not obtained. A lineless result hands the run on exactly as null did (D28), so only the report
+/// changes, not the run (D44).
 /// </summary>
 internal sealed class FiscalStep(
     IFiscalCodeDecoder decoder,
@@ -43,7 +47,13 @@ internal sealed class FiscalStep(
 
         if (payload is null)
         {
-            return null;
+            return ExtractionStepResult.FiscalOnly(
+                Name,
+                FiscalIdentifiers.None,
+                FiscalInvoice.FiscalSource.None,
+                diagnosis: new FiscalDiagnosis(
+                    FiscalDiagnosisKind.NoPayload,
+                    "No fiscal code was supplied, and none could be read from the image."));
         }
 
         var identifiers = request.Fiscal.IsEmpty ? FiscalIdentity.From(payload) : request.Fiscal;
@@ -52,14 +62,21 @@ internal sealed class FiscalStep(
         {
             // A payload nothing could be read from is still worth carrying: it is retained on the
             // receipt so that a parser which later learns this format can read it (D32).
-            return ExtractionStepResult.FiscalOnly(Name, identifiers, source, payload);
+            return ExtractionStepResult.FiscalOnly(
+                Name,
+                identifiers,
+                source,
+                payload,
+                new FiscalDiagnosis(
+                    FiscalDiagnosisKind.NotFiscal,
+                    "The code read carries no invoice code, issuer tax number or creation time."));
         }
 
-        var invoice = await Retrieve(request.PurchaseId, identifiers, cancellationToken);
+        var retrieved = await Retrieve(request.PurchaseId, identifiers, cancellationToken);
 
-        return invoice is null
-            ? ExtractionStepResult.FiscalOnly(Name, identifiers, source, payload)
-            : invoice.WithPayload(payload);
+        return retrieved.Invoice is null
+            ? ExtractionStepResult.FiscalOnly(Name, identifiers, source, payload, retrieved.Diagnosis)
+            : retrieved.Invoice.WithPayload(payload).WithDiagnosis(retrieved.Diagnosis);
     }
 
     /// <summary>
@@ -101,7 +118,7 @@ internal sealed class FiscalStep(
         }
     }
 
-    private async Task<ExtractionStepResult?> Retrieve(
+    private async Task<FiscalRetrieval> Retrieve(
         long purchaseId,
         FiscalIdentifiers identifiers,
         CancellationToken cancellationToken)
@@ -112,12 +129,17 @@ internal sealed class FiscalStep(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogDebug(
+            // The service answered, and something in the answer could not be taken: a line the
+            // ledger refuses while mapping it, for instance. It is still a step that produced
+            // nothing, and still worth saying why (D44).
+            logger.LogWarning(
                 exception,
                 "The invoice for the receipt of purchase {PurchaseId} could not be retrieved; continuing without it.",
                 purchaseId);
 
-            return null;
+            return new FiscalRetrieval(null, new FiscalDiagnosis(
+                FiscalDiagnosisKind.UnparseableResponse,
+                $"The verification service's answer could not be taken: {exception.Message}"));
         }
     }
 }

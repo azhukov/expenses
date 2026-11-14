@@ -15,8 +15,10 @@ namespace Expenses.Infrastructure.Extraction;
 /// invoice. It is undocumented and may change without notice, which is the other reason every
 /// failure here is nothing rather than an error (D26).
 ///
-/// Every failure вЂ” no record, a refusal, a timeout, a shape this has never seen вЂ” returns null. The
-/// portal is on the critical path of a better answer, never of an answer at all.
+/// Every failure (no record, a refusal, a timeout, a shape this has never seen) returns no invoice.
+/// The portal is on the critical path of a better answer, never of an answer at all. Each failure is
+/// still classified here, at the only place that can tell them apart, so that the capture can say
+/// which one happened (D43).
 /// </summary>
 internal sealed class FiscalPortalClient(
     IHttpClientFactory clients,
@@ -29,14 +31,18 @@ internal sealed class FiscalPortalClient(
 
     private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web);
 
+    private static readonly FiscalDiagnosis s_retrieved
+        = new(FiscalDiagnosisKind.Retrieved, "The invoice was retrieved from the fiscal verification service.");
+
     /// <summary>
     /// Answers already given, by the invoice code they were given for. Re-running extraction on a
     /// receipt asks the portal nothing it has already said, which matters more here than for a
-    /// local computation: the request leaves the building.
+    /// local computation: the request leaves the building. Only answers that mapped onto an invoice
+    /// are kept, so a failure is asked about afresh next time (D43).
     /// </summary>
     private readonly ConcurrentDictionary<string, VerifiedInvoice> _retrieved = new(StringComparer.Ordinal);
 
-    public async Task<ExtractionStepResult?> Retrieve(
+    public async Task<FiscalRetrieval> Retrieve(
         long purchaseId,
         FiscalIdentifiers decoded,
         CancellationToken cancellationToken = default)
@@ -47,29 +53,81 @@ internal sealed class FiscalPortalClient(
             || decoded.IssuerTaxNumber is not { Length: > 0 } tin
             || decoded.CreatedAt is not { Length: > 0 } createdAt)
         {
-            return null;
+            string[] missing =
+            [
+                .. new[] { ("iic", decoded.Ikof), ("tin", decoded.IssuerTaxNumber), ("crtd", decoded.CreatedAt) }
+                    .Where(parameter => string.IsNullOrEmpty(parameter.Item2))
+                    .Select(parameter => parameter.Item1),
+            ];
+
+            return Failed(
+                decoded.Ikof,
+                new FiscalDiagnosis(
+                    FiscalDiagnosisKind.IncompleteIdentifiers,
+                    $"The fiscal code is missing {string.Join(", ", missing)}, so the verification service cannot be asked.",
+                    MissingParameters: missing));
         }
 
-        var invoice = _retrieved.TryGetValue(iic, out var known)
-            ? known
-            : await Fetch(iic, tin, createdAt, cancellationToken);
-
-        if (invoice is null)
+        if (_retrieved.TryGetValue(iic, out var known))
         {
-            return null;
+            return new FiscalRetrieval(Map(purchaseId, decoded, known), s_retrieved);
         }
 
-        _retrieved[iic] = invoice;
+        var (invoice, body, failure) = await Fetch(iic, tin, createdAt, cancellationToken);
 
-        return Map(purchaseId, decoded, invoice);
+        if (failure is not null)
+        {
+            return Failed(iic, failure);
+        }
+
+        var mapped = invoice is null ? null : Map(purchaseId, decoded, invoice);
+
+        if (mapped is null)
+        {
+            // It deserialised, or deserialised to nothing, but carries no lines to take. Either way
+            // this is not an invoice in the shape this was built against.
+            return Failed(iic, Unparseable("The verification service answered with no invoice lines.", body));
+        }
+
+        _retrieved[iic] = invoice!;
+
+        return new FiscalRetrieval(mapped, s_retrieved);
     }
 
-    private async Task<VerifiedInvoice?> Fetch(
+    private static FiscalDiagnosis Unparseable(string detail, string body)
+        => new(FiscalDiagnosisKind.UnparseableResponse, detail, ResponseExcerpt: FiscalDiagnosis.Excerpt(body));
+
+    /// <summary>
+    /// No invoice, and why. Logged at warning, so that it reaches the durable log without debug
+    /// logging turned on. A capture shows the user one of these, and the log is where the operator
+    /// finds the same thing afterwards (D46).
+    /// </summary>
+    private FiscalRetrieval Failed(string? iic, FiscalDiagnosis diagnosis)
+    {
+        logger.LogWarning(
+            "No invoice from the fiscal verification service for invoice {Iic}: {Kind} {Status} {Detail} {Excerpt}",
+            iic,
+            diagnosis.Kind,
+            diagnosis.PortalStatus,
+            diagnosis.Detail,
+            diagnosis.ResponseExcerpt);
+
+        return new FiscalRetrieval(null, diagnosis);
+    }
+
+    /// <summary>
+    /// One request to the portal. It answers with the invoice and the body it came from, or with the
+    /// failure it ran into. Cancellation by the caller still propagates. Only the portal's own time
+    /// budget running out counts as the portal being unreachable.
+    /// </summary>
+    private async Task<(VerifiedInvoice? Invoice, string Body, FiscalDiagnosis? Failure)> Fetch(
         string iic,
         string tin,
         string createdAt,
         CancellationToken cancellationToken)
     {
+        string body;
+
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -91,32 +149,42 @@ internal sealed class FiscalPortalClient(
             using var response = await client.SendAsync(request, timeout.Token);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogDebug(
-                    "The fiscal verification service answered {Status} for invoice {Iic}; continuing without it.",
-                    response.StatusCode,
-                    iic);
-
-                return null;
+                return (null, string.Empty, new FiscalDiagnosis(
+                    FiscalDiagnosisKind.PortalRejected,
+                    $"The verification service answered {(int)response.StatusCode} {response.ReasonPhrase}.",
+                    PortalStatus: (int)response.StatusCode));
             }
 
-            string body = await response.Content.ReadAsStringAsync(timeout.Token);
-
-            // An empty body is the service saying it has no record, not a malformed answer.
-            return string.IsNullOrWhiteSpace(body)
-                ? null
-                : JsonSerializer.Deserialize<VerifiedInvoice>(body, s_json);
+            body = await response.Content.ReadAsStringAsync(timeout.Token);
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException
-            or OperationCanceledException or JsonException)
+        catch (HttpRequestException exception)
         {
-            // Unreachable, too slow, or answering with something this has never seen: all of them
-            // are a stage that produced nothing, and none of them is reported about the receipt.
-            logger.LogDebug(
-                exception,
-                "The fiscal verification service could not be consulted for invoice {Iic}; continuing without it.",
-                iic);
+            return (null, string.Empty, new FiscalDiagnosis(
+                FiscalDiagnosisKind.PortalUnreachable,
+                $"The verification service could not be reached: {exception.Message}"));
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return (null, string.Empty, new FiscalDiagnosis(
+                FiscalDiagnosisKind.PortalUnreachable,
+                $"The verification service timed out after {options.TimeoutMilliseconds} ms."));
+        }
 
-            return null;
+        // An empty body is the service saying it has no record, not a malformed answer.
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return (null, body, new FiscalDiagnosis(
+                FiscalDiagnosisKind.NoRecord,
+                "The verification service has no record of this invoice."));
+        }
+
+        try
+        {
+            return (JsonSerializer.Deserialize<VerifiedInvoice>(body, s_json), body, null);
+        }
+        catch (JsonException exception)
+        {
+            return (null, body, Unparseable($"The verification service's answer is not readable JSON: {exception.Message}", body));
         }
     }
 

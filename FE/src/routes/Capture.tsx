@@ -10,6 +10,7 @@ import {
   recordPurchase,
   type SuppliedFiscalPayload,
 } from '../api/writes'
+import { fiscalNoticeOf } from '../capture/fiscalNotice'
 import { confirmationOf, type Edits } from '../capture/review'
 import { startScanning } from '../capture/scanner'
 import styles from './Capture.module.css'
@@ -45,6 +46,9 @@ export function Capture() {
   const [notice, setNotice] = useState<string | null>(null)
   const [unreachable, setUnreachable] = useState(false)
 
+  /** Whether the notice concerns the code itself, so the text read is shown beside it (D47). */
+  const [showRead, setShowRead] = useState(false)
+
   /** What travels with the photograph: a payload that was a fiscal code but fetched no invoice. */
   const [carried, setCarried] = useState<SuppliedFiscalPayload | undefined>(undefined)
 
@@ -64,6 +68,7 @@ export function Capture() {
   const fetchInvoice = useCallback(async (payload: SuppliedFiscalPayload) => {
     setRead(payload)
     setNotice(null)
+    setShowRead(false)
     setUnreachable(false)
     setIsFetching(true)
 
@@ -80,7 +85,11 @@ export function Capture() {
       // stop the ledger decoding the receipt's real code from the photograph (D31).
       const wasFiscal = fetched.supplied.ikof !== null || fetched.supplied.issuerTaxNumber !== null
       setCarried(wasFiscal ? payload : undefined)
-      setNotice('We could not fetch the invoice for this receipt. Photograph the receipt instead.')
+
+      // Why, as the ledger diagnosed it, rather than one sentence for every cause (D47).
+      const why = fiscalNoticeOf(fetched.fiscalDiagnosis)
+      setNotice(why.message)
+      setShowRead(why.showPayload)
     } catch (error) {
       setUnreachable(true)
       setNotice(messageOf(error, 'The invoice could not be fetched.'))
@@ -242,6 +251,12 @@ export function Capture() {
       {notice !== null ? (
         <p role={unreachable ? 'alert' : undefined} className={styles.notice}>
           {notice}
+        </p>
+      ) : null}
+
+      {showRead && read !== null ? (
+        <p className={styles.notice}>
+          Read: <code className={styles.payload}>{read}</code>
         </p>
       ) : null}
 

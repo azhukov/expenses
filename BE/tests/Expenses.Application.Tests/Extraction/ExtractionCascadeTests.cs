@@ -9,7 +9,8 @@ namespace Expenses.Application.Tests.Extraction;
 /// Scenarios from receipt-ingestion, "Extraction runs as an ordered cascade of stages": step
 /// provenance, a step that reads lines ending the run, a step that reads none advancing it, a
 /// result that does not reconcile not advancing it, fiscal identity outliving the step that found
-/// it, and no step producing anything.
+/// it, and no step producing anything. Also, from "Why no invoice was obtained is diagnosed": the
+/// diagnosis is carried and does not change the outcome (D45).
 /// </summary>
 public sealed class ExtractionCascadeTests
 {
@@ -225,5 +226,68 @@ public sealed class ExtractionCascadeTests
         Assert.Equal(1, vision.Runs);
         Assert.Equal(1, vision.LastRequest?.PurchaseId);
         Assert.NotNull(outcome.Result);
+    }
+
+    private static readonly FiscalDiagnosis s_unreachable
+        = new(FiscalDiagnosisKind.PortalUnreachable, "The verification service timed out after 250 ms.");
+
+    [Fact]
+    public async Task The_diagnosis_reaches_the_outcome_when_the_run_reads_lines()
+    {
+        var outcome = await new ExtractionCascade([
+            FakeStep.Diagnosing("fiscal", s_unreachable),
+            FakeStep.Producing("vision", Results.Reconciling("vision")),
+        ]).Run(s_image);
+
+        Assert.Equal(s_unreachable, outcome.Diagnosis);
+    }
+
+    [Fact]
+    public async Task The_diagnosis_reaches_the_outcome_when_nothing_reads_the_receipt()
+    {
+        var outcome = await new ExtractionCascade([FakeStep.Diagnosing("fiscal", s_unreachable)]).Run(s_image);
+
+        Assert.Null(outcome.Result);
+        Assert.NotNull(outcome.FailureReason);
+        Assert.Equal(s_unreachable, outcome.Diagnosis);
+    }
+
+    [Fact]
+    public async Task The_first_diagnosis_is_the_one_reported()
+    {
+        var later = new FiscalDiagnosis(FiscalDiagnosisKind.NoRecord, "No record.");
+
+        var outcome = await new ExtractionCascade([
+            FakeStep.Diagnosing("fiscal", s_unreachable),
+            FakeStep.Diagnosing("other", later),
+        ]).Run(s_image);
+
+        Assert.Equal(s_unreachable, outcome.Diagnosis);
+    }
+
+    [Fact]
+    public async Task Diagnosis_does_not_change_the_outcome()
+    {
+        var diagnosed = await new ExtractionCascade([
+            FakeStep.Diagnosing("fiscal", s_unreachable),
+            FakeStep.Producing("vision", Results.Reconciling("vision")),
+        ]).Run(s_image, s_decoded, "https://mapr.tax.gov.me/ic/#/verify?iic=32AA");
+
+        var silent = await new ExtractionCascade([
+            FakeStep.Silent("fiscal"),
+            FakeStep.Producing("vision", Results.Reconciling("vision")),
+        ]).Run(s_image, s_decoded, "https://mapr.tax.gov.me/ic/#/verify?iic=32AA");
+
+        // A lineless result that says why is the same run as a step that returned nothing (D44).
+        Assert.Equal(silent.StepsRun, diagnosed.StepsRun);
+        Assert.Equal(silent.Extracted, diagnosed.Extracted);
+        Assert.Equal(silent.FiscalSource, diagnosed.FiscalSource);
+        Assert.Equal(silent.Payload, diagnosed.Payload);
+        Assert.Equal(silent.FailureReason, diagnosed.FailureReason);
+        Assert.Equal(silent.Result?.Fiscal, diagnosed.Result?.Fiscal);
+        Assert.Equal(
+            silent.Result?.Candidates.Select(candidate => candidate.Amount),
+            diagnosed.Result?.Candidates.Select(candidate => candidate.Amount));
+        Assert.Null(silent.Diagnosis);
     }
 }

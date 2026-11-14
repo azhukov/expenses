@@ -259,6 +259,81 @@ describe('A photograph is taken only when the code produces no invoice', () => {
     await waitFor(() => expect(capture).toHaveBeenCalledWith(file, undefined))
   })
 
+  it('says the fiscal service could not be reached, and still carries the payload with the photograph', async () => {
+    await scanned(() =>
+      Promise.resolve(
+        failed({
+          tempKey: null,
+          supplied: { ...noFiscal, ikof: '32AA324CFF5030271E16D59F7F8EF636' },
+          fiscalDiagnosis: diagnosis('PortalUnreachable'),
+        }),
+      ),
+    )
+
+    expect(await screen.findByText(/fiscal service could not be reached/i)).toBeInTheDocument()
+    expect(screen.queryByText(payload)).not.toBeInTheDocument()
+
+    neverSettles()
+    const file = image()
+    await userEvent.upload(photographControl(), file)
+
+    await waitFor(() => expect(capture).toHaveBeenCalledWith(file, payload))
+  })
+
+  it('names the status the fiscal service refused with', async () => {
+    await scanned(() =>
+      Promise.resolve(
+        failed({
+          tempKey: null,
+          fiscalDiagnosis: diagnosis('PortalRejected', { portalStatus: 500 }),
+        }),
+      ),
+    )
+
+    expect(await screen.findByText(/refused the request \(HTTP 500\)/i)).toBeInTheDocument()
+    expect(photographControl()).toBeInTheDocument()
+  })
+
+  it('says the scanned code is not a fiscal code, shows what was read, and leaves it off the photograph', async () => {
+    const menu = 'https://example.com/menu?table=4'
+    liveCamera()
+    fiscal.mockResolvedValue(
+      failed({ tempKey: null, fiscalDiagnosis: diagnosis('NotFiscal') }) as never,
+    )
+    renderAt()
+    await waitFor(() => expect(scans).toHaveLength(1))
+    act(() => scans[0].read(menu))
+
+    expect(await screen.findByText(/not a fiscal receipt code/i)).toBeInTheDocument()
+    expect(screen.getByText(menu)).toBeInTheDocument()
+
+    neverSettles()
+    const file = image()
+    await userEvent.upload(photographControl(), file)
+
+    await waitFor(() => expect(capture).toHaveBeenCalledWith(file, undefined))
+  })
+
+  it('names the parameters a fiscal code is missing, and shows what was read', async () => {
+    await scanned(() =>
+      Promise.resolve(
+        failed({
+          tempKey: null,
+          supplied: {
+            ...noFiscal,
+            ikof: '32AA324CFF5030271E16D59F7F8EF636',
+            issuerTaxNumber: '02365928',
+          },
+          fiscalDiagnosis: diagnosis('IncompleteIdentifiers', { missingParameters: ['crtd'] }),
+        }),
+      ),
+    )
+
+    expect(await screen.findByText(/missing the creation time/i)).toBeInTheDocument()
+    expect(screen.getByText(payload)).toBeInTheDocument()
+    expect(photographControl()).toBeInTheDocument()
+  })
+
   it('offers to retry the same payload, or a photograph, when the ledger cannot be reached', async () => {
     await scanned(() => Promise.reject(new LedgerError('The ledger could not be reached.')))
 
@@ -821,3 +896,14 @@ describe('Abandoning a capture leaves no trace', () => {
     expect(invalidate).not.toHaveBeenCalled()
   })
 })
+
+function diagnosis(kind: string, overrides: Record<string, unknown> = {}) {
+  return {
+    kind,
+    detail: 'detail',
+    missingParameters: null,
+    portalStatus: null,
+    responseExcerpt: null,
+    ...overrides,
+  }
+}

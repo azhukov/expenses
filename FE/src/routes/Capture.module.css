@@ -28,6 +28,12 @@
   margin: 0;
 }
 
+/* A scanned URL is one unbroken word that is wider than a phone, so it wraps anywhere. */
+.payload {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
 .control {
   display: flex;
   align-items: center;

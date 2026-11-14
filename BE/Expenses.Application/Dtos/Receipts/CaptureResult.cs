@@ -29,4 +29,11 @@ public sealed record CaptureResult(
     /// The purchase already carrying the invoice this capture established, where one does. A warning
     /// only: it changes neither the outcome nor whether the capture can be confirmed (D39).
     /// </summary>
-    AlreadyRecordedInvoice? AlreadyRecorded = null);
+    AlreadyRecordedInvoice? AlreadyRecorded = null,
+
+    /// <summary>
+    /// Why the receipt's fiscal code did or did not produce the invoice. It is informational only: it
+    /// never changes <see cref="State"/> or whether the capture can be confirmed, and it is never stored
+    /// (D42, D45).
+    /// </summary>
+    FiscalDiagnosis? FiscalDiagnosis = null);

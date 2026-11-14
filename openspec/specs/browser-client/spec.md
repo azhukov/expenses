@@ -550,11 +550,16 @@ place of the viewfinder, without reporting an error.
 ### Requirement: A photograph is taken only when the code produces no invoice
 
 Where the fiscal-capture endpoint returns Extracted or NeedsReview, the client SHALL present the
-result for review and SHALL NOT ask for a photograph. Where it returns Failed, or cannot be reached,
-the client SHALL state that the invoice could not be fetched and SHALL present the photograph
-control. Where a Failed fiscal capture reported fiscal identifiers, the photograph SHALL be uploaded
-together with the payload that was read; where it reported none, the photograph SHALL be uploaded
-without it, so that an unrecognised code does not stop the ledger reading the photograph itself.
+result for review and SHALL NOT ask for a photograph. Where it returns Failed, the client SHALL state
+why the invoice could not be fetched, as the response's fiscal diagnosis reports it, and SHALL present
+the photograph control. Where it cannot be reached, the client SHALL say so. Where the diagnosis
+concerns the payload itself (not a fiscal code, or missing verification parameters), the client SHALL
+also show the text that was read, so that the user can tell which code was scanned. Where the
+diagnosis concerns missing parameters, the client SHALL name them. Where a Failed fiscal capture
+reported fiscal identifiers, the photograph SHALL be uploaded together with the payload that was read.
+Where it reported none, the photograph SHALL be uploaded without it, so that an unrecognised code does
+not stop the ledger reading the photograph itself. A response carrying no diagnosis SHALL be reported
+with the general statement that the invoice could not be fetched.
 
 #### Scenario: The invoice is fetched
 
@@ -564,15 +569,28 @@ without it, so that an unrecognised code does not stop the ledger reading the ph
 
 #### Scenario: The invoice is not fetched
 
-- **WHEN** a fiscal capture returns Failed having reported fiscal identifiers
-- **THEN** the screen states that the invoice could not be fetched and presents the photograph control
+- **WHEN** a fiscal capture returns Failed having reported fiscal identifiers, with a diagnosis that the verification service was unreachable
+- **THEN** the screen states that the fiscal service could not be reached and presents the photograph control
 - **AND** the photograph taken is uploaded together with the payload that was read
+
+#### Scenario: The verification service refused or answered unreadably
+
+- **WHEN** a fiscal capture returns Failed with a diagnosis that the service refused the request, has no record, or answered in a shape that could not be read
+- **THEN** the screen states that specific reason, including the status for a refusal
+- **AND** presents the photograph control
 
 #### Scenario: The code was not a fiscal code
 
-- **WHEN** a fiscal capture returns Failed having reported no fiscal identifiers
-- **THEN** the photograph control is presented
+- **WHEN** a fiscal capture returns Failed with a diagnosis that the payload is not a fiscal code
+- **THEN** the screen states that the scanned code is not a fiscal receipt code and shows the text that was read
+- **AND** the photograph control is presented
 - **AND** the photograph taken is uploaded without the payload
+
+#### Scenario: The fiscal code was incomplete
+
+- **WHEN** a fiscal capture returns Failed with a diagnosis that verification parameters are missing
+- **THEN** the screen names the missing parameters and shows the text that was read
+- **AND** the photograph control is presented
 
 #### Scenario: The fiscal capture cannot be reached
 
@@ -740,3 +758,97 @@ Where the ledger rejects or cannot be reached for a clear, the client SHALL repo
 - **WHEN** the user confirms and the clear request fails to reach the ledger
 - **THEN** the confirmation reports that the ledger could not be reached
 - **AND** the purchases are still listed on the home screen once the confirmation is dismissed
+
+### Requirement: The ledger can be exported from the home screen
+
+The home screen SHALL offer an "Export" control, presented as quietly as the other tools so that capture stays the prominent control. Activating it SHALL NOT download anything by itself. It SHALL open an export step where the user chooses what to export. Cancelling that step SHALL send nothing.
+
+#### Scenario: The control is reachable from home
+
+- **WHEN** the user is on the home screen
+- **THEN** an "Export" control is present alongside the other tools
+- **AND** the capture action remains the most prominent control
+
+#### Scenario: Activating the control downloads nothing
+
+- **WHEN** the user activates "Export"
+- **THEN** an export step is shown
+- **AND** no export has been requested from the ledger
+
+#### Scenario: Cancelling sends nothing
+
+- **WHEN** the user opens the export step and cancels it
+- **THEN** no export is requested
+- **AND** the home screen is as it was
+
+### Requirement: The export step chooses everything, a month or a date range
+
+The export step SHALL offer three choices: everything, one month, or a date range. It SHALL start on one month, set to the current month. The month SHALL be changeable a month at a time, and SHALL NOT go past the current month. A date range SHALL need both a start and an end. A range whose end is before its start SHALL be marked on the inputs and SHALL NOT be sent.
+
+#### Scenario: The current month is the default
+
+- **WHEN** the user opens the export step during October 2026
+- **THEN** the month choice is selected and shows October 2026
+
+#### Scenario: Exporting a month
+
+- **WHEN** the user selects September 2026 and confirms
+- **THEN** the client requests an export from 2026-09-01 to 2026-09-30
+
+#### Scenario: Exporting everything
+
+- **WHEN** the user chooses everything and confirms
+- **THEN** the client requests an export with no range
+
+#### Scenario: Exporting a date range
+
+- **WHEN** the user chooses a range from 2026-10-05 to 2026-10-12 and confirms
+- **THEN** the client requests an export from 2026-10-05 to 2026-10-12
+
+#### Scenario: An incomplete range cannot be sent
+
+- **WHEN** the user chooses a range and gives a start but no end
+- **THEN** the export cannot be confirmed
+
+#### Scenario: An inverted range is refused before sending
+
+- **WHEN** the user chooses a range whose end is before its start
+- **THEN** the inputs are marked as invalid with a message saying the end falls before the start
+- **AND** no export is requested
+
+### Requirement: A confirmed export is saved as a file
+
+Confirming the export step SHALL save the ledger's CSV as a file on the device, named for what was chosen. The step SHALL show that the export is in progress and SHALL prevent a second request while it is. Once the file is saved, the step SHALL close. The client SHALL NOT alter the file's contents.
+
+#### Scenario: Files are named for what was chosen
+
+- **WHEN** the user exports everything, then October 2026, then the range 2026-10-05 to 2026-10-12
+- **THEN** the files are named `expenses-all.csv`, `expenses-2026-10.csv` and `expenses-2026-10-05-to-2026-10-12.csv`
+
+#### Scenario: An export in progress
+
+- **WHEN** the user confirms an export and the ledger has not yet answered
+- **THEN** the step shows that the export is in progress
+- **AND** it cannot be confirmed again
+
+#### Scenario: The file is the ledger's file
+
+- **WHEN** an export is saved
+- **THEN** the saved file's bytes equal the body the ledger returned
+
+### Requirement: A failed export is reported in the export step
+
+Where the ledger rejects an export or cannot be reached, the client SHALL report it in the export step using the ledger's own message where it has one. It SHALL save no file, and SHALL keep the user's choice so that they can retry or change it.
+
+#### Scenario: The ledger rejects the export
+
+- **WHEN** the user confirms an export and the ledger answers with a validation failure
+- **THEN** the export step shows the ledger's message
+- **AND** no file is saved
+- **AND** the chosen range is still selected
+
+#### Scenario: The ledger cannot be reached
+
+- **WHEN** the user confirms an export and the request fails to reach the ledger
+- **THEN** the export step reports that the ledger could not be reached
+- **AND** the user can confirm again

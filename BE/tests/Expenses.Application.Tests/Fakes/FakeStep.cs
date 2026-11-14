@@ -46,6 +46,17 @@ internal sealed class FakeStep(
             payload));
 
     /// <summary>
+    /// A step that tried for the invoice, got nothing (no identity, no lines) and says why, as the
+    /// fiscal step does on every path that is not a retrieval (D44).
+    /// </summary>
+    public static FakeStep Diagnosing(string name, FiscalDiagnosis diagnosis)
+        => new(name, _ => ExtractionStepResult.FiscalOnly(
+            name,
+            FiscalIdentifiers.None,
+            FiscalInvoice.FiscalSource.None,
+            diagnosis: diagnosis));
+
+    /// <summary>
     /// Marks the step as one that needs an image, like the vision step, so that a run with no image
     /// can be shown never to reach it (D37).
     /// </summary>

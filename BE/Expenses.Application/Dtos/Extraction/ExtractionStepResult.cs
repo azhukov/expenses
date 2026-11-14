@@ -80,6 +80,12 @@ public sealed record ExtractionStepResult
     /// <summary>The fiscal QR payload the step obtained, verbatim, where it obtained one (D32).</summary>
     public string? Payload { get; private init; }
 
+    /// <summary>
+    /// Why the step got the invoice or did not, where the step is one that tries to (D44). It is
+    /// carried through the run without being interpreted (D45).
+    /// </summary>
+    public FiscalDiagnosis? Diagnosis { get; private init; }
+
     public static ExtractionStepResult From(
         long purchaseId,
         string engineName,
@@ -95,7 +101,8 @@ public sealed record ExtractionStepResult
         IReadOnlyDictionary<string, decimal>? reportedConfidence = null,
         FiscalIdentifiers? fiscal = null,
         FiscalInvoice.FiscalSource fiscalSource = FiscalInvoice.FiscalSource.None,
-        string? payload = null)
+        string? payload = null,
+        FiscalDiagnosis? diagnosis = null)
     {
         if (string.IsNullOrWhiteSpace(engineName))
         {
@@ -119,6 +126,7 @@ public sealed record ExtractionStepResult
             Fiscal = fiscal ?? FiscalIdentifiers.None,
             FiscalSource = fiscalSource,
             Payload = payload,
+            Diagnosis = diagnosis,
         };
     }
 
@@ -130,12 +138,14 @@ public sealed record ExtractionStepResult
         string stepName,
         FiscalIdentifiers fiscal,
         FiscalInvoice.FiscalSource fiscalSource,
-        string? payload = null)
+        string? payload = null,
+        FiscalDiagnosis? diagnosis = null)
         => new(purchaseId: 0, stepName, string.Empty, [], [stepName])
         {
             Fiscal = fiscal,
             FiscalSource = fiscalSource,
             Payload = payload,
+            Diagnosis = diagnosis,
         };
 
     /// <summary>
@@ -149,6 +159,10 @@ public sealed record ExtractionStepResult
     /// <summary>The payload the identity behind this result was read from (D32).</summary>
     public ExtractionStepResult WithPayload(string? payload)
         => this with { Payload = payload ?? Payload };
+
+    /// <summary>The reason the step obtained, or failed to obtain, the invoice behind this result (D44).</summary>
+    public ExtractionStepResult WithDiagnosis(FiscalDiagnosis? diagnosis)
+        => this with { Diagnosis = diagnosis };
 
     /// <summary>
     /// What the run knows about the receipt's fiscal identity, merged onto what this step found.

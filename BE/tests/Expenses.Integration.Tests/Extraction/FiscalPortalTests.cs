@@ -13,7 +13,9 @@ namespace Expenses.Integration.Tests.Extraction;
 ///
 /// Scenarios from receipt-ingestion: "Invoice detail is retrieved and mapped", "The missing
 /// identifier arrives from the verification service", "The service has no record of the invoice",
-/// "The service cannot be reached", "Retrieval is not repeated needlessly".
+/// "The service cannot be reached", "Retrieval is not repeated needlessly", and the diagnosis
+/// each of them reports: "The service refuses the request", "The service answers in an unreadable
+/// shape", "A fiscal code missing parameters" (D43).
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class FiscalPortalTests(PostgresFixture postgres)
@@ -34,8 +36,10 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.Answering();
         await using var services = Services(portal);
 
-        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+        var invoice = retrieval.Invoice;
 
+        Assert.Equal(FiscalDiagnosisKind.Retrieved, retrieval.Diagnosis.Kind);
         Assert.NotNull(invoice);
         Assert.Equal(7, invoice.PurchaseId);
         Assert.Equal(14, invoice.Candidates.Count);
@@ -76,7 +80,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.Answering();
         await using var services = Services(portal);
 
-        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+        var invoice = (await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded)).Invoice;
 
         // `unitPriceAfterVat` is a unit price and the check it feeds is a line-level one, so it
         // arrives extended by the quantity: 15.00 per kilogram over 0.548 kg is a list price of
@@ -97,7 +101,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.Answering();
         await using var services = Services(portal);
 
-        var invoice = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+        var invoice = (await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded)).Invoice;
 
         // The JIKR the fiscal code does not carry. It is the portal's `fic`, and this is the only
         // place it is ever known from (D24).
@@ -111,20 +115,58 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.WithNoRecord();
         await using var services = Services(portal);
 
-        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded));
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        Assert.Null(retrieval.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.NoRecord, retrieval.Diagnosis.Kind);
     }
 
     [Theory]
     [InlineData(HttpStatusCode.NotFound)]
     [InlineData(HttpStatusCode.InternalServerError)]
-    public async Task The_service_answers_with_a_failure(HttpStatusCode status)
+    public async Task The_service_refuses_the_request(HttpStatusCode status)
     {
         await using var portal = await FiscalPortalStub.Failing(status);
         await using var services = Services(portal);
 
         // Nothing rather than an exception: a stage that produced nothing is an ordinary outcome,
-        // and a government portal having a bad day is not a problem with the receipt (D26).
-        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded));
+        // and a government portal having a bad day is not a problem with the receipt (D26). Which
+        // status it answered is still worth telling the person holding the receipt (D43).
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        Assert.Null(retrieval.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.PortalRejected, retrieval.Diagnosis.Kind);
+        Assert.Equal((int)status, retrieval.Diagnosis.PortalStatus);
+    }
+
+    [Fact]
+    public async Task The_service_answers_in_an_unreadable_shape()
+    {
+        // An error page where JSON was expected, long enough that an untruncated excerpt would show.
+        string body = "<html><body>" + new string('x', 500) + "</body></html>";
+        await using var portal = await FiscalPortalStub.AnsweringWith(body);
+        await using var services = Services(portal);
+
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        Assert.Null(retrieval.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.UnparseableResponse, retrieval.Diagnosis.Kind);
+        Assert.NotNull(retrieval.Diagnosis.ResponseExcerpt);
+        Assert.StartsWith("<html><body>xxx", retrieval.Diagnosis.ResponseExcerpt, StringComparison.Ordinal);
+        Assert.Equal(FiscalDiagnosis.MaximumExcerptLength, retrieval.Diagnosis.ResponseExcerpt.Length);
+    }
+
+    [Fact]
+    public async Task An_invoice_with_no_lines_is_an_unreadable_answer()
+    {
+        await using var portal = await FiscalPortalStub.AnsweringWith("""{"fic":"abc","totalPrice":1.00,"items":[]}""");
+        await using var services = Services(portal);
+
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        Assert.Null(retrieval.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.UnparseableResponse, retrieval.Diagnosis.Kind);
+        Assert.Contains("\"items\":[]", retrieval.Diagnosis.ResponseExcerpt, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -133,7 +175,71 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         await using var portal = await FiscalPortalStub.Hanging();
         await using var services = Services(portal, ("Extraction:Portal:TimeoutMilliseconds", "250"));
 
-        Assert.Null(await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded));
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        Assert.Null(retrieval.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.PortalUnreachable, retrieval.Diagnosis.Kind);
+        Assert.Contains("timed out", retrieval.Diagnosis.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_refused_connection_is_unreachable()
+    {
+        // A stub that has been stopped leaves an address nothing listens on.
+        string address;
+        await using (var stopped = await FiscalPortalStub.Answering())
+        {
+            address = stopped.BaseAddress;
+        }
+
+        await using var services = postgres.Services(
+            [("Extraction:Portal:BaseAddress", address), ("Extraction:Portal:TimeoutMilliseconds", "10000")]);
+
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        Assert.Null(retrieval.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.PortalUnreachable, retrieval.Diagnosis.Kind);
+        Assert.Contains("could not be reached", retrieval.Diagnosis.Detail, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(true, false, false, "tin,crtd")]
+    [InlineData(false, true, true, "iic")]
+    [InlineData(true, true, false, "crtd")]
+    public async Task A_fiscal_code_missing_parameters_is_not_asked_about(
+        bool hasIic,
+        bool hasTin,
+        bool hasCreated,
+        string missing)
+    {
+        await using var portal = await FiscalPortalStub.Answering();
+        await using var services = Services(portal);
+        var partial = s_decoded with
+        {
+            Ikof = hasIic ? s_decoded.Ikof : null,
+            IssuerTaxNumber = hasTin ? s_decoded.IssuerTaxNumber : null,
+            CreatedAt = hasCreated ? s_decoded.CreatedAt : null,
+        };
+
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, partial);
+
+        Assert.Null(retrieval.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.IncompleteIdentifiers, retrieval.Diagnosis.Kind);
+        Assert.Equal(missing.Split(','), retrieval.Diagnosis.MissingParameters);
+        Assert.Empty(portal.Requests);
+    }
+
+    [Fact]
+    public async Task A_failure_is_not_remembered()
+    {
+        await using var portal = await FiscalPortalStub.Failing(HttpStatusCode.InternalServerError);
+        await using var services = Services(portal);
+        await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        // A later capture is a real second attempt, which is what makes "try again later" advice.
+        Assert.Equal(2, portal.Requests.Count);
     }
 
     [Fact]
@@ -148,7 +254,8 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         var again = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
 
         // Re-running extraction asks the portal nothing it has already answered.
-        Assert.NotNull(again);
+        Assert.NotNull(again.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.Retrieved, again.Diagnosis.Kind);
         Assert.Single(portal.Requests);
     }
 

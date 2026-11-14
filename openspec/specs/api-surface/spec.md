@@ -8,7 +8,7 @@ Defines the two front doors onto the ledger — an HTTP interface for the browse
 
 ### Requirement: Both interfaces expose the same behaviour
 
-Every ledger operation reachable over HTTP SHALL be reachable over MCP with the same effect, and the reverse, except for receipt capture, receipt image download, confirming a capture's temporary image bytes directly (as opposed to confirming with the already-captured key), and clearing the ledger of all purchases, which are HTTP-only. An operation invoked over either interface SHALL produce the same result, the same validation outcome, and the same change to stored data. Neither interface SHALL contain business rules of its own.
+Every ledger operation reachable over HTTP SHALL be reachable over MCP with the same effect, and the reverse, except for receipt capture, receipt image download, confirming a capture's temporary image bytes directly (as opposed to confirming with the already-captured key), clearing the ledger of all purchases, and exporting the ledger as a file, which are HTTP-only. An operation invoked over either interface SHALL produce the same result, the same validation outcome, and the same change to stored data. Neither interface SHALL contain business rules of its own.
 
 #### Scenario: Same operation over either interface
 
@@ -30,6 +30,12 @@ Every ledger operation reachable over HTTP SHALL be reachable over MCP with the 
 
 - **WHEN** the MCP tools are listed
 - **THEN** no tool deletes purchases, singly or all at once
+
+#### Scenario: Exporting is not offered over MCP
+
+- **WHEN** the MCP tools are listed
+- **THEN** no tool exports the ledger as a file
+- **AND** purchases in a date range remain readable through the listing tool
 
 ### Requirement: HTTP interface for the browser client
 
@@ -586,3 +592,72 @@ The HTTP interface SHALL clear the ledger when asked with the number of purchase
 
 - **WHEN** an allowed origin sends a preflight for the clear request and then the request itself
 - **THEN** the preflight is answered and the clear's response is readable by that origin
+
+### Requirement: The ledger can be exported over HTTP
+
+The HTTP interface SHALL export the ledger as CSV when asked, for every purchase or for an inclusive date range given by optional start and end dates. A successful export SHALL be a `text/csv` response with a UTF-8 charset, offered as an attachment with a file name that reflects the range. An invalid range SHALL be reported in the existing error shape, as JSON, not as CSV.
+
+#### Scenario: Exporting everything over HTTP
+
+- **WHEN** an export without a range is requested over HTTP
+- **THEN** the response succeeds with content type `text/csv; charset=utf-8`
+- **AND** it is offered as an attachment named `expenses-all.csv`
+
+#### Scenario: Exporting a range over HTTP
+
+- **WHEN** an export from 2026-10-01 to 2026-10-31 is requested over HTTP
+- **THEN** the response succeeds with the CSV of that range
+- **AND** it is offered as an attachment named `expenses-2026-10-01-to-2026-10-31.csv`
+
+#### Scenario: An open-ended range is named for its open end
+
+- **WHEN** an export from 2026-10-15 with no end is requested over HTTP
+- **THEN** it is offered as an attachment named `expenses-2026-10-15-to-latest.csv`
+
+#### Scenario: An inverted range over HTTP
+
+- **WHEN** an export from 2026-10-31 to 2026-10-01 is requested over HTTP
+- **THEN** the response is a validation failure in the existing JSON error shape, with the listing's stable error code for an inverted range
+
+#### Scenario: A malformed date over HTTP
+
+- **WHEN** an export is requested with a start that is not a date
+- **THEN** the response is a validation failure in the existing JSON error shape naming the start
+
+#### Scenario: Exporting from an allowed browser origin
+
+- **WHEN** an allowed origin requests an export
+- **THEN** the response body is readable by that origin
+
+### Requirement: A capture response carries its fiscal diagnosis
+
+Both HTTP capture endpoints SHALL report the capture's fiscal diagnosis in their response. It SHALL
+have a kind from a closed, documented set, a short human-readable detail, and the specifics the kind
+calls for. It SHALL be an addition to the response shape: no existing field SHALL change meaning,
+and a successful response SHALL stay successful whatever the diagnosis.
+
+#### Scenario: Reading why a fiscal capture fetched nothing
+
+- **WHEN** a fiscal payload is captured and the verification service cannot be reached
+- **THEN** the response succeeds with outcome Failed
+- **AND** it carries a fiscal diagnosis whose kind states that the service was unreachable
+
+#### Scenario: Reading missing parameters
+
+- **WHEN** a payload carrying an invoice code but no creation timestamp is captured
+- **THEN** the fiscal diagnosis names the creation timestamp as missing
+
+#### Scenario: Reading a refusal
+
+- **WHEN** the verification service answers a capture's request with status 500
+- **THEN** the fiscal diagnosis carries status 500
+
+#### Scenario: Reading an unreadable answer
+
+- **WHEN** the verification service answers a capture's request with a body that is not a readable invoice
+- **THEN** the fiscal diagnosis carries an excerpt of that body no longer than 200 characters, never the whole of it
+
+#### Scenario: A retrieved invoice
+
+- **WHEN** a capture's invoice is retrieved from the verification service
+- **THEN** the fiscal diagnosis kind states that it was retrieved

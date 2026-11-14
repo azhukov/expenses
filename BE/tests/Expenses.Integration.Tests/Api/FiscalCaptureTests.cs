@@ -13,7 +13,8 @@ namespace Expenses.Integration.Tests.Api;
 /// HTTP"), "A capture response names an invoice already recorded", "Fiscal identity is reported apart
 /// from the receipt image", "Confirming a capture is available over both interfaces"; and from
 /// receipt-ingestion, "A fiscal QR payload can be captured with no image" ("A payload no identifier
-/// can be read from": the service is not asked).
+/// can be read from": the service is not asked); and from api-surface, "A capture response carries
+/// its fiscal diagnosis" (D42).
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class FiscalCaptureTests(PostgresFixture postgres) : IAsyncLifetime
@@ -190,6 +191,93 @@ public sealed class FiscalCaptureTests(PostgresFixture postgres) : IAsyncLifetim
         var photographed = await ExpensesApi.Read<JsonElement>(await CaptureImage(Payload(ikof)));
         Assert.Equal(id, photographed.GetProperty("alreadyRecorded").GetProperty("purchaseId").GetInt64());
     }
+
+    [Fact]
+    public async Task Reading_why_a_fiscal_capture_fetched_nothing()
+    {
+        await using var hanging = await FiscalPortalStub.Hanging();
+        await using var api = Api(hanging, ("Extraction:Portal:TimeoutMilliseconds", "250"));
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/receipts/capture-fiscal", new { payload = Payload(UniqueIkof()) }, ExpensesApi.Json);
+
+        // Still a success, still Failed: the diagnosis is a reason, not an error (D42).
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var captured = await ExpensesApi.Read<JsonElement>(response);
+        Assert.Equal("Failed", captured.GetProperty("state").GetString());
+
+        var diagnosis = captured.GetProperty("fiscalDiagnosis");
+        Assert.Equal("PortalUnreachable", diagnosis.GetProperty("kind").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(diagnosis.GetProperty("detail").GetString()));
+    }
+
+    [Fact]
+    public async Task Reading_missing_parameters()
+    {
+        var response = await CaptureFiscal($"https://mapr.tax.gov.me/ic/#/verify?iic={UniqueIkof()}&tin=02365928");
+
+        var diagnosis = (await ExpensesApi.Read<JsonElement>(response)).GetProperty("fiscalDiagnosis");
+        Assert.Equal("IncompleteIdentifiers", diagnosis.GetProperty("kind").GetString());
+        Assert.Equal(
+            ["crtd"],
+            diagnosis.GetProperty("missingParameters").EnumerateArray().Select(parameter => parameter.GetString()));
+    }
+
+    [Fact]
+    public async Task Reading_a_refusal()
+    {
+        await using var failing = await FiscalPortalStub.Failing(HttpStatusCode.InternalServerError);
+        await using var api = Api(failing);
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/receipts/capture-fiscal", new { payload = Payload(UniqueIkof()) }, ExpensesApi.Json);
+
+        var diagnosis = (await ExpensesApi.Read<JsonElement>(response)).GetProperty("fiscalDiagnosis");
+        Assert.Equal("PortalRejected", diagnosis.GetProperty("kind").GetString());
+        Assert.Equal(500, diagnosis.GetProperty("portalStatus").GetInt32());
+    }
+
+    [Fact]
+    public async Task Reading_an_unreadable_answer()
+    {
+        await using var garbled = await FiscalPortalStub.AnsweringWith("<html>" + new string('x', 1000) + "</html>");
+        await using var api = Api(garbled);
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/receipts/capture-fiscal", new { payload = Payload(UniqueIkof()) }, ExpensesApi.Json);
+
+        var diagnosis = (await ExpensesApi.Read<JsonElement>(response)).GetProperty("fiscalDiagnosis");
+        Assert.Equal("UnparseableResponse", diagnosis.GetProperty("kind").GetString());
+        Assert.True(diagnosis.GetProperty("responseExcerpt").GetString()!.Length <= 200);
+    }
+
+    [Fact]
+    public async Task A_retrieved_invoice_is_diagnosed_as_retrieved()
+    {
+        var response = await CaptureFiscal(Payload(UniqueIkof()));
+
+        var diagnosis = (await ExpensesApi.Read<JsonElement>(response)).GetProperty("fiscalDiagnosis");
+        Assert.Equal("Retrieved", diagnosis.GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public async Task An_image_capture_carries_the_fiscal_diagnosis()
+    {
+        var response = await CaptureImage("https://example.com/menu?table=4");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var diagnosis = (await ExpensesApi.Read<JsonElement>(response)).GetProperty("fiscalDiagnosis");
+        Assert.Equal("NotFiscal", diagnosis.GetProperty("kind").GetString());
+    }
+
+    /// <summary>A host of its own, for a scenario that needs the verification service misbehaving.</summary>
+    private ExpensesApi Api(FiscalPortalStub portal, params (string Key, string Value)[] settings)
+        => new(
+            postgres.ConnectionString,
+            [("Extraction:Portal:BaseAddress", portal.BaseAddress), ("Extraction:Vision:Engine", "placeholder"), .. settings]);
 
     private static string UniqueIkof() => $"FISCALCAPTURE{Interlocked.Increment(ref s_sequence):D19}";
 
