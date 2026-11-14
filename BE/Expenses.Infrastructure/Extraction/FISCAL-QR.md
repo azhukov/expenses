@@ -125,9 +125,20 @@ Two details that are easy to get wrong:
   so the list price is extended by the quantity before it reaches the check. Passing the unit price
   through verbatim would fail the arithmetic on every weighed line and send an authoritative invoice
   to review.
-- **Line amounts are stated at four decimal places and the total at two.** Their raw sum is
-  `59.6515` against a stated `totalPrice` of `59.65`, so both sides are rounded to two places before
-  comparison — the precision the ledger records — rather than compared raw (D25).
+- **Line amounts are unrounded; only the invoice's totals are in cents.** A weighed line's
+  `priceAfterVat` is quantity × unit price as is: 1.696 kg × 2.30 is `3.9008`, where the receipt
+  prints 3.90. Every line field (`priceBeforeVat`, `vatAmount`, `unitPriceBeforeVat`) is unrounded in
+  the same way, and no field carries the printed cent value. Only `totalPrice`,
+  `totalPriceWithoutVAT`, `totalVATAmount`, `sameTaxes` and `paymentMethod` are rounded. The lines'
+  raw sum is `59.6515` against a stated `totalPrice` of `59.65`.
+
+  The ledger keeps money to the cent (D7), so the mapping brings every money value to the cent:
+  half away from zero, as the till prints it (`CentRounding`). It then brings the line amounts to sum
+  to `totalPrice`, moving a cent onto or off the lines rounding moved furthest, but only where the
+  exact lines already agree with the total. Any cent moved on an amount is moved on that line's list
+  price too, so the discount check still holds. Without this, an invoice confirmed unedited was
+  refused with `amount.precision_exceeded`. The arithmetic check still rounds both sides before
+  comparing (D25).
 
 The response recorded once from the real portal is committed as
 `Fixtures/verify-32AA324CFF5030271E16D59F7F8EF636.json`. It is the only sanctioned copy, and no test

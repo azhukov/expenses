@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Domain.Entities;
 using Expenses.Domain.Extraction;
 using Microsoft.Extensions.Logging;
@@ -208,7 +209,14 @@ internal sealed class FiscalPortalClient(
     }
 
     /// <summary>
-    /// Taken verbatim (D27). The one derived value is the line's list price, which the portal states
+    /// Taken verbatim (D27), except money, which arrives in cents. The portal states each weighed line
+    /// unrounded (1.696 kg × 2.30 = 3.9008) and rounds only the invoice's totals, while the ledger
+    /// keeps money to the cent (D7). So each money value is rounded half away from zero, as the till
+    /// prints it, and the line amounts are then brought to sum to the total the portal stated. Any
+    /// cent moved onto or off a line's amount is moved on its list price too, so the line still adds
+    /// up. Quantities are not money, and keep their places.
+    ///
+    /// The one derived value is the line's list price, which the portal states
     /// per unit while the check it feeds is a line-level one, so it is extended by the quantity вЂ”
     /// a kilogram price of 15.00 over 0.548 kg lists at 8.22, against a line amount of 8.22.
     /// </summary>
@@ -219,14 +227,17 @@ internal sealed class FiscalPortalClient(
             return null;
         }
 
+        var amounts = CentRounding.ToCentsSummingTo([.. items.Select(item => item.PriceAfterVat)], invoice.TotalPrice);
+
         var candidates = items.Select((item, index) => ExtractionCandidate.Propose(
             index + 1,
             item.Name ?? $"Line {index + 1}",
-            item.PriceAfterVat,
+            amounts[index],
             quantity: item.Quantity,
-            unitPrice: item.UnitPriceAfterVat,
-            listUnitPrice: item.UnitPriceAfterVat * item.Quantity,
-            discountAmount: item.Rebate,
+            unitPrice: CentRounding.ToCents(item.UnitPriceAfterVat),
+            listUnitPrice: CentRounding.ToCents(item.UnitPriceAfterVat * item.Quantity)
+                + (amounts[index] - CentRounding.ToCents(item.PriceAfterVat)),
+            discountAmount: CentRounding.ToCents(item.Rebate),
             taxRatePercent: item.VatRate,
             unitRaw: item.Unit,
             provenance: Provenance(
@@ -245,13 +256,13 @@ internal sealed class FiscalPortalClient(
             "1.0",
             candidates,
             stepsRun: [Stage],
-            total: invoice.TotalPrice,
+            total: invoice.TotalPrice is { } total ? CentRounding.ToCents(total) : null,
 
             // A rate only where the invoice has one. This receipt carries lines at 21% and at 7%,
             // and stating either as the invoice's rate would be inventing a fact the portal did
             // not state вЂ” the tax amount it did state stands on its own.
             taxRatePercent: invoice.SameTaxes is { Count: 1 } ? invoice.SameTaxes[0].VatRate : null,
-            taxAmount: invoice.TotalVATAmount,
+            taxAmount: invoice.TotalVATAmount is { } tax ? CentRounding.ToCents(tax) : null,
             merchantName: invoice.Seller?.Name,
             merchantTaxId: invoice.Seller?.IdNum,
             provenance: Provenance(

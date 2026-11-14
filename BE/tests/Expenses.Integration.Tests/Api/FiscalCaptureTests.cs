@@ -146,6 +146,46 @@ public sealed class FiscalCaptureTests(PostgresFixture postgres) : IAsyncLifetim
         Assert.Equal(JsonValueKind.Null, extraction.GetProperty("receipt").GetProperty("contentType").ValueKind);
     }
 
+    /// <summary>
+    /// The fiscal portal states weighed lines unrounded (1.696 kg × 2.30 = 3.9008), and the ledger
+    /// keeps money to the cent (D7). An invoice taken as the ledger proposed it, with nothing edited,
+    /// must be recordable as it stands.
+    /// </summary>
+    [Fact]
+    public async Task A_retrieved_invoice_can_be_confirmed_exactly_as_proposed()
+    {
+        string ikof = UniqueIkof();
+        var captured = await ExpensesApi.Read<JsonElement>(await CaptureFiscal(Payload(ikof)));
+        var result = captured.GetProperty("result");
+
+        var expenses = result.GetProperty("candidates").EnumerateArray().Select(line => new
+        {
+            description = line.GetProperty("description").GetString(),
+            amount = line.GetProperty("amount").GetDecimal(),
+            quantity = line.GetProperty("quantity").GetDecimal(),
+            unitPrice = line.GetProperty("unitPrice").GetDecimal(),
+            listUnitPrice = line.GetProperty("listUnitPrice").GetDecimal(),
+            discountAmount = line.GetProperty("discountAmount").GetDecimal(),
+            unitCode = line.GetProperty("unitRaw").GetString() == "KG" ? "KG" : "PCS",
+        }).ToArray();
+
+        var confirmed = await Record(new
+        {
+            occurredAt = Next(),
+            amount = result.GetProperty("total").GetDecimal(),
+            expenses,
+            capture = new
+            {
+                state = captured.GetProperty("state").GetString(),
+                jikr = captured.GetProperty("extracted").GetProperty("jikr").GetString(),
+                fiscalSource = captured.GetProperty("fiscalSource").GetString(),
+                fiscalPayload = captured.GetProperty("fiscalPayload").GetString(),
+            },
+        });
+
+        Assert.Equal(HttpStatusCode.Created, confirmed.StatusCode);
+    }
+
     [Fact]
     public async Task A_confirmation_naming_neither_a_key_nor_a_payload_is_rejected()
     {

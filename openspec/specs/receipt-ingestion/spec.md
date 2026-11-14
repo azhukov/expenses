@@ -579,7 +579,9 @@ extraction candidates. All receipts are assumed to be issued under the same nati
 scheme and verified by the same service. A retrieved invoice SHALL be treated as authoritative: its
 line items, quantities, units, tax rates, seller identity and totals SHALL be used verbatim rather
 than re-estimated, and SHALL NOT be re-derived by any later step, whether or not it reconciles
-arithmetically. Where no invoice is obtained, extraction SHALL continue exactly as for a step that
+arithmetically. The one exception is precision: every money value SHALL be brought to the cent,
+rounding half away from zero, and where the exact line amounts agree with the invoice total once
+rounded, the rounded line amounts SHALL be adjusted by at most a cent each so that they sum to it. Where no invoice is obtained, extraction SHALL continue exactly as for a step that
 produced nothing, and no error SHALL be raised; the reason no invoice was obtained SHALL nevertheless
 be classified and reported as the capture's fiscal diagnosis.
 
@@ -590,6 +592,13 @@ be classified and reported as the capture's fiscal diagnosis.
 - **AND** the seller name and tax identification number are recorded as the merchant
 - **AND** the candidates identify the retrieval step as their source
 - **AND** the fiscal diagnosis reports that the invoice was retrieved
+
+#### Scenario: Unrounded line amounts arrive in cents
+
+- **WHEN** the verification service states a line amount with more than two decimal places, such as 3.9008 for 1.696 kg at 2.30
+- **THEN** the candidate's amount, unit price, list price and discount are each in cents, 3.90 in this case
+- **AND** the candidate amounts sum to the invoice total
+- **AND** a capture whose candidates are confirmed unedited is recorded
 
 #### Scenario: A retrieved invoice that does not reconcile is still authoritative
 

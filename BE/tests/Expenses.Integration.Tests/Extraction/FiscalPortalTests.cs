@@ -95,6 +95,64 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
     }
 
+    /// <summary>
+    /// The portal states weighed lines unrounded (1.696 kg × 2.30 = 3.9008) and rounds only the
+    /// invoice's totals. The ledger keeps money to the cent (D7), so every money value arrives in
+    /// cents, as the receipt prints it.
+    /// </summary>
+    [Fact]
+    public async Task Weighed_lines_arrive_in_cents_as_the_receipt_prints_them()
+    {
+        await using var portal = await FiscalPortalStub.Answering();
+        await using var services = Services(portal);
+
+        var invoice = (await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded)).Invoice;
+
+        Assert.NotNull(invoice);
+        var tomatoes = invoice.Candidates[7];
+        Assert.Equal("PARADAJZ rozi", tomatoes.Description);
+        Assert.Equal(3.90m, tomatoes.Amount);
+        Assert.Equal(3.90m, tomatoes.ListUnitPrice);
+
+        // Quantities are not money, and keep their three places.
+        Assert.Equal(1.696m, tomatoes.Quantity);
+
+        Assert.All(invoice.Candidates, line =>
+        {
+            Assert.Equal(line.Amount, CentRounding.ToCents(line.Amount));
+            Assert.Equal(line.UnitPrice, line.UnitPrice is { } unit ? CentRounding.ToCents(unit) : null);
+            Assert.Equal(line.ListUnitPrice, line.ListUnitPrice is { } list ? CentRounding.ToCents(list) : null);
+            Assert.Equal(line.DiscountAmount, line.DiscountAmount is { } off ? CentRounding.ToCents(off) : null);
+        });
+        Assert.Equal(59.65m, invoice.Candidates.Sum(line => line.Amount));
+        Assert.Equal(invoice.Total, invoice.Candidates.Sum(line => line.Amount));
+    }
+
+    [Fact]
+    public async Task Lines_that_round_past_the_total_are_brought_back_to_it()
+    {
+        // Three lines of 0.335, 0.335 and 0.33: each rounds up, to 1.01, against a stated 1.00.
+        await using var portal = await FiscalPortalStub.AnsweringWith("""
+            {"fic":"abc","totalPrice":1.00,"items":[
+              {"name":"A","quantity":1,"unitPriceAfterVat":0.335,"priceAfterVat":0.335,"rebate":0,"vatRate":21},
+              {"name":"B","quantity":1,"unitPriceAfterVat":0.335,"priceAfterVat":0.335,"rebate":0,"vatRate":21},
+              {"name":"C","quantity":1,"unitPriceAfterVat":0.33,"priceAfterVat":0.33,"rebate":0,"vatRate":21}]}
+            """);
+        await using var services = Services(portal);
+
+        var invoice = (await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded)).Invoice;
+
+        Assert.NotNull(invoice);
+        Assert.Equal([0.33m, 0.34m, 0.33m], invoice.Candidates.Select(line => line.Amount));
+
+        // The cent taken off a line is taken off its list price too, so the line still adds up.
+        Assert.Equal([0.33m, 0.34m, 0.33m], invoice.Candidates.Select(line => line.ListUnitPrice));
+        Assert.Equal(1.00m, invoice.Candidates.Sum(line => line.Amount));
+
+        var report = ArithmeticValidator.Validate(ExtractionArithmetic.From(invoice));
+        Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
+    }
+
     [Fact]
     public async Task The_missing_identifier_arrives_from_the_verification_service()
     {
