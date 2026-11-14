@@ -73,25 +73,53 @@ internal sealed class FiscalPortalClient(
             return new FiscalRetrieval(Map(purchaseId, decoded, known), s_retrieved);
         }
 
-        var (invoice, body, failure) = await Fetch(iic, tin, createdAt, cancellationToken);
+        // Built once, and reported with whatever comes of it, so the person holding the receipt can
+        // see what the site was asked beside what the QR code said.
+        var sent = new FiscalPortalRequest(
+            HttpMethod.Post.Method,
+            new Uri(new Uri(options.BaseAddress), "/ic/api/verifyInvoice").ToString(),
+            new Dictionary<string, string>
+            {
+                ["iic"] = iic,
+                ["dateTimeCreated"] = createdAt,
+                ["tin"] = tin,
+            });
+
+        var (invoice, body, failure) = await Fetch(sent, cancellationToken);
 
         if (failure is not null)
         {
-            return Failed(iic, failure);
+            return Failed(iic, failure with { PortalRequest = sent });
         }
 
-        var mapped = invoice is null ? null : Map(purchaseId, decoded, invoice);
+        ExtractionStepResult? mapped;
+
+        try
+        {
+            mapped = invoice is null ? null : Map(purchaseId, decoded, invoice);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Readable JSON carrying a value the ledger refuses, such as a line with no name. It is
+            // still an answer this cannot take.
+            return Failed(
+                iic,
+                Unparseable($"The verification service's answer could not be taken: {exception.Message}", body)
+                    with { PortalRequest = sent });
+        }
 
         if (mapped is null)
         {
             // It deserialised, or deserialised to nothing, but carries no lines to take. Either way
             // this is not an invoice in the shape this was built against.
-            return Failed(iic, Unparseable("The verification service answered with no invoice lines.", body));
+            return Failed(
+                iic,
+                Unparseable("The verification service answered with no invoice lines.", body) with { PortalRequest = sent });
         }
 
         _retrieved[iic] = invoice!;
 
-        return new FiscalRetrieval(mapped, s_retrieved);
+        return new FiscalRetrieval(mapped, s_retrieved with { PortalRequest = sent });
     }
 
     private static FiscalDiagnosis Unparseable(string detail, string body)
@@ -121,9 +149,7 @@ internal sealed class FiscalPortalClient(
     /// budget running out counts as the portal being unreachable.
     /// </summary>
     private async Task<(VerifiedInvoice? Invoice, string Body, FiscalDiagnosis? Failure)> Fetch(
-        string iic,
-        string tin,
-        string createdAt,
+        FiscalPortalRequest sent,
         CancellationToken cancellationToken)
     {
         string body;
@@ -133,16 +159,9 @@ internal sealed class FiscalPortalClient(
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(options.TimeoutMilliseconds);
 
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                new Uri(new Uri(options.BaseAddress), "/ic/api/verifyInvoice"))
+            using var request = new HttpRequestMessage(new HttpMethod(sent.Method), new Uri(sent.Url))
             {
-                Content = new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    ["iic"] = iic,
-                    ["dateTimeCreated"] = createdAt,
-                    ["tin"] = tin,
-                }),
+                Content = new FormUrlEncodedContent(sent.Form),
             };
 
             using var client = clients.CreateClient(ClientName);

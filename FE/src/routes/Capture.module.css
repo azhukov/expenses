@@ -28,6 +28,21 @@
   margin: 0;
 }
 
+/* Small and quiet: evidence for the curious, not the main message. */
+.details {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.details dt {
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.details dd {
+  margin: 0.125rem 0 0;
+}
+
 /* A scanned URL is one unbroken word that is wider than a phone, so it wraps anywhere. */
 .payload {
   overflow-wrap: anywhere;

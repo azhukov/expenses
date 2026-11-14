@@ -107,6 +107,9 @@ public sealed class FiscalStepTests(PostgresFixture postgres)
 
         Assert.Equal(FiscalDiagnosisKind.UnparseableResponse, result?.Diagnosis?.Kind);
         Assert.False(result?.ProducedLines);
+
+        // The request had been sent and answered, so it is still reported.
+        Assert.Equal("POST", result?.Diagnosis?.PortalRequest?.Method);
     }
 
     private static IExtractionStep Fiscal(IServiceProvider services)

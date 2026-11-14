@@ -140,6 +140,43 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task A_refused_request_reports_the_request_that_was_sent()
+    {
+        await using var portal = await FiscalPortalStub.Failing(HttpStatusCode.InternalServerError);
+        await using var services = Services(portal);
+
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        // What went over the wire, so the person holding the receipt can see what the site was asked.
+        var request = retrieval.Diagnosis.PortalRequest;
+        Assert.NotNull(request);
+        Assert.Equal("POST", request.Method);
+        Assert.Equal(new Uri(new Uri(portal.BaseAddress), "/ic/api/verifyInvoice").ToString(), request.Url);
+        Assert.Equal(DecoderRegressionTests.Ikof, request.Form["iic"]);
+        Assert.Equal("02365928", request.Form["tin"]);
+        Assert.Equal("2026-08-29T14:59:22+02:00", request.Form["dateTimeCreated"]);
+        Assert.Equal(Assert.Single(portal.Requests), request.Form);
+    }
+
+    [Fact]
+    public async Task Every_request_that_was_sent_is_reported()
+    {
+        await using var noRecord = await FiscalPortalStub.WithNoRecord();
+        await using var garbled = await FiscalPortalStub.AnsweringWith("not json");
+        await using var hanging = await FiscalPortalStub.Hanging();
+        await using var answering = await FiscalPortalStub.Answering();
+
+        foreach (var portal in new[] { noRecord, garbled, hanging, answering })
+        {
+            await using var services = Services(portal, ("Extraction:Portal:TimeoutMilliseconds", "250"));
+
+            var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+            Assert.Equal(DecoderRegressionTests.Ikof, retrieval.Diagnosis.PortalRequest?.Form["iic"]);
+        }
+    }
+
+    [Fact]
     public async Task The_service_answers_in_an_unreadable_shape()
     {
         // An error page where JSON was expected, long enough that an untruncated excerpt would show.
@@ -227,6 +264,9 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         Assert.Equal(FiscalDiagnosisKind.IncompleteIdentifiers, retrieval.Diagnosis.Kind);
         Assert.Equal(missing.Split(','), retrieval.Diagnosis.MissingParameters);
         Assert.Empty(portal.Requests);
+
+        // Nothing was sent, so there is no request to report.
+        Assert.Null(retrieval.Diagnosis.PortalRequest);
     }
 
     [Fact]

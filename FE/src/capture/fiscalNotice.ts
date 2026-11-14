@@ -3,8 +3,6 @@ import type { FiscalDiagnosis, FiscalParameter } from '../api/types'
 /** What the capture screen says when a fiscal capture fetched no invoice. */
 export interface FiscalNotice {
   message: string
-  /** Whether the text the camera read should be shown beside the message, so the user can see which code was scanned. */
-  showPayload: boolean
 }
 
 const GENERAL = 'We could not fetch the invoice for this receipt. Photograph the receipt instead.'
@@ -35,7 +33,6 @@ export function fiscalNoticeOf(diagnosis: FiscalDiagnosis | null | undefined): F
       return {
         message:
           'The fiscal service could not be reached. Photograph the receipt, or try again later.',
-        showPayload: false,
       }
 
     case 'PortalRejected':
@@ -44,29 +41,24 @@ export function fiscalNoticeOf(diagnosis: FiscalDiagnosis | null | undefined): F
           diagnosis.portalStatus === null
             ? 'The fiscal service refused the request. Photograph the receipt instead.'
             : `The fiscal service refused the request (HTTP ${diagnosis.portalStatus}). Photograph the receipt instead.`,
-        showPayload: false,
       }
 
     case 'NoRecord':
       return {
         message:
           'The fiscal service has no record of this invoice yet. Photograph the receipt, or try again later.',
-        showPayload: false,
       }
 
     case 'UnparseableResponse':
       return {
         message:
           'The fiscal service answered, but its response could not be read. Photograph the receipt instead.',
-        showPayload: false,
       }
 
-    // About the code itself, so what was read is shown: the camera may have caught the wrong one.
     case 'NotFiscal':
       return {
         message:
           "This code is not a fiscal receipt code. Scan the receipt's own QR code, or photograph the receipt.",
-        showPayload: true,
       }
 
     case 'IncompleteIdentifiers': {
@@ -79,11 +71,10 @@ export function fiscalNoticeOf(diagnosis: FiscalDiagnosis | null | undefined): F
           missing === ''
             ? 'The code is missing details the fiscal service needs. Photograph the receipt instead.'
             : `The code is missing ${missing}. Photograph the receipt instead.`,
-        showPayload: true,
       }
     }
 
     default:
-      return { message: GENERAL, showPayload: false }
+      return { message: GENERAL }
   }
 }

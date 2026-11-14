@@ -265,19 +265,64 @@ describe('A photograph is taken only when the code produces no invoice', () => {
         failed({
           tempKey: null,
           supplied: { ...noFiscal, ikof: '32AA324CFF5030271E16D59F7F8EF636' },
-          fiscalDiagnosis: diagnosis('PortalUnreachable'),
+          fiscalDiagnosis: diagnosis('PortalUnreachable', { portalRequest: request }),
         }),
       ),
     )
 
     expect(await screen.findByText(/fiscal service could not be reached/i)).toBeInTheDocument()
-    expect(screen.queryByText(payload)).not.toBeInTheDocument()
+    expect(screen.getByText(payload)).toBeInTheDocument()
 
     neverSettles()
     const file = image()
     await userEvent.upload(photographControl(), file)
 
     await waitFor(() => expect(capture).toHaveBeenCalledWith(file, payload))
+  })
+
+  it('shows the QR code content and the request the fiscal site was sent', async () => {
+    await scanned(() =>
+      Promise.resolve(
+        failed({
+          tempKey: null,
+          fiscalDiagnosis: diagnosis('PortalRejected', {
+            portalStatus: 500,
+            portalRequest: request,
+          }),
+        }),
+      ),
+    )
+
+    expect(await screen.findByText(/qr code content/i)).toBeInTheDocument()
+    expect(screen.getByText(payload)).toBeInTheDocument()
+    expect(screen.getByText(/fiscal site request/i)).toBeInTheDocument()
+    expect(
+      screen.getByText('POST https://mapr.tax.gov.me/ic/api/verifyInvoice'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('iic=32AA324CFF5030271E16D59F7F8EF636')).toBeInTheDocument()
+    expect(screen.getByText('tin=02365928')).toBeInTheDocument()
+    expect(screen.getByText('dateTimeCreated=2026-08-29T14:59:22+02:00')).toBeInTheDocument()
+  })
+
+  it('shows the QR code content but no request when the fiscal site was never asked', async () => {
+    await scanned(() =>
+      Promise.resolve(
+        failed({
+          tempKey: null,
+          fiscalDiagnosis: diagnosis('IncompleteIdentifiers', { missingParameters: ['crtd'] }),
+        }),
+      ),
+    )
+
+    expect(await screen.findByText(payload)).toBeInTheDocument()
+    expect(screen.queryByText(/fiscal site request/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the QR code content when the response carries no diagnosis', async () => {
+    await scanned(() => Promise.resolve(failed({ tempKey: null })))
+
+    expect(await screen.findByText(/could not fetch the invoice/i)).toBeInTheDocument()
+    expect(screen.getByText(payload)).toBeInTheDocument()
   })
 
   it('names the status the fiscal service refused with', async () => {
@@ -906,4 +951,15 @@ function diagnosis(kind: string, overrides: Record<string, unknown> = {}) {
     responseExcerpt: null,
     ...overrides,
   }
+}
+
+/** The request the ledger reports having sent to the fiscal site. */
+const request = {
+  method: 'POST',
+  url: 'https://mapr.tax.gov.me/ic/api/verifyInvoice',
+  form: {
+    iic: '32AA324CFF5030271E16D59F7F8EF636',
+    dateTimeCreated: '2026-08-29T14:59:22+02:00',
+    tin: '02365928',
+  },
 }

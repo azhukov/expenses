@@ -237,6 +237,11 @@ public sealed class FiscalCaptureTests(PostgresFixture postgres) : IAsyncLifetim
         var diagnosis = (await ExpensesApi.Read<JsonElement>(response)).GetProperty("fiscalDiagnosis");
         Assert.Equal("PortalRejected", diagnosis.GetProperty("kind").GetString());
         Assert.Equal(500, diagnosis.GetProperty("portalStatus").GetInt32());
+
+        var request = diagnosis.GetProperty("portalRequest");
+        Assert.Equal("POST", request.GetProperty("method").GetString());
+        Assert.EndsWith("/ic/api/verifyInvoice", request.GetProperty("url").GetString(), StringComparison.Ordinal);
+        Assert.Equal("02365928", request.GetProperty("form").GetProperty("tin").GetString());
     }
 
     [Fact]

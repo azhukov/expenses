@@ -208,6 +208,16 @@ export interface FiscalDiagnosis {
   portalStatus: number | null
   /** Set for `UnparseableResponse`: at most 200 characters of what the service answered. */
   responseExcerpt: string | null
+  /** The request sent to the fiscal site, wherever one was sent. Absent from older servers. */
+  portalRequest?: FiscalPortalRequest | null
+}
+
+/** The request the ledger sent to the fiscal site, exactly as it went over the wire. */
+export interface FiscalPortalRequest {
+  method: string
+  url: string
+  /** The form fields sent: `iic`, `dateTimeCreated` and `tin`. */
+  form: Record<string, string>
 }
 
 /** The purchase a capture's invoice appears to be recorded against already. */

@@ -3,7 +3,7 @@ import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'reac
 import { useNavigate } from 'react-router'
 
 import { LedgerError } from '../api/client'
-import type { CaptureResult } from '../api/types'
+import type { CaptureResult, FiscalPortalRequest } from '../api/types'
 import {
   captureFiscal,
   captureReceipt,
@@ -46,8 +46,8 @@ export function Capture() {
   const [notice, setNotice] = useState<string | null>(null)
   const [unreachable, setUnreachable] = useState(false)
 
-  /** Whether the notice concerns the code itself, so the text read is shown beside it (D47). */
-  const [showRead, setShowRead] = useState(false)
+  /** The request the ledger sent the fiscal site for this payload, where it sent one. */
+  const [portalRequest, setPortalRequest] = useState<FiscalPortalRequest | null>(null)
 
   /** What travels with the photograph: a payload that was a fiscal code but fetched no invoice. */
   const [carried, setCarried] = useState<SuppliedFiscalPayload | undefined>(undefined)
@@ -68,7 +68,7 @@ export function Capture() {
   const fetchInvoice = useCallback(async (payload: SuppliedFiscalPayload) => {
     setRead(payload)
     setNotice(null)
-    setShowRead(false)
+    setPortalRequest(null)
     setUnreachable(false)
     setIsFetching(true)
 
@@ -87,9 +87,8 @@ export function Capture() {
       setCarried(wasFiscal ? payload : undefined)
 
       // Why, as the ledger diagnosed it, rather than one sentence for every cause (D47).
-      const why = fiscalNoticeOf(fetched.fiscalDiagnosis)
-      setNotice(why.message)
-      setShowRead(why.showPayload)
+      setNotice(fiscalNoticeOf(fetched.fiscalDiagnosis).message)
+      setPortalRequest(fetched.fiscalDiagnosis?.portalRequest ?? null)
     } catch (error) {
       setUnreachable(true)
       setNotice(messageOf(error, 'The invoice could not be fetched.'))
@@ -254,10 +253,33 @@ export function Capture() {
         </p>
       ) : null}
 
-      {showRead && read !== null ? (
-        <p className={styles.notice}>
-          Read: <code className={styles.payload}>{read}</code>
-        </p>
+      {/*
+       * What the camera read and what the ledger asked the fiscal site, under any failure, so the
+       * cause can be seen rather than guessed: the wrong code scanned, a code read badly, or a site
+       * that refused a well-formed request.
+       */}
+      {notice !== null && read !== null ? (
+        <dl className={styles.details}>
+          <dt>QR code content</dt>
+          <dd>
+            <code className={styles.payload}>{read}</code>
+          </dd>
+          {portalRequest !== null ? (
+            <>
+              <dt>Fiscal site request</dt>
+              <dd>
+                <code className={styles.payload}>
+                  {portalRequest.method} {portalRequest.url}
+                </code>
+              </dd>
+              {Object.entries(portalRequest.form).map(([name, value]) => (
+                <dd key={name}>
+                  <code className={styles.payload}>{`${name}=${value}`}</code>
+                </dd>
+              ))}
+            </>
+          ) : null}
+        </dl>
       ) : null}
 
       {unreachable && read !== null ? (

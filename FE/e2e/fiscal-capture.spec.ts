@@ -143,4 +143,9 @@ test('a code the fiscal service refuses names the refusal and still offers a pho
   await expect(page.getByText(/refused the request \(HTTP 500\)/i)).toBeVisible({ timeout: 20_000 })
   await expect(page.getByLabel('Photograph the receipt')).toBeAttached()
   expect(captured.get('/receipts/capture-fiscal')?.state).toBe('Failed')
+
+  // What the camera read, and the request the ledger actually sent the (stub) fiscal site.
+  await expect(page.getByText(payloadFor(refusedIkof), { exact: true })).toBeVisible()
+  await expect(page.getByText(/^POST http:\/\/portal:8080\/ic\/api\/verifyInvoice$/)).toBeVisible()
+  await expect(page.getByText(`iic=${refusedIkof}`, { exact: true })).toBeVisible()
 })

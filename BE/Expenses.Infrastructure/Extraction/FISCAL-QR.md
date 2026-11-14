@@ -152,6 +152,13 @@ me to photograph it" can be matched with a log line by the invoice code.
 | `UnparseableResponse` | `FiscalPortalClient`, `FiscalStep` | 200, but not the JSON shape above, no lines, or a line the ledger refuses while mapping it. `responseExcerpt` holds at most 200 characters. | The contract may have changed. Capture the excerpt and compare it with the fixture. |
 | `Retrieved` | `FiscalPortalClient` | The invoice was fetched, or reused from an earlier answer. | Nothing. |
 
+Whenever a request actually went to the portal, the diagnosis also carries `portalRequest`: the
+method, the full address, and the form fields sent (`iic`, `dateTimeCreated`, `tin`). It is absent
+for `NoPayload`, `NotFiscal` and `IncompleteIdentifiers`, and for an answer reused from the cache,
+because nothing was sent. On any failed fiscal capture, the capture screen shows the QR code content
+it read and this request beneath the reason. Comparing the two answers the usual question directly:
+was it the wrong code, a code read badly, or a well-formed request the site refused?
+
 Only successes are cached. A failure is asked about afresh by the next capture, which is what makes
 "retry later" useful advice. The diagnosis is never persisted on a purchase, and it is not part of
 the MCP surface, because capture is HTTP-only.

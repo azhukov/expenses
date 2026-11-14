@@ -16,7 +16,14 @@ public sealed record FiscalDiagnosis(
     int? PortalStatus = null,
 
     /// <summary>The start of an answer that could not be read, never longer than <see cref="MaximumExcerptLength"/>.</summary>
-    string? ResponseExcerpt = null)
+    string? ResponseExcerpt = null,
+
+    /// <summary>
+    /// The request sent to the verification service, wherever one was sent. Null where the service
+    /// was never asked: no payload, not a fiscal code, missing parameters, or an answer reused from
+    /// an earlier capture.
+    /// </summary>
+    FiscalPortalRequest? PortalRequest = null)
 {
     /// <summary>
     /// The longest excerpt kept from an unreadable answer. It is enough to tell an error page from a

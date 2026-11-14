@@ -552,10 +552,11 @@ place of the viewfinder, without reporting an error.
 Where the fiscal-capture endpoint returns Extracted or NeedsReview, the client SHALL present the
 result for review and SHALL NOT ask for a photograph. Where it returns Failed, the client SHALL state
 why the invoice could not be fetched, as the response's fiscal diagnosis reports it, and SHALL present
-the photograph control. Where it cannot be reached, the client SHALL say so. Where the diagnosis
-concerns the payload itself (not a fiscal code, or missing verification parameters), the client SHALL
-also show the text that was read, so that the user can tell which code was scanned. Where the
-diagnosis concerns missing parameters, the client SHALL name them. Where a Failed fiscal capture
+the photograph control. Where it cannot be reached, the client SHALL say so. Whenever the invoice
+could not be fetched, the client SHALL also show the QR code content that was read, and, where the
+diagnosis reports a request sent to the fiscal site, that request's method, address and form fields,
+so that the user can tell a wrong or misread code from a site that refused a well-formed request.
+Where the diagnosis concerns missing parameters, the client SHALL name them. Where a Failed fiscal capture
 reported fiscal identifiers, the photograph SHALL be uploaded together with the payload that was read.
 Where it reported none, the photograph SHALL be uploaded without it, so that an unrecognised code does
 not stop the ledger reading the photograph itself. A response carrying no diagnosis SHALL be reported
@@ -585,6 +586,18 @@ with the general statement that the invoice could not be fetched.
 - **THEN** the screen states that the scanned code is not a fiscal receipt code and shows the text that was read
 - **AND** the photograph control is presented
 - **AND** the photograph taken is uploaded without the payload
+
+#### Scenario: The QR code content and the fiscal site request are shown
+
+- **WHEN** a fiscal capture returns Failed with a diagnosis reporting the request sent to the fiscal site
+- **THEN** the screen shows the QR code content that was read
+- **AND** it shows the request's method and address, and each form field it carried
+
+#### Scenario: No request is shown where the fiscal site was not asked
+
+- **WHEN** a fiscal capture returns Failed with a diagnosis reporting no request, or with no diagnosis
+- **THEN** the screen shows the QR code content that was read
+- **AND** it shows no fiscal site request
 
 #### Scenario: The fiscal code was incomplete
 

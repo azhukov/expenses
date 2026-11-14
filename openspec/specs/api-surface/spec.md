@@ -651,6 +651,12 @@ and a successful response SHALL stay successful whatever the diagnosis.
 
 - **WHEN** the verification service answers a capture's request with status 500
 - **THEN** the fiscal diagnosis carries status 500
+- **AND** it carries the request sent to the verification service: its method, address and form fields
+
+#### Scenario: No request where none was sent
+
+- **WHEN** a capture's payload is not a fiscal code, or lacks a parameter the verification service needs
+- **THEN** the fiscal diagnosis carries no request
 
 #### Scenario: Reading an unreadable answer
 
