@@ -153,6 +153,117 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
     }
 
+    /// <summary>
+    /// The portal's <c>rebate</c> is a percentage (the schema's <c>R</c>), not an amount, and
+    /// <c>unitPriceAfterVat</c> is the price before it. Taken as an amount, a 10% rebate on 5.00
+    /// would list 5.00 less 10.00 against an amount of 4.50, and fail the discount check on an
+    /// authoritative invoice.
+    /// </summary>
+    [Fact]
+    public async Task A_rebate_is_a_percentage_and_arrives_as_the_amount_taken_off()
+    {
+        await using var portal = await FiscalPortalStub.AnsweringWith("""
+            {"fic":"abc","totalPrice":7.62,"items":[
+              {"name":"A","quantity":1,"unitPriceAfterVat":5.00,"priceAfterVat":4.50,"rebate":10,"vatRate":21},
+              {"name":"B","quantity":1.696,"unitPriceAfterVat":2.30,"priceAfterVat":3.12064,"rebate":20,"vatRate":21}]}
+            """);
+        await using var services = Services(portal);
+
+        var invoice = (await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded)).Invoice;
+
+        Assert.NotNull(invoice);
+        Assert.Equal([4.50m, 3.12m], invoice.Candidates.Select(line => line.Amount));
+        Assert.Equal([5.00m, 3.90m], invoice.Candidates.Select(line => line.ListUnitPrice));
+        Assert.Equal([0.50m, 0.78m], invoice.Candidates.Select(line => line.DiscountAmount));
+
+        var report = ArithmeticValidator.Validate(ExtractionArithmetic.From(invoice));
+        Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
+    }
+
+    /// <summary>
+    /// The Aroma receipt of 3 September 2026 (Broj 2619, 35.11): four lines printed with a
+    /// "Cijena … Popust …%" (list price, discount) beside weighed lines and plain ones. The portal
+    /// states each discounted line's unit price before the discount, the discount as a percentage,
+    /// and the amount after it unrounded (4.19 less 22.43% is 3.250183). What arrives is what the
+    /// till printed: the amount, the list price, and the discount in euros.
+    /// </summary>
+    [Fact]
+    public async Task A_receipt_with_popust_lines_arrives_as_the_till_printed_it()
+    {
+        await using var portal = await FiscalPortalStub.AnsweringWith("""
+            {"fic":"bd6f241e-7a6b-4a36-80c8-c593f25f17e6","totalPrice":35.11,"totalVATAmount":5.68,
+             "seller":{"idNum":"02440261","name":"DOMACA TRGOVINA doo"},
+             "sameTaxes":[{"vatRate":21,"vatAmount":5.42},{"vatRate":7,"vatAmount":0.25}],
+             "items":[
+              {"name":"Cokolada crna Galeb 100g 80% kakao","unit":"KOM","quantity":1,"unitPriceAfterVat":4.19,"priceAfterVat":3.250183,"rebate":22.43,"rebateReducing":false,"vatRate":21},
+              {"name":"Cokolada crna Galeb 100g 80% kakao","unit":"KOM","quantity":1,"unitPriceAfterVat":4.19,"priceAfterVat":3.250183,"rebate":22.43,"rebateReducing":false,"vatRate":21},
+              {"name":"Lubenica","unit":"KG","quantity":3.344,"unitPriceAfterVat":0.65,"priceAfterVat":2.1736,"rebate":0,"vatRate":21},
+              {"name":"Mlijeko Milkos sterilno sa cepom 2.8%mm","unit":"KOM","quantity":1,"unitPriceAfterVat":0.89,"priceAfterVat":0.89,"rebate":0,"vatRate":7},
+              {"name":"Vino crveno Plantaze Epoha 0.75L","unit":"KOM","quantity":1,"unitPriceAfterVat":11.49,"priceAfterVat":11.49,"rebate":0,"vatRate":21},
+              {"name":"Pavlaka kisjela Moja Kravica 20%mm 400g","unit":"KOM","quantity":1,"unitPriceAfterVat":1.75,"priceAfterVat":1.48995,"rebate":14.86,"rebateReducing":false,"vatRate":7},
+              {"name":"Sirni namaz Ala kajmak 150g","unit":"KOM","quantity":1,"unitPriceAfterVat":2.39,"priceAfterVat":2.090055,"rebate":12.55,"rebateReducing":false,"vatRate":21},
+              {"name":"Hljeb farmerski Aroma 400g","unit":"KOM","quantity":1,"unitPriceAfterVat":1.49,"priceAfterVat":1.49,"rebate":0,"vatRate":7},
+              {"name":"Sir olives&tomatoes 200g","unit":"KOM","quantity":1,"unitPriceAfterVat":4.09,"priceAfterVat":4.09,"rebate":0,"vatRate":21},
+              {"name":"Pileca virsla classico mini Wudy 125g","unit":"KOM","quantity":1,"unitPriceAfterVat":1.05,"priceAfterVat":0.589995,"rebate":43.81,"rebateReducing":false,"vatRate":21},
+              {"name":"Jabuka zlatni delises","unit":"KG","quantity":1.31,"unitPriceAfterVat":1.79,"priceAfterVat":2.3449,"rebate":0,"vatRate":21},
+              {"name":"Krompir mladi","unit":"KG","quantity":1.534,"unitPriceAfterVat":0.99,"priceAfterVat":1.51866,"rebate":0,"vatRate":21},
+              {"name":"Crni luk","unit":"KG","quantity":0.524,"unitPriceAfterVat":0.85,"priceAfterVat":0.4454,"rebate":0,"vatRate":21}]}
+            """);
+        await using var services = Services(portal);
+
+        var invoice = (await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded)).Invoice;
+
+        Assert.NotNull(invoice);
+        Assert.Equal(13, invoice.Candidates.Count);
+        Assert.Equal(
+            [3.25m, 3.25m, 2.17m, 0.89m, 11.49m, 1.49m, 2.09m, 1.49m, 4.09m, 0.59m, 2.34m, 1.52m, 0.45m],
+            invoice.Candidates.Select(line => line.Amount));
+        Assert.Equal(35.11m, invoice.Total);
+        Assert.Equal(invoice.Total, invoice.Candidates.Sum(line => line.Amount));
+        Assert.Equal(5.68m, invoice.TaxAmount);
+
+        // Two tax rates on one invoice: neither is the invoice's rate.
+        Assert.Null(invoice.TaxRatePercent);
+
+        // The popust lines, as printed: "Cijena: 4.19, Popust: 22.43% (0.94Eur)" and the rest.
+        (int Line, decimal ListPrice, decimal Discount, decimal Percent)[] popust =
+        [
+            (1, 4.19m, 0.94m, 22.43m),
+            (2, 4.19m, 0.94m, 22.43m),
+            (6, 1.75m, 0.26m, 14.86m),
+            (7, 2.39m, 0.30m, 12.55m),
+            (10, 1.05m, 0.46m, 43.81m),
+        ];
+
+        foreach (var (line, listPrice, discount, percent) in popust)
+        {
+            var candidate = invoice.Candidates[line - 1];
+            Assert.Equal(listPrice, candidate.ListUnitPrice);
+            Assert.Equal(discount, candidate.DiscountAmount);
+            Assert.Equal(listPrice - discount, candidate.Amount);
+
+            // The percentage is derived for display, never stored (D19), and derived from the
+            // amounts it comes back to the one the till printed.
+            Assert.Equal(percent, Math.Round(discount / listPrice * 100m, 2));
+        }
+
+        // Every other line, weighed or not, is undiscounted: its list price is its amount.
+        var popustLines = popust.Select(entry => entry.Line).ToHashSet();
+        Assert.All(
+            invoice.Candidates.Where(candidate => !popustLines.Contains(candidate.LineNumber)),
+            candidate =>
+            {
+                Assert.Equal(0m, candidate.DiscountAmount);
+                Assert.Equal(candidate.Amount, candidate.ListUnitPrice);
+            });
+
+        // A weighed line keeps its three places of quantity: 3.344 kg × 0.65 is 2.17.
+        Assert.Equal(3.344m, invoice.Candidates[2].Quantity);
+
+        var report = ArithmeticValidator.Validate(ExtractionArithmetic.From(invoice));
+        Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
+    }
+
     [Fact]
     public async Task The_missing_identifier_arrives_from_the_verification_service()
     {

@@ -112,7 +112,7 @@ The answer is roughly 14 KB of JSON. What is mapped, and nothing else is:
 | --- | --- |
 | `items[].name`, `.unit`, `.quantity`, `.priceAfterVat`, `.vatRate` | a candidate line, verbatim |
 | `items[].unitPriceAfterVat` × `.quantity` | the line's list price |
-| `items[].rebate` | the line's discount |
+| `items[].rebate` | **not** mapped as is: it is a percentage. The line's discount is its list price less its amount, in cents |
 | `seller.name`, `seller.idNum` | the merchant and its tax number |
 | `totalPrice`, `totalVATAmount` | the result's total and tax amount |
 | `sameTaxes[].vatRate` | the result's tax rate, **only** when the invoice has exactly one |

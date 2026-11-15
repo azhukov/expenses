@@ -106,7 +106,8 @@ internal sealed class FiscalPortalClient(
             return Failed(
                 iic,
                 Unparseable($"The verification service's answer could not be taken: {exception.Message}", body)
-                    with { PortalRequest = sent });
+                    with
+                { PortalRequest = sent });
         }
 
         if (mapped is null)
@@ -229,26 +230,38 @@ internal sealed class FiscalPortalClient(
 
         var amounts = CentRounding.ToCentsSummingTo([.. items.Select(item => item.PriceAfterVat)], invoice.TotalPrice);
 
-        var candidates = items.Select((item, index) => ExtractionCandidate.Propose(
-            index + 1,
-            item.Name ?? $"Line {index + 1}",
-            amounts[index],
-            quantity: item.Quantity,
-            unitPrice: CentRounding.ToCents(item.UnitPriceAfterVat),
-            listUnitPrice: CentRounding.ToCents(item.UnitPriceAfterVat * item.Quantity)
-                + (amounts[index] - CentRounding.ToCents(item.PriceAfterVat)),
-            discountAmount: CentRounding.ToCents(item.Rebate),
-            taxRatePercent: item.VatRate,
-            unitRaw: item.Unit,
-            provenance: Provenance(
-                ExtractedValues.Description,
-                ExtractedValues.Amount,
-                ExtractedValues.Quantity,
-                ExtractedValues.UnitPrice,
-                ExtractedValues.ListUnitPrice,
-                ExtractedValues.DiscountAmount,
-                ExtractedValues.UnitGuess,
-                ExtractedValues.TaxRatePercent)));
+        var candidates = items.Select((item, index) =>
+        {
+            decimal amount = amounts[index];
+            decimal listPrice = CentRounding.ToCents(item.UnitPriceAfterVat * item.Quantity)
+                + (amount - CentRounding.ToCents(item.PriceAfterVat));
+
+            return ExtractionCandidate.Propose(
+                index + 1,
+                item.Name ?? $"Line {index + 1}",
+                amount,
+                quantity: item.Quantity,
+                unitPrice: CentRounding.ToCents(item.UnitPriceAfterVat),
+                listUnitPrice: listPrice,
+
+                // The portal's `rebate` is a percentage, not an amount, and the unit price is the one
+                // before it. The amount taken off is what separates the list price from the amount,
+                // both already in cents, so the line adds up however each was rounded. A unit price the
+                // portal states to four places can extend to a cent under the amount on an undiscounted
+                // line, which is no discount rather than a negative one.
+                discountAmount: Math.Max(0m, listPrice - amount),
+                taxRatePercent: item.VatRate,
+                unitRaw: item.Unit,
+                provenance: Provenance(
+                    ExtractedValues.Description,
+                    ExtractedValues.Amount,
+                    ExtractedValues.Quantity,
+                    ExtractedValues.UnitPrice,
+                    ExtractedValues.ListUnitPrice,
+                    ExtractedValues.DiscountAmount,
+                    ExtractedValues.UnitGuess,
+                    ExtractedValues.TaxRatePercent));
+        });
 
         return ExtractionStepResult.From(
             purchaseId,
