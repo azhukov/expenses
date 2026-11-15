@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Domain.Extraction;
 using Microsoft.Extensions.Logging;
 
@@ -49,9 +50,12 @@ internal sealed class ClaudeVisionReceiptExtractor(
               "quantity": number or null,
               "unit": string or null, the unit as printed (e.g. kom, kg, l),
               "unit_confidence": number or null, your confidence in the unit guess,
-              "unit_price": number or null,
-              "list_unit_price": number or null, the price before any discount,
-              "discount_amount": number or null,
+              "unit_price": number or null, the price per unit actually charged,
+              "list_unit_price": number or null, the price per unit before any discount,
+              "discount_amount": number or null, the amount taken off the whole line, only if the
+                receipt prints the discount as an amount,
+              "discount_percent": number or null, the discount as a percentage, only if the receipt
+                prints it as one (e.g. "Popust: 47,19%" is 47.19),
               "tax_rate_percent": number or null, this line's own VAT rate if the receipt states one,
               "amount": number, the line's paid amount
             }
@@ -59,7 +63,8 @@ internal sealed class ClaudeVisionReceiptExtractor(
         }
 
         Read every value from what the image actually shows; never invent a value the receipt does
-        not display.
+        not display. Copy numbers with every decimal place printed (2,2886 is 2.2886) and do not
+        compute or round them yourself.
         """;
 
     public string EngineName => Engine;
@@ -176,14 +181,29 @@ internal sealed class ClaudeVisionReceiptExtractor(
             return null;
         }
 
+        // Read as printed, then brought to cents the same way the portal's lines are (D7): a till
+        // prints weighed lines to four places, a list price per unit and a discount as a
+        // percentage, while the ledger and the oracle work in cents and per line.
+        var money = PrintedLineMoney.ToCents(
+            [
+                .. lines.Select(line => new PrintedLine(
+                    line.Amount,
+                    line.Quantity,
+                    line.UnitPrice,
+                    line.ListUnitPrice,
+                    line.DiscountAmount,
+                    line.DiscountPercent)),
+            ],
+            extraction.Total);
+
         var candidates = lines.Select((line, index) => ExtractionCandidate.Propose(
             index + 1,
             line.Description ?? $"Line {index + 1}",
-            line.Amount,
+            money[index].Amount,
             quantity: line.Quantity,
-            unitPrice: line.UnitPrice,
-            listUnitPrice: line.ListUnitPrice,
-            discountAmount: line.DiscountAmount,
+            unitPrice: money[index].UnitPrice,
+            listUnitPrice: money[index].ListPrice,
+            discountAmount: money[index].Discount,
             taxRatePercent: line.TaxRatePercent,
             unitRaw: line.Unit,
             provenance: Provenance(
@@ -202,9 +222,9 @@ internal sealed class ClaudeVisionReceiptExtractor(
             EngineName,
             EngineVersion,
             candidates,
-            total: extraction.Total,
+            total: extraction.Total is { } total ? CentRounding.ToCents(total) : null,
             taxRatePercent: extraction.TaxRatePercent,
-            taxAmount: extraction.TaxAmount,
+            taxAmount: extraction.TaxAmount is { } tax ? CentRounding.ToCents(tax) : null,
             merchantName: extraction.MerchantName,
             provenance: Provenance(
                 ExtractedValues.Total,
@@ -286,6 +306,8 @@ internal sealed class ClaudeVisionReceiptExtractor(
         public decimal? ListUnitPrice { get; init; }
 
         public decimal? DiscountAmount { get; init; }
+
+        public decimal? DiscountPercent { get; init; }
 
         public decimal? TaxRatePercent { get; init; }
 

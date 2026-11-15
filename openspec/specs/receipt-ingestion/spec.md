@@ -396,7 +396,10 @@ extracted total; that for any line carrying a list price and a discount, the lis
 discount equals the line amount; and that where a tax rate and tax amount were extracted, the total
 implies the extracted tax amount. Amounts SHALL be compared at the precision the ledger records them
 in, rounding each side to two decimal places before comparison, so that a source which states line
-amounts at a greater precision than its own total is not reported as disagreeing with itself. Each
+amounts at a greater precision than its own total is not reported as disagreeing with itself. The tax
+check SHALL accept an extracted tax amount within half a cent per line of the tax the total implies,
+because tills that round tax line by line, or tax line amounts before rounding them, print a tax a
+cent or two from it; with one line it is checked to the cent. Each
 check SHALL be reported individually, naming the values that disagree. Validation SHALL apply to the
 extraction result alone and SHALL NOT alter the purchase.
 
@@ -432,6 +435,18 @@ extraction result alone and SHALL NOT alter the purchase.
 
 - **WHEN** an extraction produces a total of 8.48 at a tax rate of 21 percent and a tax amount of 1.47
 - **THEN** the tax check passes
+
+#### Scenario: Tax rounded line by line is not a disagreement
+
+- **WHEN** an extraction produces lines of 4.84, 2.10 and 5.16 with a total of 12.10 at a tax rate of 15 percent and a tax amount of 1.57
+- **THEN** the tax check passes, although the total alone implies 1.58
+
+#### Scenario: Lines read from a printed receipt arrive in cents
+
+- **WHEN** the probabilistic step reads line amounts printed to four places, a list price per unit, or a discount printed as a percentage
+- **THEN** every money value is brought to the cent and the line amounts are adjusted to sum to the total exactly as for an invoice from the verification service
+- **AND** the list price is the unit list price extended by the quantity, and a percentage discount is that share of it
+- **AND** a line carrying only one of a list price and a discount carries neither
 
 #### Scenario: Checks that cannot be performed are not failures
 

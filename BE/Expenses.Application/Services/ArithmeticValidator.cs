@@ -13,6 +13,9 @@ public static class ArithmeticValidator
     /// <summary>Money is compared at the precision a receipt prints it.</summary>
     private const int ComparisonScale = 2;
 
+    /// <summary>The most rounding one line can move the tax a till prints for it.</summary>
+    private const decimal HalfCent = 0.005m;
+
     public static ArithmeticValidationReport Validate(ExtractionArithmetic result)
         => new([
             CheckLineSum(result),
@@ -99,9 +102,16 @@ public static class ArithmeticValidator
                 "No total, tax rate and tax amount to check against one another.");
         }
 
+        // Tills do not all tax the printed total. Some round VAT line by line and sum it (a
+        // restaurant's 4.84, 2.10 and 5.16 at 15% print 1.57, where 12.10 implies 1.58); some tax
+        // the lines before rounding them (IDEA's 9.5946 prints 1.67, where 9.59 implies 1.66). Each
+        // line's rounding moves the tax by at most half a cent, so that is the slack allowed per
+        // line, and no more: a single-line receipt is still checked to the cent.
         decimal rate = ratePercent / 100m;
-        decimal computed = Round(total / (1m + rate) * rate);
-        bool agrees = computed == Round(taxAmount);
+        decimal exact = total / (1m + rate) * rate;
+        decimal computed = Round(exact);
+        decimal tolerance = HalfCent * Math.Max(1, result.Lines.Count);
+        bool agrees = computed == Round(taxAmount) || Math.Abs(exact - taxAmount) <= tolerance;
 
         return new ArithmeticCheck(
             ArithmeticChecks.TotalTax,

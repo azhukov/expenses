@@ -1,0 +1,17 @@
+{
+  "id": "msg_01aroma",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"merchant_name\":\"DOMAĆA TRGOVINA doo\",\"merchant_name_confidence\":0.9,\"total\":20.19,\"tax_rate_percent\":null,\"tax_amount\":2.9,\"lines\":[{\"description\":\"Sladoled Oreo Mini Sticks MPK 6x50ml\",\"description_confidence\":0.9,\"quantity\":1,\"unit\":\"KOM\",\"unit_confidence\":0.9,\"unit_price\":4.4885,\"list_unit_price\":8.5,\"discount_amount\":null,\"discount_percent\":47.19,\"tax_rate_percent\":null,\"amount\":4.49},{\"description\":\"Mlijeko Milkos sterilno sa cepom 2,8\",\"description_confidence\":0.9,\"quantity\":1,\"unit\":\"KOM\",\"unit_confidence\":0.9,\"unit_price\":0.79,\"list_unit_price\":0.89,\"discount_amount\":null,\"discount_percent\":11.24,\"tax_rate_percent\":null,\"amount\":0.79},{\"description\":\"Krompir mladi\",\"description_confidence\":0.9,\"quantity\":2.042,\"unit\":\"KG\",\"unit_confidence\":0.9,\"unit_price\":0.99,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":2.02},{\"description\":\"Pavlaka kisjela Moja Kravica 20%mm 400\",\"description_confidence\":0.9,\"quantity\":1,\"unit\":\"KOM\",\"unit_confidence\":0.9,\"unit_price\":1.75,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":1.75},{\"description\":\"Jaja Agromont XL klasa 10/1\",\"description_confidence\":0.9,\"quantity\":1,\"unit\":\"KOM\",\"unit_confidence\":0.9,\"unit_price\":3.09,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":3.09},{\"description\":\"Luk mladi\",\"description_confidence\":0.9,\"quantity\":0.088,\"unit\":\"KG\",\"unit_confidence\":0.9,\"unit_price\":3.99,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":0.35},{\"description\":\"Sljiva\",\"description_confidence\":0.9,\"quantity\":1.358,\"unit\":\"KG\",\"unit_confidence\":0.9,\"unit_price\":1.2896,\"list_unit_price\":1.59,\"discount_amount\":null,\"discount_percent\":18.89,\"tax_rate_percent\":null,\"amount\":1.75},{\"description\":\"Paprika silja crvena\",\"description_confidence\":0.9,\"quantity\":0.674,\"unit\":\"KG\",\"unit_confidence\":0.9,\"unit_price\":1.49,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":1.0},{\"description\":\"Paradajz\",\"description_confidence\":0.9,\"quantity\":0.832,\"unit\":\"KG\",\"unit_confidence\":0.9,\"unit_price\":1.99,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":1.66},{\"description\":\"Jabuka pink lady 1kg\",\"description_confidence\":0.9,\"quantity\":0.942,\"unit\":\"KG\",\"unit_confidence\":0.9,\"unit_price\":3.49,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":3.29}]}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1834,
+    "output_tokens": 640
+  }
+}

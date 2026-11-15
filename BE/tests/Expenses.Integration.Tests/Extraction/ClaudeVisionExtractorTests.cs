@@ -1,6 +1,7 @@
 using System.Net;
 using Expenses.Application.Dtos;
 using Expenses.Application.Interfaces;
+using Expenses.Application.Services;
 using Expenses.Integration.Tests.Harness;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -80,6 +81,59 @@ public sealed class ClaudeVisionExtractorTests(PostgresFixture postgres)
         Assert.False(first.ReportedConfidence.ContainsKey(ExtractedValues.Amount));
     }
 
+    /// <summary>
+    /// IDEA prints weighed lines to four places (1.536 kg × 1.49 = 2.2886) under a total of 9.59. The
+    /// ledger refuses money beyond the cent (D7), so a candidate that kept 2.2886 could never be
+    /// confirmed; rounded line by line they would sum to 9.60.
+    /// </summary>
+    [Fact]
+    public async Task Lines_read_to_four_places_arrive_in_cents_summing_to_the_total()
+    {
+        var result = await ExtractFrom("claude-vision-response-idea.json");
+
+        Assert.Equal([2.29m, 4.05m, 1.21m, 2.04m], result.Candidates.Select(line => line.Amount));
+        Assert.Equal(9.59m, result.Total);
+        AssertPasses(result);
+    }
+
+    /// <summary>
+    /// Aroma prints "Cijena bez popusta: 1,59 Popust: 18,89%" over 1.358 kg: a kilogram list price
+    /// and a percentage. The candidate carries the line's list price, 2.16, and the 0.41 taken off
+    /// it, which is what the discount check compares against the 1.75 paid.
+    /// </summary>
+    [Fact]
+    public async Task A_percentage_discount_on_a_weighed_line_arrives_as_line_amounts()
+    {
+        var result = await ExtractFrom("claude-vision-response-aroma.json");
+
+        var oreo = result.Candidates[0];
+        Assert.Equal(4.49m, oreo.UnitPrice);
+        Assert.Equal(8.50m, oreo.ListUnitPrice);
+        Assert.Equal(4.01m, oreo.DiscountAmount);
+
+        var sljiva = result.Candidates[6];
+        Assert.Equal(2.16m, sljiva.ListUnitPrice);
+        Assert.Equal(0.41m, sljiva.DiscountAmount);
+        Assert.Equal(1.75m, sljiva.Amount);
+
+        Assert.Null(result.Candidates[2].ListUnitPrice);
+        Assert.Null(result.Candidates[2].DiscountAmount);
+        AssertPasses(result);
+    }
+
+    /// <summary>
+    /// The recorded fixture lists two bottles of water at 2.50 each, 5.00 for the line. Read per
+    /// unit, the list price disagreed with its own line before it was extended by the quantity.
+    /// </summary>
+    [Fact]
+    public async Task A_list_price_per_unit_is_extended_to_the_line()
+    {
+        var result = await ExtractFrom("claude-vision-response.json");
+
+        Assert.Equal(5.00m, result.Candidates[0].ListUnitPrice);
+        AssertPasses(result);
+    }
+
     [Fact]
     public async Task The_engine_cannot_be_reached()
     {
@@ -136,6 +190,22 @@ public sealed class ClaudeVisionExtractorTests(PostgresFixture postgres)
         Assert.Equal(
             Convert.ToBase64String(s_image.Content),
             imageBlock.GetProperty("source").GetProperty("data").GetString());
+    }
+
+    private async Task<ExtractionStepResult> ExtractFrom(string fixture)
+    {
+        await using var stub = await ClaudeVisionStub.Answering(fixture);
+        await using var services = Services(stub);
+
+        var result = await Extractor(services).Extract(s_image, FiscalIdentifiers.None);
+
+        return Assert.IsType<ExtractionStepResult>(result);
+    }
+
+    private static void AssertPasses(ExtractionStepResult result)
+    {
+        var report = ArithmeticValidator.Validate(ExtractionArithmetic.From(result));
+        Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
     }
 
     private static IReceiptExtractor Extractor(ServiceProvider services)
