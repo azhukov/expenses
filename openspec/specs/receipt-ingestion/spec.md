@@ -378,8 +378,29 @@ extraction SHALL fail and the reason SHALL be reported to the user.
 #### Scenario: No step produces anything
 
 - **WHEN** no step produces candidate lines for an image
+- **AND** no step read anything else off the image either — merchant, total, tax amount or date
 - **THEN** the extraction state is Failed
 - **AND** the reason is reported to the user
+
+#### Scenario: A poor photograph yields what could be read
+
+- **WHEN** the image is too poor for every value to be read
+- **THEN** every value that could be read is proposed, and every other value is left empty rather
+  than guessed — a whole field, a line's description, or a line's amount
+- **AND** a line is proposed when its description or its amount could be read, and dropped when
+  neither could
+- **AND** a step that read no lines but read the merchant, total, tax amount or date produces a
+  result with no lines, which is kept when no later step reads lines
+- **AND** provenance names a step only for the values it actually read
+- **AND** the extraction state is NeedsReview whenever the result has no lines or a line without
+  its description or amount
+- **AND** a line without an amount fails the line-sum check rather than being left out of the sum
+
+#### Scenario: An incomplete line cannot be confirmed unedited
+
+- **WHEN** candidates are confirmed without edits and a line has no amount
+- **THEN** confirmation is refused with `extraction_candidate.amount_required`
+- **AND** confirming edited lines that supply the amount succeeds as usual
 
 #### Scenario: A failed decode falls through to the probabilistic step
 

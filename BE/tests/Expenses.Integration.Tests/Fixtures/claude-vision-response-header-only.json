@@ -1,0 +1,17 @@
+{
+  "id": "msg_01ClaudeVisionHeaderOnly",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"merchant_name\":\"Blurred Market\",\"merchant_name_confidence\":0.6,\"occurred_at\":\"2026-08-24T12:50:00\",\"total\":12.4,\"tax_rate_percent\":null,\"tax_amount\":null,\"lines\":[]}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1834,
+    "output_tokens": 120
+  }
+}

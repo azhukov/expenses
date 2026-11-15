@@ -8,7 +8,7 @@ namespace Expenses.Application.Dtos;
 /// </summary>
 public sealed record ExtractedLineAmounts(
     int LineNumber,
-    decimal Amount,
+    decimal? Amount,
     decimal? ListPrice = null,
     decimal? Discount = null)
 {

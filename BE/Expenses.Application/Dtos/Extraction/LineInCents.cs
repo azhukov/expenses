@@ -7,7 +7,7 @@ namespace Expenses.Application.Dtos;
 /// The list price and the discount are both present or both absent (D19).
 /// </summary>
 public sealed record LineInCents(
-    decimal Amount,
+    decimal? Amount,
     decimal? UnitPrice,
     decimal? ListPrice,
     decimal? Discount);

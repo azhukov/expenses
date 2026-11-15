@@ -236,6 +236,16 @@ internal sealed class FiscalPortalClient(
                 ?? throw new InvalidOperationException($"Line {index + 1} states no amount.")),
         ];
 
+        // A stated item with an empty name is malformed, not illegible: the authority's invoice is
+        // either taken whole or reported as unreadable, unlike a photograph read as far as it goes.
+        for (int index = 0; index < items.Count; index++)
+        {
+            if (items[index].Name is { } name && string.IsNullOrWhiteSpace(name))
+            {
+                throw new InvalidOperationException($"Line {index + 1} states an empty name.");
+            }
+        }
+
         var amounts = CentRounding.ToCentsSummingTo(exact, invoice.TotalPrice);
 
         var candidates = items.Select((item, index) =>

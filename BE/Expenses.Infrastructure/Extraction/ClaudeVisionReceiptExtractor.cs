@@ -49,8 +49,8 @@ internal sealed class ClaudeVisionReceiptExtractor(
           "tax_amount": number or null, the total VAT amount,
           "lines": [
             {
-              "description": string,
-              "description_confidence": number from 0 to 1,
+              "description": string or null,
+              "description_confidence": number or null, from 0 to 1,
               "quantity": number or null,
               "unit": string or null, the unit as printed (e.g. kom, kg, l),
               "unit_confidence": number or null, your confidence in the unit guess,
@@ -61,13 +61,16 @@ internal sealed class ClaudeVisionReceiptExtractor(
               "discount_percent": number or null, the discount as a percentage, only if the receipt
                 prints it as one (e.g. "Popust: 47,19%" is 47.19),
               "tax_rate_percent": number or null, this line's own VAT rate if the receipt states one,
-              "amount": number, the line's paid amount
+              "amount": number or null, the line's paid amount
             }
           ]
         }
 
         Read every value from what the image actually shows; never invent a value the receipt does
-        not display. Copy numbers with every decimal place printed (2,2886 is 2.2886) and do not
+        not display. The photograph may be blurred, cropped, creased or badly lit: extract everything
+        you can read and use null for anything you cannot - a whole field, or one value on a line.
+        Include a line whenever you can read either its description or its amount. If no line is
+        legible, return "lines": [] with whatever else you could read. Never guess to fill a gap. Copy numbers with every decimal place printed (2,2886 is 2.2886) and do not
         compute or round them yourself.
         """;
 
@@ -180,7 +183,23 @@ internal sealed class ClaudeVisionReceiptExtractor(
 
         var extraction = JsonSerializer.Deserialize<ExtractionPayload>(text, s_json);
 
-        if (extraction?.Lines is not { Count: > 0 } lines)
+        if (extraction is null)
+        {
+            return null;
+        }
+
+        // A line with neither its text nor its amount readable is not a line anyone can review.
+        List<LinePayload> lines =
+            [.. (extraction.Lines ?? []).Where(line => !string.IsNullOrWhiteSpace(line.Description) || line.Amount is not null)];
+
+        var occurredAt = ParseOccurrence(extraction.OccurredAt);
+
+        // Nothing at all read off the image is the one outcome that is still no result.
+        if (lines.Count == 0
+            && extraction.MerchantName is null
+            && extraction.Total is null
+            && extraction.TaxAmount is null
+            && occurredAt is null)
         {
             return null;
         }
@@ -200,11 +219,9 @@ internal sealed class ClaudeVisionReceiptExtractor(
             ],
             extraction.Total);
 
-        var occurredAt = ParseOccurrence(extraction.OccurredAt);
-
         var candidates = lines.Select((line, index) => ExtractionCandidate.Propose(
             index + 1,
-            line.Description ?? $"Line {index + 1}",
+            line.Description,
             money[index].Amount,
             quantity: line.Quantity,
             unitPrice: money[index].UnitPrice,
@@ -213,14 +230,14 @@ internal sealed class ClaudeVisionReceiptExtractor(
             taxRatePercent: line.TaxRatePercent,
             unitRaw: line.Unit,
             provenance: Provenance(
-                ExtractedValues.Description,
-                ExtractedValues.Amount,
-                ExtractedValues.Quantity,
-                ExtractedValues.UnitPrice,
-                ExtractedValues.ListUnitPrice,
-                ExtractedValues.DiscountAmount,
-                ExtractedValues.UnitGuess,
-                ExtractedValues.TaxRatePercent),
+                (ExtractedValues.Description, line.Description),
+                (ExtractedValues.Amount, money[index].Amount),
+                (ExtractedValues.Quantity, line.Quantity),
+                (ExtractedValues.UnitPrice, money[index].UnitPrice),
+                (ExtractedValues.ListUnitPrice, money[index].ListPrice),
+                (ExtractedValues.DiscountAmount, money[index].Discount),
+                (ExtractedValues.UnitGuess, line.Unit),
+                (ExtractedValues.TaxRatePercent, line.TaxRatePercent)),
             reportedConfidence: LineConfidence(line)));
 
         return ExtractionStepResult.From(
@@ -234,13 +251,11 @@ internal sealed class ClaudeVisionReceiptExtractor(
             merchantName: extraction.MerchantName,
             occurredAt: occurredAt,
             provenance: Provenance(
-                [
-                    ExtractedValues.Total,
-                    ExtractedValues.TaxRatePercent,
-                    ExtractedValues.TaxAmount,
-                    ExtractedValues.MerchantName,
-                    .. occurredAt is null ? Array.Empty<string>() : [ExtractedValues.OccurredAt],
-                ]),
+                (ExtractedValues.Total, extraction.Total),
+                (ExtractedValues.TaxRatePercent, extraction.TaxRatePercent),
+                (ExtractedValues.TaxAmount, extraction.TaxAmount),
+                (ExtractedValues.MerchantName, extraction.MerchantName),
+                (ExtractedValues.OccurredAt, occurredAt)),
             reportedConfidence: ResultConfidence(extraction));
     }
 
@@ -292,8 +307,19 @@ internal sealed class ClaudeVisionReceiptExtractor(
             ? new Dictionary<string, decimal> { [ExtractedValues.MerchantName] = confidence }
             : null;
 
-    private IReadOnlyDictionary<string, string> Provenance(params string[] values)
-        => values.ToDictionary(value => value, _ => stageName);
+    /// <summary>
+    /// Only the values actually read are attributed to this stage: a value left empty on a poor
+    /// photograph was produced by nobody, and claiming it would tell review it came from vision.
+    /// </summary>
+    private IReadOnlyDictionary<string, string> Provenance(params (string Name, object? Value)[] values)
+        => values
+            .Where(value => value.Value switch
+            {
+                null => false,
+                string text => !string.IsNullOrWhiteSpace(text),
+                _ => true,
+            })
+            .ToDictionary(value => value.Name, _ => stageName);
 
     /// <summary>The Messages API envelope: only the one content block this adapter asks for is read.</summary>
     private sealed record MessagesResponse
@@ -348,6 +374,6 @@ internal sealed class ClaudeVisionReceiptExtractor(
 
         public decimal? TaxRatePercent { get; init; }
 
-        public decimal Amount { get; init; }
+        public decimal? Amount { get; init; }
     }
 }

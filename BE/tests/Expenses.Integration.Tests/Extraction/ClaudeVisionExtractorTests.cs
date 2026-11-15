@@ -175,6 +175,50 @@ public sealed class ClaudeVisionExtractorTests(PostgresFixture postgres)
         Assert.Null(await Extractor(services).Extract(s_image, FiscalIdentifiers.None));
     }
 
+    /// <summary>
+    /// A poor photograph: one line's text is legible but not its amount, another's amount but not
+    /// its text, and a third shows nothing. What was read is kept, the rest left empty, and the line
+    /// with nothing read is dropped rather than proposed blank.
+    /// </summary>
+    [Fact]
+    public async Task A_poor_photograph_yields_what_could_be_read()
+    {
+        await using var stub = await ClaudeVisionStub.Answering("claude-vision-response-blurry.json");
+        await using var services = Services(stub);
+
+        var result = await Extractor(services).Extract(s_image, FiscalIdentifiers.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.Candidates.Count);
+        Assert.Equal("Mlijeko 1l", result.Candidates[0].Description);
+        Assert.Null(result.Candidates[0].Amount);
+        Assert.Null(result.Candidates[1].Description);
+        Assert.Equal(3.20m, result.Candidates[1].Amount);
+        Assert.Equal(9.40m, result.Total);
+        Assert.Null(result.MerchantName);
+        Assert.Null(result.OccurredAt);
+
+        // Provenance names only what vision actually read.
+        Assert.False(result.Candidates[0].Provenance.ContainsKey(ExtractedValues.Amount));
+        Assert.False(result.Candidates[1].Provenance.ContainsKey(ExtractedValues.Description));
+        Assert.False(result.Provenance.ContainsKey(ExtractedValues.MerchantName));
+    }
+
+    [Fact]
+    public async Task A_photograph_with_no_legible_line_still_yields_its_header()
+    {
+        await using var stub = await ClaudeVisionStub.Answering("claude-vision-response-header-only.json");
+        await using var services = Services(stub);
+
+        var result = await Extractor(services).Extract(s_image, FiscalIdentifiers.None);
+
+        Assert.NotNull(result);
+        Assert.Empty(result.Candidates);
+        Assert.Equal("Blurred Market", result.MerchantName);
+        Assert.Equal(12.40m, result.Total);
+        Assert.Equal(new DateTime(2026, 8, 24, 12, 50, 0), result.OccurredAt);
+    }
+
     [Fact]
     public async Task The_engines_answer_cannot_be_interpreted()
     {

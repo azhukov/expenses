@@ -48,6 +48,12 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
         // business (D45).
         FiscalDiagnosis? diagnosis = null;
 
+        // A reading that got the merchant, the total or the date off a receipt too poor to yield a
+        // single line. It does not end the run, since a later step may still read lines, but if
+        // none does it is what the run produced: whatever could be read reaches review, and the
+        // rest is left empty rather than the whole receipt reported as unread.
+        ExtractionStepResult? partial = null;
+
         foreach (var step in _steps.Where(step => image is not null || !step.ReadsImage))
         {
             // Recorded whether or not it contributed, so the shape of the run is visible rather
@@ -76,11 +82,27 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
 
             if (!result.ProducedLines)
             {
+                if (partial is null && ReadSomething(result))
+                {
+                    partial = result;
+                }
+
                 continue;
             }
 
             return new CascadeOutcome(
                 result.RunningSteps(stepsRun).Carrying(known, source, payload),
+                stepsRun,
+                established,
+                source,
+                Payload: payload,
+                Diagnosis: diagnosis);
+        }
+
+        if (partial is not null)
+        {
+            return new CascadeOutcome(
+                partial.RunningSteps(stepsRun).Carrying(known, source, payload),
                 stepsRun,
                 established,
                 source,
@@ -130,6 +152,16 @@ public sealed class ExtractionCascade(IEnumerable<IExtractionStep> steps)
 
         return (Merge(known, result.Fiscal), establishedBy, payload ?? result.Payload);
     }
+
+    /// <summary>
+    /// Whether a result without lines still read something off the receipt itself. Fiscal identity
+    /// alone does not count: it is carried by the run anyway, and is not a reading of the image.
+    /// </summary>
+    private static bool ReadSomething(ExtractionStepResult result)
+        => result.MerchantName is not null
+            || result.Total is not null
+            || result.TaxAmount is not null
+            || result.OccurredAt is not null;
 
     /// <summary>Field by field, whatever is already known kept over what has just been found.</summary>
     private static FiscalIdentifiers Merge(FiscalIdentifiers known, FiscalIdentifiers found) => new(

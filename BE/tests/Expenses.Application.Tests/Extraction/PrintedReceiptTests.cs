@@ -112,7 +112,7 @@ public sealed class PrintedReceiptTests
         Assert.Equal(total, money.Sum(line => line.Amount));
         Assert.All(money, line =>
         {
-            Assert.True(InCents(line.Amount), $"amount {line.Amount}");
+            Assert.True(InCents(line.Amount!.Value), $"amount {line.Amount}");
             Assert.True(line.UnitPrice is null || InCents(line.UnitPrice.Value), $"unit price {line.UnitPrice}");
             Assert.True(line.ListPrice is null || InCents(line.ListPrice.Value), $"list price {line.ListPrice}");
             Assert.True(line.Discount is null || InCents(line.Discount.Value), $"discount {line.Discount}");

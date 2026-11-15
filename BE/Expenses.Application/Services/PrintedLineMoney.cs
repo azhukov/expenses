@@ -20,14 +20,21 @@ public static class PrintedLineMoney
     /// </summary>
     public static IReadOnlyList<LineInCents> ToCents(IReadOnlyList<PrintedLine> lines, decimal? total)
     {
+        // A line whose amount could not be read leaves nothing to spread a rounding cent across
+        // honestly: the lines are rounded each on its own, and the missing amount stays missing.
+        if (lines.Any(line => line.Amount is null))
+        {
+            return [.. lines.Select(line => InCents(line, line.Amount is { } amount ? CentRounding.ToCents(amount) : null))];
+        }
+
         var amounts = CentRounding.ToCentsSummingTo(
-            [.. lines.Select(line => line.Amount)],
+            [.. lines.Select(line => line.Amount!.Value)],
             total is { } stated ? CentRounding.ToCents(stated) : null);
 
         return [.. lines.Select((line, index) => InCents(line, amounts[index]))];
     }
 
-    private static LineInCents InCents(PrintedLine line, decimal amount)
+    private static LineInCents InCents(PrintedLine line, decimal? amount)
     {
         decimal? unitPrice = line.UnitPrice is { } unit ? CentRounding.ToCents(unit) : null;
 

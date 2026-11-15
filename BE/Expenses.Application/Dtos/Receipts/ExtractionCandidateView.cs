@@ -9,8 +9,8 @@ namespace Expenses.Application.Dtos;
 /// </summary>
 public sealed record ExtractionCandidateView(
     int LineNumber,
-    string Description,
-    decimal Amount,
+    string? Description,
+    decimal? Amount,
     decimal? Quantity,
     decimal? UnitPrice,
     decimal? ListUnitPrice,

@@ -124,8 +124,10 @@ export interface FiscalIdentifiers {
  */
 export interface ExtractionCandidateView {
   lineNumber: number
-  description: string
-  amount: number
+  /** Null where the line's text could not be read off the photograph. */
+  description: string | null
+  /** Null where the line's amount could not be read; review supplies it. */
+  amount: number | null
   quantity: number | null
   unitPrice: number | null
   listUnitPrice: number | null

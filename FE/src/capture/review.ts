@@ -61,7 +61,7 @@ export function lineOf(
 ): EditableLine {
   return {
     key: candidate.lineNumber,
-    description: candidate.description,
+    description: candidate.description ?? '',
     amount: asText(candidate.amount),
     quantity: asText(candidate.quantity),
     categoryCode: codeOfCategory(candidate.categoryId),

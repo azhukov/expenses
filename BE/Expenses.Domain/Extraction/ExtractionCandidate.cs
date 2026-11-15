@@ -15,16 +15,20 @@ public sealed class ExtractionCandidate
 {
     private ExtractionCandidate()
     {
-        Description = null!;
         Provenance = null!;
         ReportedConfidence = null!;
     }
 
     public int LineNumber { get; private set; }
 
-    public string Description { get; private set; }
+    /// <summary>Null where the line's text could not be read: left empty, never invented.</summary>
+    public string? Description { get; private set; }
 
-    public decimal Amount { get; private set; }
+    /// <summary>
+    /// Null where the line's amount could not be read. Such a line still reaches review, which is
+    /// where the person holding the receipt supplies it; it is never guessed.
+    /// </summary>
+    public decimal? Amount { get; private set; }
 
     public decimal? Quantity { get; private set; }
 
@@ -65,8 +69,8 @@ public sealed class ExtractionCandidate
 
     public static ExtractionCandidate Propose(
         int lineNumber,
-        string description,
-        decimal amount,
+        string? description,
+        decimal? amount,
         decimal? quantity = null,
         decimal? unitPrice = null,
         decimal? listUnitPrice = null,
@@ -79,15 +83,10 @@ public sealed class ExtractionCandidate
         IReadOnlyDictionary<string, string>? provenance = null,
         IReadOnlyDictionary<string, decimal>? reportedConfidence = null)
     {
-        if (string.IsNullOrWhiteSpace(description))
-        {
-            throw new ArgumentException("A candidate line requires a description.", nameof(description));
-        }
-
         return new ExtractionCandidate
         {
             LineNumber = lineNumber,
-            Description = description.Trim(),
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
             Amount = amount,
             Quantity = quantity,
             UnitPrice = unitPrice,

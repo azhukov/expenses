@@ -65,8 +65,13 @@ public sealed class ReceiptService(
                 .Distinct(StringComparer.Ordinal),
         ];
 
+        // A reading that left something empty — no lines at all, or a line whose text or amount could
+        // not be read — is a person's to finish, however its arithmetic turns out.
+        bool incomplete = result.Candidates.Count == 0
+            || result.Candidates.Any(candidate => candidate.Description is null || candidate.Amount is null);
+
         return (
-            validation.Passed && lowConfidence.Count == 0
+            validation.Passed && lowConfidence.Count == 0 && !incomplete
                 ? Purchase.ExtractionState.Extracted
                 : Purchase.ExtractionState.NeedsReview,
             validation,
@@ -248,6 +253,18 @@ public sealed class ReceiptService(
         // edits are what the user is actually asserting about the receipt (D12). Editing also
         // remains possible when the candidates themselves are gone, which is what makes their
         // transience harmless.
+        // Confirming as extracted asserts every line as read; a line read without an amount has
+        // nothing to assert, so it must be edited first rather than confirmed as zero.
+        if (edited is null
+            && result?.Candidates.FirstOrDefault(candidate => candidate.Amount is null) is { } unread)
+        {
+            throw ExpensesException.For(
+                ApplicationErrors.ExtractionCandidateAmountRequired,
+                $"Line {unread.LineNumber} has no amount read off the receipt. Confirm edited lines that supply it.",
+                ("purchaseId", purchaseId),
+                ("lineNumber", unread.LineNumber));
+        }
+
         var commands = edited ?? result?.Candidates.Select(AsCommand).ToList()
             ?? throw ExpensesException.For(
                 ApplicationErrors.ExtractionCandidatesNotFound,
@@ -391,8 +408,8 @@ public sealed class ReceiptService(
     /// unit, which would state something the receipt did not.
     /// </summary>
     private static ExpenseCommand AsCommand(ExtractionCandidate candidate) => new(
-        candidate.Description,
-        candidate.Amount,
+        candidate.Description ?? string.Empty,
+        candidate.Amount!.Value,
         candidate.Quantity,
         UnitCode: null,
         candidate.UnitPrice,

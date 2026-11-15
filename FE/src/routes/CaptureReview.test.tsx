@@ -177,6 +177,28 @@ describe('A missing date never reaches the ledger', () => {
   })
 })
 
+describe('Values a poor photograph left unread arrive empty', () => {
+  it('shows an unread description and amount as empty inputs, and asks for them', async () => {
+    const base = captured()
+    const { onConfirm, confirm } = show({
+      ...base,
+      result: {
+        ...base.result!,
+        candidates: [candidate({ description: null, amount: null })],
+      },
+    })
+
+    expect(within(line()).getByLabelText(/description/i)).toHaveValue('')
+    // A number input reports an empty value as null.
+    expect(within(line()).getByLabelText(/amount/i)).toHaveValue(null)
+
+    await userEvent.click(confirm)
+
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(within(line()).getByLabelText(/amount/i)).toHaveAttribute('aria-invalid', 'true')
+  })
+})
+
 describe('A date read off the image prefills review', () => {
   it('fills the date from the reading and confirms with it', async () => {
     const base = captured({ extracted: noFiscal, supplied: noFiscal })

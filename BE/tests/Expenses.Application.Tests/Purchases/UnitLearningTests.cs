@@ -215,8 +215,8 @@ public sealed class UnitLearningTests
     {
         var purchase = _ledger.Given(Purchase.Record(
             s_occurred,
-            candidate.Amount,
-            [Expense.Record("Groceries", candidate.Amount)],
+            candidate.Amount!.Value,
+            [Expense.Record("Groceries", candidate.Amount!.Value)],
             receipt: _ledger.GivenReceiptFile([0xFF, 0xD8, 0xFF, 0x03]).AsReceipt(),
             extraction: Purchase.ExtractionState.Extracted));
 

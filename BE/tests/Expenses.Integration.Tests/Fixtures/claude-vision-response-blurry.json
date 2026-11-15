@@ -1,0 +1,17 @@
+{
+  "id": "msg_01ClaudeVisionBlurry",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"merchant_name\":null,\"merchant_name_confidence\":null,\"occurred_at\":null,\"total\":9.4,\"tax_rate_percent\":null,\"tax_amount\":null,\"lines\":[{\"description\":\"Mlijeko 1l\",\"description_confidence\":0.9,\"quantity\":1,\"unit\":\"kom\",\"unit_confidence\":0.8,\"unit_price\":null,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":null},{\"description\":null,\"description_confidence\":null,\"quantity\":null,\"unit\":null,\"unit_confidence\":null,\"unit_price\":null,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":3.2},{\"description\":null,\"description_confidence\":null,\"quantity\":null,\"unit\":null,\"unit_confidence\":null,\"unit_price\":null,\"list_unit_price\":null,\"discount_amount\":null,\"discount_percent\":null,\"tax_rate_percent\":null,\"amount\":null}]}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1834,
+    "output_tokens": 120
+  }
+}

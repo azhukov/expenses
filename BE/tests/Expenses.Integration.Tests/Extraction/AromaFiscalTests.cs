@@ -106,7 +106,7 @@ public sealed class AromaFiscalTests(PostgresFixture postgres)
 
         Assert.NotNull(invoice);
         Assert.Equal("Kesa tregerica Aroma", invoice.Candidates[11].Description);
-        Assert.All(invoice.Candidates, line => Assert.Equal(line.Description.Trim(), line.Description));
+        Assert.All(invoice.Candidates, line => Assert.Equal(line.Description!.Trim(), line.Description));
     }
 
     private async Task<FiscalRetrieval> Retrieve(string ikof, FiscalIdentifiers decoded)

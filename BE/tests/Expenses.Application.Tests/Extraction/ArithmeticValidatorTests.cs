@@ -184,4 +184,31 @@ public sealed class ArithmeticValidatorTests
             ArithmeticValidator.Validate(result).Checks,
             ArithmeticValidator.Validate(result).Checks);
     }
+
+    /// <summary>
+    /// A line whose amount could not be read off a poor photograph cannot be summed, and leaving it
+    /// out would make a sum agree with nothing. The check fails, which sends the receipt to review.
+    /// </summary>
+    [Fact]
+    public void A_line_without_an_amount_fails_the_line_sum()
+    {
+        var report = ArithmeticValidator.Validate(new ExtractionArithmetic(
+            [new ExtractedLineAmounts(1, 4.49m), new ExtractedLineAmounts(2, null)],
+            Total: 8.48m));
+
+        var check = Check(report, ArithmeticChecks.LineSum);
+        Assert.Equal(CheckOutcome.Failed, check.Outcome);
+        Assert.Equal(1m, check.Values["linesWithoutAmount"]);
+        Assert.False(report.Passed);
+    }
+
+    [Fact]
+    public void A_discounted_line_without_an_amount_is_not_discount_checked()
+    {
+        var report = ArithmeticValidator.Validate(new ExtractionArithmetic(
+            [new ExtractedLineAmounts(1, null, ListPrice: 8.50m, Discount: 4.01m)],
+            Total: null));
+
+        Assert.Equal(CheckOutcome.NotApplicable, Check(report, ArithmeticChecks.LineDiscount).Outcome);
+    }
 }

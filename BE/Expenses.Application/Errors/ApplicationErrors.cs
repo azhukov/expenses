@@ -43,6 +43,7 @@ public static class ApplicationErrors
     public const string ReceiptImageSizeInvalid = "receipt_image.size_invalid";
     public const string ExtractionInvalidTransition = "extraction.invalid_transition";
     public const string ExtractionCandidateDescriptionRequired = "extraction_candidate.description_required";
+    public const string ExtractionCandidateAmountRequired = "extraction_candidate.amount_required";
 
     // Raised above the domain.
     public const string PurchaseNotFound = "purchase.not_found";

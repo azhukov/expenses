@@ -290,4 +290,47 @@ public sealed class ExtractionCascadeTests
             diagnosed.Result?.Candidates.Select(candidate => candidate.Amount));
         Assert.Null(silent.Diagnosis);
     }
+
+    /// <summary>
+    /// A photograph too poor to yield a single line can still show the merchant, the total and the
+    /// date. What was read reaches review; the run is not reported as having read nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_reading_without_lines_is_kept_when_no_step_reads_lines()
+    {
+        var headerOnly = ExtractionStepResult.From(
+            1,
+            "vision",
+            "1",
+            [],
+            total: 12.40m,
+            merchantName: "Blurred Market",
+            occurredAt: new DateTime(2026, 8, 24, 12, 50, 0));
+
+        var outcome = await new ExtractionCascade([
+            FakeStep.Silent("fiscal"),
+            FakeStep.Producing("vision", headerOnly),
+        ]).Run(s_image);
+
+        Assert.Null(outcome.FailureReason);
+        Assert.NotNull(outcome.Result);
+        Assert.Empty(outcome.Result.Candidates);
+        Assert.Equal("Blurred Market", outcome.Result.MerchantName);
+        Assert.Equal(12.40m, outcome.Result.Total);
+        Assert.Equal(["fiscal", "vision"], outcome.Result.StepsRun);
+    }
+
+    [Fact]
+    public async Task A_later_step_that_reads_lines_outranks_a_reading_without_them()
+    {
+        var headerOnly = ExtractionStepResult.From(1, "first", "1", [], merchantName: "Blurred Market");
+
+        var outcome = await new ExtractionCascade([
+            FakeStep.Producing("first", headerOnly),
+            FakeStep.Producing("vision", Results.Reconciling("vision")),
+        ]).Run(s_image);
+
+        Assert.NotNull(outcome.Result);
+        Assert.NotEmpty(outcome.Result.Candidates);
+    }
 }

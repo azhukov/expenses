@@ -119,7 +119,7 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
 
         Assert.All(invoice.Candidates, line =>
         {
-            Assert.Equal(line.Amount, CentRounding.ToCents(line.Amount));
+            Assert.Equal(line.Amount, CentRounding.ToCents(line.Amount!.Value));
             Assert.Equal(line.UnitPrice, line.UnitPrice is { } unit ? CentRounding.ToCents(unit) : null);
             Assert.Equal(line.ListUnitPrice, line.ListUnitPrice is { } list ? CentRounding.ToCents(list) : null);
             Assert.Equal(line.DiscountAmount, line.DiscountAmount is { } off ? CentRounding.ToCents(off) : null);

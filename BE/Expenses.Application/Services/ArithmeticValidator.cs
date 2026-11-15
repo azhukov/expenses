@@ -32,7 +32,24 @@ public static class ArithmeticValidator
                 "No total, or no lines, to sum against.");
         }
 
-        decimal sum = result.Lines.Sum(line => line.Amount);
+        // A line nobody could read an amount for cannot be summed, and a sum that silently left it
+        // out would agree with nothing. It fails, which is what sends the receipt to review.
+        var unread = result.Lines.Where(line => line.Amount is null).ToList();
+
+        if (unread.Count > 0)
+        {
+            return new ArithmeticCheck(
+                ArithmeticChecks.LineSum,
+                CheckOutcome.Failed,
+                $"{unread.Count} of {result.Lines.Count} lines have no amount, so the lines cannot be summed against the extracted total {total}.",
+                new Dictionary<string, decimal?>
+                {
+                    ["total"] = total,
+                    ["linesWithoutAmount"] = unread.Count,
+                });
+        }
+
+        decimal sum = result.Lines.Sum(line => line.Amount!.Value);
         bool agrees = Round(sum) == Round(total);
 
         return new ArithmeticCheck(
@@ -51,7 +68,7 @@ public static class ArithmeticValidator
     private static ArithmeticCheck CheckLineDiscounts(ExtractionArithmetic result)
     {
         var checkable = result.Lines
-            .Where(line => line.ListPrice.HasValue && line.Discount.HasValue)
+            .Where(line => line.ListPrice.HasValue && line.Discount.HasValue && line.Amount.HasValue)
             .ToList();
 
         if (checkable.Count == 0)
@@ -64,7 +81,7 @@ public static class ArithmeticValidator
         foreach (var line in checkable)
         {
             decimal computed = line.ListPrice!.Value - line.Discount!.Value;
-            if (Round(computed) == Round(line.Amount))
+            if (Round(computed) == Round(line.Amount!.Value))
             {
                 continue;
             }

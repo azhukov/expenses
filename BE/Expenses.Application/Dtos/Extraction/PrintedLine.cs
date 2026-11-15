@@ -7,7 +7,7 @@ namespace Expenses.Application.Dtos;
 /// "Cijena bez popusta: 8,50 Popust: 47,19%") as often as an amount.
 /// </summary>
 public sealed record PrintedLine(
-    decimal Amount,
+    decimal? Amount,
     decimal? Quantity = null,
     decimal? UnitPrice = null,
     decimal? ListUnitPrice = null,
