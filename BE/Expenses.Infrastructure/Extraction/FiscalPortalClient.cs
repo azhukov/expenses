@@ -244,8 +244,8 @@ internal sealed class FiscalPortalClient(
 
             // A list price needs both the unit price and the quantity. Without either there is
             // neither a list price nor a discount: the two are recorded together or not at all (D19).
-            decimal? listPrice = item.UnitPriceAfterVat is { } unit && item.Quantity is { } quantity
-                ? CentRounding.ToCents(unit * quantity) + (amount - CentRounding.ToCents(exact[index]))
+            decimal? listPrice = ListPrice(item) is { } listed
+                ? listed + (amount - CentRounding.ToCents(exact[index]))
                 : null;
 
             return ExtractionCandidate.Propose(
@@ -302,6 +302,35 @@ internal sealed class FiscalPortalClient(
             fiscalSource: FiscalInvoice.FiscalSource.RetrievedFromService);
     }
 
+    /// <summary>
+    /// The line's list price, in cents, extended by its quantity. Normally <c>unitPriceAfterVat</c>,
+    /// which is the price before any rebate. Aroma's till states it after the rebate instead (8.50
+    /// less 41.29% arrives as 4.99, the line's amount), and keeps the list price only in
+    /// <c>unitPriceBeforeVat</c> (7.0248, which is 8.50 at 21%). So on a line with a rebate the
+    /// pre-VAT unit price is grossed up by the line's rate, and the larger of the two list prices is
+    /// taken. A rebate never raises a price, so the larger one is the price before it. Lines without
+    /// a rebate keep the after-VAT price as they always have, because grossing up a unit price stated
+    /// to four places could move it a cent.
+    /// </summary>
+    private static decimal? ListPrice(Item item)
+    {
+        if (item.UnitPriceAfterVat is not { } unit || item.Quantity is not { } quantity)
+        {
+            return null;
+        }
+
+        decimal listed = CentRounding.ToCents(unit * quantity);
+
+        if (item.Rebate is not > 0m
+            || item.UnitPriceBeforeVat is not { } beforeVat
+            || item.VatRate is not { } rate)
+        {
+            return listed;
+        }
+
+        return Math.Max(listed, CentRounding.ToCents(beforeVat * (1m + (rate / 100m)) * quantity));
+    }
+
     private static IReadOnlyDictionary<string, string> Provenance(params string[] values)
         => values.ToDictionary(value => value, _ => Stage);
 
@@ -338,7 +367,8 @@ internal sealed class FiscalPortalClient(
     /// One line. Every number is optional, because tills differ in what they state: IDEA's states no
     /// rebate at all where Megapromet's states a zero one, and the portal answers <c>null</c> for it.
     /// A non-nullable field would refuse the whole invoice over a value nothing here needs. The
-    /// rebate itself is not read: it is a percentage, and the discount is derived from the amounts.
+    /// rebate is never taken as an amount: it is a percentage, and the discount is derived from the
+    /// amounts. It only marks a line whose list price may need recovering (see ListPrice).
     /// </summary>
     private sealed record Item
     {
@@ -348,9 +378,14 @@ internal sealed class FiscalPortalClient(
 
         public decimal? Quantity { get; init; }
 
+        public decimal? UnitPriceBeforeVat { get; init; }
+
         public decimal? UnitPriceAfterVat { get; init; }
 
         public decimal? PriceAfterVat { get; init; }
+
+        /// <summary>A percentage. Read only to tell a discounted line apart; never taken as an amount.</summary>
+        public decimal? Rebate { get; init; }
 
         public decimal? VatRate { get; init; }
     }

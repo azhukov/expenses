@@ -186,6 +186,67 @@ public sealed class FiscalCaptureTests(PostgresFixture postgres) : IAsyncLifetim
         Assert.Equal(HttpStatusCode.Created, confirmed.StatusCode);
     }
 
+    /// <summary>
+    /// The Aroma receipt with twelve lines, two discounted, captured from its own payload and
+    /// confirmed exactly as the ledger proposed it.
+    /// </summary>
+    [Fact]
+    public async Task An_aroma_invoice_can_be_captured_and_confirmed_exactly_as_proposed()
+    {
+        await using var portal = await FiscalPortalStub.Answering(Extraction.AromaFiscalTests.MixedIkof);
+        await using var api = Api(portal);
+        using var client = api.CreateClient();
+
+        string payload = $"https://mapr.tax.gov.me/ic/#/verify?iic={Extraction.AromaFiscalTests.MixedIkof}"
+            + "&tin=02440261&crtd=2026-09-10T17:02:02+02:00&ord=2933&bu=rv197xp702&cr=hi821lc718&sw=dz406qv826&prc=26.76";
+
+        var response = await client.PostAsJsonAsync("/receipts/capture-fiscal", new { payload }, ExpensesApi.Json);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var captured = await ExpensesApi.Read<JsonElement>(response);
+        Assert.Equal("Retrieved", captured.GetProperty("fiscalDiagnosis").GetProperty("kind").GetString());
+        var result = captured.GetProperty("result");
+
+        static decimal? Number(JsonElement line, string name)
+            => line.GetProperty(name).ValueKind == JsonValueKind.Number ? line.GetProperty(name).GetDecimal() : null;
+
+        var expenses = result.GetProperty("candidates").EnumerateArray().Select(line => new
+        {
+            description = line.GetProperty("description").GetString(),
+            amount = line.GetProperty("amount").GetDecimal(),
+            quantity = Number(line, "quantity"),
+            unitPrice = Number(line, "unitPrice"),
+            listUnitPrice = Number(line, "listUnitPrice"),
+            discountAmount = Number(line, "discountAmount"),
+            unitCode = line.GetProperty("unitRaw").GetString() switch
+            {
+                "KG" => "KG",
+                "L" => "L",
+                _ => "PCS",
+            },
+        }).ToArray();
+
+        var confirmed = await client.PostAsJsonAsync(
+            "/purchases",
+            new
+            {
+                occurredAt = Next(),
+                amount = result.GetProperty("total").GetDecimal(),
+                expenses,
+                capture = new
+                {
+                    state = captured.GetProperty("state").GetString(),
+                    jikr = captured.GetProperty("extracted").GetProperty("jikr").GetString(),
+                    fiscalSource = captured.GetProperty("fiscalSource").GetString(),
+                    fiscalPayload = captured.GetProperty("fiscalPayload").GetString(),
+                },
+            },
+            ExpensesApi.Json);
+
+        Assert.True(
+            confirmed.StatusCode == HttpStatusCode.Created,
+            $"{(int)confirmed.StatusCode}: {await confirmed.Content.ReadAsStringAsync()}");
+    }
+
     [Fact]
     public async Task A_confirmation_naming_neither_a_key_nor_a_payload_is_rejected()
     {

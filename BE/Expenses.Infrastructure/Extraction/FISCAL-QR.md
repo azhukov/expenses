@@ -112,6 +112,7 @@ The answer is roughly 14 KB of JSON. What is mapped, and nothing else is:
 | --- | --- |
 | `items[].name`, `.unit`, `.quantity`, `.priceAfterVat`, `.vatRate` | a candidate line, verbatim |
 | `items[].unitPriceAfterVat` × `.quantity` | the line's list price |
+| `items[].unitPriceBeforeVat` × (1 + `.vatRate`/100) × `.quantity` | the line's list price instead, **only** on a line with a rebate and only when it is the larger. Aroma's till states `unitPriceAfterVat` after the rebate (4.99 for a line printed "Cijena: 8.50, Popust: 41.29%"), so the list price survives only before VAT (7.0248 × 1.21 = 8.50). Recorded as `verify-EC071329….json` and `verify-902B5C31….json` |
 | `items[].rebate` | **not** mapped as is: it is a percentage. The line's discount is its list price less its amount, in cents |
 | `seller.name`, `seller.idNum` | the merchant and its tax number |
 | `totalPrice`, `totalVATAmount` | the result's total and tax amount |
