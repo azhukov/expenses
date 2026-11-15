@@ -82,6 +82,38 @@ public sealed class ClaudeVisionExtractorTests(PostgresFixture postgres)
     }
 
     /// <summary>
+    /// The printed purchase time is read off the image as wall-clock time, unconverted (D5), so a
+    /// receipt with no fiscal code still arrives at review with its date.
+    /// </summary>
+    [Fact]
+    public async Task The_printed_date_and_time_are_read()
+    {
+        await using var stub = await ClaudeVisionStub.Answering();
+        await using var services = Services(stub);
+
+        var result = await Extractor(services).Extract(s_image, FiscalIdentifiers.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(new DateTime(2026, 8, 24, 12, 50, 8, DateTimeKind.Unspecified), result.OccurredAt);
+        Assert.Equal(DateTimeKind.Unspecified, result.OccurredAt!.Value.Kind);
+        Assert.True(result.Provenance.ContainsKey(ExtractedValues.OccurredAt));
+    }
+
+    /// <summary>A receipt whose date the engine could not read still has its lines.</summary>
+    [Fact]
+    public async Task A_receipt_without_a_readable_date_still_has_its_lines()
+    {
+        await using var stub = await ClaudeVisionStub.Answering("claude-vision-response-alternate.json");
+        await using var services = Services(stub);
+
+        var result = await Extractor(services).Extract(s_image, FiscalIdentifiers.None);
+
+        Assert.NotNull(result);
+        Assert.Null(result.OccurredAt);
+        Assert.NotEmpty(result.Candidates);
+    }
+
+    /// <summary>
     /// IDEA prints weighed lines to four places (1.536 kg × 1.49 = 2.2886) under a total of 9.59. The
     /// ledger refuses money beyond the cent (D7), so a candidate that kept 2.2886 could never be
     /// confirmed; rounded line by line they would sum to 9.60.

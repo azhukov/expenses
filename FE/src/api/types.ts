@@ -152,6 +152,11 @@ export interface ExtractionResultView {
   merchantTaxId: string | null
   provenance: Record<string, string>
   reportedConfidence: Record<string, number>
+  /**
+   * The date and time printed on the receipt, as read off the image: offset-less wall-clock time.
+   * A guess to prefill review with, never a fiscal date. Absent from a server that predates it.
+   */
+  occurredAt?: string | null
 }
 
 /**

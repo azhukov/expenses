@@ -60,6 +60,13 @@ public sealed record ExtractionStepResult
 
     public string? MerchantTaxId { get; private init; }
 
+    /// <summary>
+    /// The date and time the receipt prints, as a reading of the image rather than an identifier: a
+    /// step that decoded a fiscal code states its timestamp in <see cref="Fiscal"/> instead. Wall
+    /// clock, never converted (D5).
+    /// </summary>
+    public DateTime? OccurredAt { get; private init; }
+
     /// <summary>Result-level value provenance, for values that are not per line (D20).</summary>
     public IReadOnlyDictionary<string, string> Provenance { get; private init; }
         = new Dictionary<string, string>();
@@ -96,6 +103,7 @@ public sealed record ExtractionStepResult
         decimal? taxAmount = null,
         string? merchantName = null,
         string? merchantTaxId = null,
+        DateTime? occurredAt = null,
         IEnumerable<string>? stepsRun = null,
         IReadOnlyDictionary<string, string>? provenance = null,
         IReadOnlyDictionary<string, decimal>? reportedConfidence = null,
@@ -121,6 +129,7 @@ public sealed record ExtractionStepResult
             TaxAmount = taxAmount,
             MerchantName = merchantName,
             MerchantTaxId = merchantTaxId,
+            OccurredAt = occurredAt is { } when ? DateTime.SpecifyKind(when, DateTimeKind.Unspecified) : null,
             Provenance = provenance ?? new Dictionary<string, string>(),
             ReportedConfidence = reportedConfidence ?? new Dictionary<string, decimal>(),
             Fiscal = fiscal ?? FiscalIdentifiers.None,

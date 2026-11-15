@@ -78,7 +78,11 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
   )
   const [amount, setAmount] = useState(() => asText(capture.result?.total))
   const [merchant, setMerchant] = useState(() => capture.result?.merchantName ?? '')
-  const [occurredAt, setOccurredAt] = useState(() => asLocalInput(fiscalCreatedAt(capture)))
+  const [occurredAt, setOccurredAt] = useState(() =>
+    // A fiscal date is exact and the API resolves it by itself; a date read off the image is only a
+    // prefill, sent back as the user's own because nothing server-side can resolve it.
+    asLocalInput(fiscalCreatedAt(capture) ?? capture.result?.occurredAt ?? null),
+  )
   const [dateEdited, setDateEdited] = useState(false)
 
   const nextKey = useRef(candidates.length + 1)

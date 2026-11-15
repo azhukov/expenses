@@ -18,4 +18,5 @@ public static class ExtractedValues
     public const string Total = "total";
     public const string TaxRatePercent = "tax_rate_percent";
     public const string TaxAmount = "tax_amount";
+    public const string OccurredAt = "occurred_at";
 }

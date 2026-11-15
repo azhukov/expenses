@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Expenses.Application.Dtos;
@@ -40,6 +41,9 @@ internal sealed class ClaudeVisionReceiptExtractor(
         {
           "merchant_name": string or null,
           "merchant_name_confidence": number from 0 to 1, your confidence in merchant_name,
+          "occurred_at": string or null, the date and time of the purchase as printed, written as
+            YYYY-MM-DDTHH:MM:SS with no time zone (seconds 00 if not printed, time 00:00:00 if only
+            a date is printed),
           "total": number or null, the amount actually paid,
           "tax_rate_percent": number or null, the VAT rate if the receipt states a single one,
           "tax_amount": number or null, the total VAT amount,
@@ -196,6 +200,8 @@ internal sealed class ClaudeVisionReceiptExtractor(
             ],
             extraction.Total);
 
+        var occurredAt = ParseOccurrence(extraction.OccurredAt);
+
         var candidates = lines.Select((line, index) => ExtractionCandidate.Propose(
             index + 1,
             line.Description ?? $"Line {index + 1}",
@@ -226,12 +232,41 @@ internal sealed class ClaudeVisionReceiptExtractor(
             taxRatePercent: extraction.TaxRatePercent,
             taxAmount: extraction.TaxAmount is { } tax ? CentRounding.ToCents(tax) : null,
             merchantName: extraction.MerchantName,
+            occurredAt: occurredAt,
             provenance: Provenance(
-                ExtractedValues.Total,
-                ExtractedValues.TaxRatePercent,
-                ExtractedValues.TaxAmount,
-                ExtractedValues.MerchantName),
+                [
+                    ExtractedValues.Total,
+                    ExtractedValues.TaxRatePercent,
+                    ExtractedValues.TaxAmount,
+                    ExtractedValues.MerchantName,
+                    .. occurredAt is null ? Array.Empty<string>() : [ExtractedValues.OccurredAt],
+                ]),
             reportedConfidence: ResultConfidence(extraction));
+    }
+
+    /// <summary>
+    /// Read leniently and on its own: a date the model wrote in some other shape costs the receipt
+    /// its date, never its lines. Whatever is read is kept as wall-clock time, unconverted (D5).
+    /// </summary>
+    private static DateTime? ParseOccurrence(string? printed)
+    {
+        if (string.IsNullOrWhiteSpace(printed))
+        {
+            return null;
+        }
+
+        string[] formats = ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd"];
+
+        if (DateTime.TryParseExact(printed.Trim(), formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var exact))
+        {
+            return DateTime.SpecifyKind(exact, DateTimeKind.Unspecified);
+        }
+
+        // An offset the prompt asked it not to write is dropped rather than applied: the receipt
+        // printed local time, and that is what the ledger keeps.
+        return DateTimeOffset.TryParse(printed, CultureInfo.InvariantCulture, DateTimeStyles.None, out var offset)
+            ? DateTime.SpecifyKind(offset.DateTime, DateTimeKind.Unspecified)
+            : null;
     }
 
     /// <summary>Only values arithmetic cannot decide carry a reported confidence (D20).</summary>
@@ -279,6 +314,8 @@ internal sealed class ClaudeVisionReceiptExtractor(
         public string? MerchantName { get; init; }
 
         public decimal? MerchantNameConfidence { get; init; }
+
+        public string? OccurredAt { get; init; }
 
         public decimal? Total { get; init; }
 

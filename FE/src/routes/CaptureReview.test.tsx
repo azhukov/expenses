@@ -177,6 +177,31 @@ describe('A missing date never reaches the ledger', () => {
   })
 })
 
+describe('A date read off the image prefills review', () => {
+  it('fills the date from the reading and confirms with it', async () => {
+    const base = captured({ extracted: noFiscal, supplied: noFiscal })
+    const { onConfirm, confirm } = show({
+      ...base,
+      result: { ...base.result!, occurredAt: '2026-08-24T12:50:08' },
+    })
+
+    expect(screen.getByLabelText(/^date/i)).toHaveValue('2026-08-24T12:50')
+
+    await userEvent.click(confirm)
+
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ occurredAt: '2026-08-24T12:50' }),
+    )
+  })
+
+  it('prefers the fiscal date over the reading', () => {
+    const base = captured()
+    show({ ...base, result: { ...base.result!, occurredAt: '2026-08-24T12:50:08' } })
+
+    expect(screen.getByLabelText(/^date/i)).toHaveValue('2026-09-01T10:15')
+  })
+})
+
 describe('Invalid values are marked on the inputs at fault', () => {
   it('clears a mark as soon as the value becomes valid, without confirming again', async () => {
     const { confirm } = show()

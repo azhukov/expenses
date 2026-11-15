@@ -15,7 +15,13 @@ public sealed record ExtractionResultView(
     string? MerchantName,
     string? MerchantTaxId,
     IReadOnlyDictionary<string, string> Provenance,
-    IReadOnlyDictionary<string, decimal> ReportedConfidence)
+    IReadOnlyDictionary<string, decimal> ReportedConfidence,
+
+    /// <summary>
+    /// The date and time printed on the receipt, where a step read one off the image. A fiscal
+    /// code's timestamp, where there is one, is reported in the capture's identifiers instead.
+    /// </summary>
+    DateTime? OccurredAt = null)
 {
     public static ExtractionResultView Of(ExtractionStepResult result) => new(
         result.EngineName,
@@ -28,5 +34,6 @@ public sealed record ExtractionResultView(
         result.MerchantName,
         result.MerchantTaxId,
         result.Provenance,
-        result.ReportedConfidence);
+        result.ReportedConfidence,
+        result.OccurredAt);
 }
