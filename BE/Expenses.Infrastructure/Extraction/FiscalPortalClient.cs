@@ -228,20 +228,32 @@ internal sealed class FiscalPortalClient(
             return null;
         }
 
-        var amounts = CentRounding.ToCentsSummingTo([.. items.Select(item => item.PriceAfterVat)], invoice.TotalPrice);
+        // The amount is the one number a line cannot do without. A line the portal states with none
+        // is an answer that cannot be taken, reported as such by the caller rather than guessed at.
+        decimal[] exact =
+        [
+            .. items.Select((item, index) => item.PriceAfterVat
+                ?? throw new InvalidOperationException($"Line {index + 1} states no amount.")),
+        ];
+
+        var amounts = CentRounding.ToCentsSummingTo(exact, invoice.TotalPrice);
 
         var candidates = items.Select((item, index) =>
         {
             decimal amount = amounts[index];
-            decimal listPrice = CentRounding.ToCents(item.UnitPriceAfterVat * item.Quantity)
-                + (amount - CentRounding.ToCents(item.PriceAfterVat));
+
+            // A list price needs both the unit price and the quantity. Without either there is
+            // neither a list price nor a discount: the two are recorded together or not at all (D19).
+            decimal? listPrice = item.UnitPriceAfterVat is { } unit && item.Quantity is { } quantity
+                ? CentRounding.ToCents(unit * quantity) + (amount - CentRounding.ToCents(exact[index]))
+                : null;
 
             return ExtractionCandidate.Propose(
                 index + 1,
                 item.Name ?? $"Line {index + 1}",
                 amount,
                 quantity: item.Quantity,
-                unitPrice: CentRounding.ToCents(item.UnitPriceAfterVat),
+                unitPrice: item.UnitPriceAfterVat is { } unitPrice ? CentRounding.ToCents(unitPrice) : null,
                 listUnitPrice: listPrice,
 
                 // The portal's `rebate` is a percentage, not an amount, and the unit price is the one
@@ -249,7 +261,7 @@ internal sealed class FiscalPortalClient(
                 // both already in cents, so the line adds up however each was rounded. A unit price the
                 // portal states to four places can extend to a cent under the amount on an undiscounted
                 // line, which is no discount rather than a negative one.
-                discountAmount: Math.Max(0m, listPrice - amount),
+                discountAmount: listPrice is { } list ? Math.Max(0m, list - amount) : null,
                 taxRatePercent: item.VatRate,
                 unitRaw: item.Unit,
                 provenance: Provenance(
@@ -322,27 +334,29 @@ internal sealed class FiscalPortalClient(
         public string? IdNum { get; init; }
     }
 
+    /// <summary>
+    /// One line. Every number is optional, because tills differ in what they state: IDEA's states no
+    /// rebate at all where Megapromet's states a zero one, and the portal answers <c>null</c> for it.
+    /// A non-nullable field would refuse the whole invoice over a value nothing here needs. The
+    /// rebate itself is not read: it is a percentage, and the discount is derived from the amounts.
+    /// </summary>
     private sealed record Item
     {
         public string? Name { get; init; }
 
         public string? Unit { get; init; }
 
-        public decimal Quantity { get; init; }
+        public decimal? Quantity { get; init; }
 
-        public decimal UnitPriceAfterVat { get; init; }
+        public decimal? UnitPriceAfterVat { get; init; }
 
-        public decimal PriceAfterVat { get; init; }
+        public decimal? PriceAfterVat { get; init; }
 
-        public decimal Rebate { get; init; }
-
-        public decimal VatRate { get; init; }
+        public decimal? VatRate { get; init; }
     }
 
     private sealed record TaxGroup
     {
-        public decimal VatRate { get; init; }
-
-        public decimal VatAmount { get; init; }
+        public decimal? VatRate { get; init; }
     }
 }

@@ -37,17 +37,23 @@ public sealed class FiscalPortalStub : IAsyncDisposable
 
     public string BaseAddress { get; private set; } = string.Empty;
 
-    /// <summary>The response the real portal gave for the receipt that decodes.</summary>
-    public static string RecordedInvoice() => File.ReadAllText(Path.Combine(
+    /// <summary>The invoice code of the receipt that decodes, the Megapromet one.</summary>
+    public const string MegaprometIkof = "32AA324CFF5030271E16D59F7F8EF636";
+
+    /// <summary>
+    /// The response the real portal gave for an invoice, recorded once and committed under
+    /// <c>Fixtures/verify-{ikof}.json</c>. The Megapromet receipt unless another is named.
+    /// </summary>
+    public static string RecordedInvoice(string ikof = MegaprometIkof) => File.ReadAllText(Path.Combine(
         AppContext.BaseDirectory,
         "Fixtures",
-        "verify-32AA324CFF5030271E16D59F7F8EF636.json"));
+        $"verify-{ikof}.json"));
 
-    public static Task<FiscalPortalStub> Answering()
+    public static Task<FiscalPortalStub> Answering(string ikof = MegaprometIkof)
         => Start(async context =>
         {
             context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(RecordedInvoice());
+            await context.Response.WriteAsync(RecordedInvoice(ikof));
         });
 
     /// <summary>A service that has no record of the invoice: 200, and nothing in it.</summary>

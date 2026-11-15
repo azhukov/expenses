@@ -118,8 +118,13 @@ The answer is roughly 14 KB of JSON. What is mapped, and nothing else is:
 | `sameTaxes[].vatRate` | the result's tax rate, **only** when the invoice has exactly one |
 | `fic` | the JIKR |
 
-Two details that are easy to get wrong:
+Three details that are easy to get wrong:
 
+- **Tills differ in which fields they state.** IDEA's till states no rebate at all, so the portal
+  answers `"rebate": null` where Megapromet's answers `0.0000`. Every number on a line is read as
+  optional; only the amount is required, and a line without one is an unparseable answer. Two IDEA
+  answers are recorded beside the Megapromet one, as `verify-136329B5….json` (1.19) and
+  `verify-C92945B9….json` (10.02, a line of 0.125 kg stated unrounded as 0.1238).
 - **`unitPriceAfterVat` is a unit price; the discount check is line-level.** Six of the fourteen
   lines on the recorded invoice have a quantity other than 1 — 15.00 per kilogram over 0.548 kg —
   so the list price is extended by the quantity before it reaches the check. Passing the unit price

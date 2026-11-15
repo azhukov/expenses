@@ -264,6 +264,100 @@ public sealed class FiscalPortalTests(PostgresFixture postgres)
         Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
     }
 
+    /// <summary>
+    /// IDEA's till states no rebate at all where Megapromet's states a zero one: the portal answers
+    /// <c>"rebate": null</c>. Recorded from the real portal for an IDEA receipt of 1.19 (one carton
+    /// of sour cream at 7%). A field the invoice leaves out is not an answer this cannot read.
+    /// </summary>
+    [Fact]
+    public async Task An_invoice_that_states_no_rebate_is_retrieved_and_mapped()
+    {
+        await using var portal = await FiscalPortalStub.Answering("136329B53A14C42501B9614D8C619CF2");
+        await using var services = Services(portal);
+
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Idea(
+            "136329B53A14C42501B9614D8C619CF2", "2026-09-09T21:24:41+02:00", 1.19m));
+        var invoice = retrieval.Invoice;
+
+        Assert.Equal(FiscalDiagnosisKind.Retrieved, retrieval.Diagnosis.Kind);
+        Assert.NotNull(invoice);
+
+        var line = Assert.Single(invoice.Candidates);
+        Assert.Equal("PAVLAKA KISJELA 20%MM 180ML IMLEK", line.Description);
+        Assert.Equal(1.19m, line.Amount);
+        Assert.Equal(1m, line.Quantity);
+        Assert.Equal(7m, line.TaxRatePercent);
+
+        // No rebate stated is no discount: the list price is the amount, and nothing is taken off.
+        Assert.Equal(1.19m, line.ListUnitPrice);
+        Assert.Equal(0m, line.DiscountAmount);
+
+        Assert.Equal(1.19m, invoice.Total);
+        Assert.Equal(0.08m, invoice.TaxAmount);
+        Assert.Equal(7m, invoice.TaxRatePercent);
+        Assert.Equal("IDEA CG", invoice.MerchantName);
+        Assert.Equal("02793962", invoice.MerchantTaxId);
+        Assert.Equal("2c115cd6-dd7b-4337-b681-b07c2e0835ef", invoice.Fiscal.Jikr);
+
+        var report = ArithmeticValidator.Validate(ExtractionArithmetic.From(invoice));
+        Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
+    }
+
+    /// <summary>
+    /// The other IDEA receipt, 10.02: one watermelon weighed in two goes, 10 kg and then 0.125 kg at
+    /// 0.99. The till prints the second line unrounded as 0,1238 and the total as 10,02, and the
+    /// portal states it the same way, with no rebate on either line.
+    /// </summary>
+    [Fact]
+    public async Task A_weighed_invoice_that_states_no_rebate_arrives_in_cents()
+    {
+        await using var portal = await FiscalPortalStub.Answering("C92945B94C4DFCA0EE9A13819682C03D");
+        await using var services = Services(portal);
+
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, Idea(
+            "C92945B94C4DFCA0EE9A13819682C03D", "2026-09-09T13:24:42+02:00", 10.02m));
+        var invoice = retrieval.Invoice;
+
+        Assert.Equal(FiscalDiagnosisKind.Retrieved, retrieval.Diagnosis.Kind);
+        Assert.NotNull(invoice);
+        Assert.Equal(["LUBENICA M", "LUBENICA M"], invoice.Candidates.Select(line => line.Description));
+        Assert.Equal([10m, 0.125m], invoice.Candidates.Select(line => line.Quantity));
+        Assert.Equal([9.90m, 0.12m], invoice.Candidates.Select(line => line.Amount));
+        Assert.Equal([9.90m, 0.12m], invoice.Candidates.Select(line => line.ListUnitPrice));
+        Assert.Equal([0m, 0m], invoice.Candidates.Select(line => line.DiscountAmount));
+
+        Assert.Equal(10.02m, invoice.Total);
+        Assert.Equal(invoice.Total, invoice.Candidates.Sum(line => line.Amount));
+        Assert.Equal(1.74m, invoice.TaxAmount);
+        Assert.Equal(21m, invoice.TaxRatePercent);
+        Assert.Equal("c8b5f6d8-1f5c-45e0-95ca-733100152e39", invoice.Fiscal.Jikr);
+
+        var report = ArithmeticValidator.Validate(ExtractionArithmetic.From(invoice));
+        Assert.True(report.Passed, string.Join("; ", report.Failures.Select(check => check.Description)));
+    }
+
+    /// <summary>
+    /// A line the portal states with no amount cannot become a ledger line, and the answer is not
+    /// taken; but it is still a diagnosis, not an exception.
+    /// </summary>
+    [Fact]
+    public async Task A_line_with_no_amount_is_an_answer_that_cannot_be_taken()
+    {
+        await using var portal = await FiscalPortalStub.AnsweringWith("""
+            {"fic":"abc","totalPrice":1.00,"items":[
+              {"name":"A","quantity":null,"unitPriceAfterVat":null,"priceAfterVat":null,"rebate":null,"vatRate":null}]}
+            """);
+        await using var services = Services(portal);
+
+        var retrieval = await services.GetRequiredService<IFiscalInvoiceRetrieval>().Retrieve(7, s_decoded);
+
+        Assert.Null(retrieval.Invoice);
+        Assert.Equal(FiscalDiagnosisKind.UnparseableResponse, retrieval.Diagnosis.Kind);
+    }
+
+    private static FiscalIdentifiers Idea(string ikof, string createdAt, decimal total)
+        => new(ikof, Jikr: null, IssuerTaxNumber: "02793962", CreatedAt: createdAt, Total: total);
+
     [Fact]
     public async Task The_missing_identifier_arrives_from_the_verification_service()
     {
