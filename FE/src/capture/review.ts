@@ -128,6 +128,56 @@ export function reviewReasons(capture: CaptureResult): string[] {
   return reasons
 }
 
+/** Why the ledger would refuse a money value, or nothing. Mirrors `Expense`'s own rule (D7). */
+function moneyProblem(value: number): string | undefined {
+  if (value < 0) {
+    return 'it is negative'
+  }
+
+  const [, fraction = ''] = String(value).split('.')
+
+  return fraction.length > 2 ? 'it has more than two decimal places' : undefined
+}
+
+/**
+ * The values of a line this screen carries but does not show — unit price, list price, discount —
+ * that the ledger will not keep, each as a sentence. They are warnings and never refusals: nothing
+ * on this screen could correct them, so confirming goes ahead and the server drops them, naming
+ * them in its answer the same way. The rules are the ledger's, restated so the user hears them
+ * before confirming rather than after (D2).
+ */
+export function unseenWarnings(lines: EditableLine[]): string[] {
+  const warnings: string[] = []
+
+  lines.forEach((line, index) => {
+    const name = `Line ${index + 1}`
+    const unitPrice = line.unitPrice === null ? undefined : moneyProblem(line.unitPrice)
+
+    if (unitPrice !== undefined) {
+      warnings.push(`${name}: the unit price ${line.unitPrice} will not be kept, as ${unitPrice}.`)
+    }
+
+    const { listUnitPrice: list, discountAmount: discount } = line
+
+    if (list === null && discount === null) {
+      return
+    }
+
+    const discountProblem =
+      list === null || discount === null
+        ? 'only one of the list price and the discount was read'
+        : (moneyProblem(list) ?? moneyProblem(discount))
+
+    if (discountProblem !== undefined) {
+      warnings.push(
+        `${name}: the discount (list price ${list ?? 'none'}, discount ${discount ?? 'none'}) will not be kept, as ${discountProblem}.`,
+      )
+    }
+  })
+
+  return warnings
+}
+
 /**
  * The longest description the ledger stores — `Expense`'s own limit, restated here so the user
  * hears it on the field rather than as a rejection after a round trip. The duplication is

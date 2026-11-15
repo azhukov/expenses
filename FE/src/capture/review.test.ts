@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import type { CaptureResult } from '../api/types'
 
-import { confirmationOf, type EditableLine, type Edits, emptyLine, validate } from './review'
+import {
+  confirmationOf,
+  type EditableLine,
+  type Edits,
+  emptyLine,
+  isValid,
+  unseenWarnings,
+  validate,
+} from './review'
 
 /**
  * Scenarios from browser-client: "The review screen refuses an incomplete purchase" and the parts
@@ -189,5 +197,28 @@ describe('confirmationOf', () => {
     )
 
     expect(request.capture?.tempKey).toBe('0f2b0a3c-0000-4000-8000-000000000001')
+  })
+})
+
+describe('Values the review screen does not show', () => {
+  it('are warned about where the ledger would not keep them', () => {
+    expect(
+      unseenWarnings([
+        line({ unitPrice: 4.4885 }),
+        line({ listUnitPrice: 8.5, discountAmount: null }),
+        line({ listUnitPrice: 2.16, discountAmount: -0.41 }),
+        line({ listUnitPrice: 8.5, discountAmount: 4.01, unitPrice: 4.49 }),
+      ]),
+    ).toEqual([
+      'Line 1: the unit price 4.4885 will not be kept, as it has more than two decimal places.',
+      'Line 2: the discount (list price 8.5, discount none) will not be kept, as only one of the list price and the discount was read.',
+      'Line 3: the discount (list price 2.16, discount -0.41) will not be kept, as it is negative.',
+    ])
+  })
+
+  it('never make the edits invalid', () => {
+    expect(
+      isValid(validate(edits({ lines: [line({ unitPrice: 4.4885, listUnitPrice: 8.5 })] }))),
+    ).toBe(true)
   })
 })

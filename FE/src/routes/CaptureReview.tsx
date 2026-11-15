@@ -15,6 +15,7 @@ import {
   lineOf,
   lowConfidence,
   reviewReasons,
+  unseenWarnings,
   validate,
 } from '../capture/review'
 
@@ -84,6 +85,10 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
 
   const reasons = reviewReasons(capture)
 
+  // Recomputed from the current lines, so removing a line takes its warning with it. Never part of
+  // `validate`: these are about values this screen cannot show, so they cannot block confirming.
+  const warnings = unseenWarnings(lines)
+
   // Per line as well as in the list of reasons: which line the unsure value is on is what the user
   // needs in order to correct it, and a reason on its own does not say.
   const unsureOn = new Map(
@@ -94,6 +99,7 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
     capture.failureReason !== null ||
     failure !== null ||
     reasons.length > 0 ||
+    warnings.length > 0 ||
     capture.alreadyRecorded !== null
 
   // Marked only once the user has tried to confirm, and recomputed from the current values on
@@ -209,6 +215,14 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
             <ul className={styles.reasons} data-testid="review-reasons">
               {reasons.map(reason => (
                 <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+
+          {warnings.length > 0 && (
+            <ul className={styles.reasons} data-testid="unseen-warnings">
+              {warnings.map(warning => (
+                <li key={warning}>{warning}</li>
               ))}
             </ul>
           )}

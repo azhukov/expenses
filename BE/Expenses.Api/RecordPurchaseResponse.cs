@@ -26,6 +26,9 @@ public sealed record RecordPurchaseResponse(
 
     public Purchase.ExtractionState? ExtractionState { get; init; }
 
+    /// <summary>Values extraction read that were not kept, and why. Empty unless a capture was confirmed.</summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+
     public static RecordPurchaseResponse Of(RecordPurchaseResult result) => new(
         result.Purchase.Id,
         result.Purchase.OccurredAt,
@@ -42,5 +45,6 @@ public sealed record RecordPurchaseResponse(
     {
         Fiscal = result.Purchase.Fiscal,
         ExtractionState = result.Purchase.ExtractionState,
+        Warnings = result.Warnings,
     };
 }

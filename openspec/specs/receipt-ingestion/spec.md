@@ -727,6 +727,13 @@ Confirming a capture SHALL create a purchase in one step: the submitted date, am
 - **AND** no purchase is created
 - **AND** the temporary image is left in place, available to confirm again
 
+#### Scenario: A value the confirming person cannot see does not refuse the purchase
+
+- **WHEN** a capture is confirmed with a line whose unit price, list price or discount breaks a rule the ledger enforces on it — more than two decimal places, a negative discount, or a list price without a discount
+- **THEN** the purchase is created without that value, a list price and discount being dropped together
+- **AND** the answer carries a warning naming the line, the value and the rule
+- **AND** a purchase recorded by hand with the same values is still rejected, since its caller states every value it sends
+
 ### Requirement: The purchase date defaults from the receipt
 
 Where confirmation does not supply a date, and the capture's extraction established the invoice creation timestamp from the receipt's fiscal identity, the system SHALL use that timestamp as the purchase's occurrence. Where no date is supplied and none was established from the receipt, the system SHALL reject the confirmation and report that a date is required.

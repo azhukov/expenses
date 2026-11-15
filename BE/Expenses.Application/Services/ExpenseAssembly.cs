@@ -1,3 +1,4 @@
+using System.Globalization;
 using Expenses.Application.Dtos;
 using Expenses.Application.Errors;
 using Expenses.Application.Interfaces;
@@ -17,7 +18,8 @@ internal static class ExpenseAssembly
         ICategoryRepository categories,
         IUnitRepository units,
         IUnitAliasRepository aliases,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        List<string>? warnings = null)
     {
         var lines = new List<Expense>(commands.Count);
 
@@ -58,9 +60,37 @@ internal static class ExpenseAssembly
                 lookup.Remember(printed, unitId.Value);
             }
 
+            lines.Add(Record(command, unitId, categoryId, position, warnings));
+        }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// The values a person confirming a capture never sees: the review screen edits the description,
+    /// amount, quantity, unit and category, and carries these through as extraction read them.
+    /// </summary>
+    private static readonly HashSet<string> s_unseen = ["unitPrice", "listUnitPrice", "discountAmount"];
+
+    /// <summary>
+    /// Records one line. Where <paramref name="warnings"/> is given — a capture being confirmed — a
+    /// rule the entity enforces on a value the confirming person could not see does not refuse the
+    /// purchase: nothing they could do on the screen would satisfy it. The value is dropped instead,
+    /// both halves of a discount together (D19), and the reason is reported as a warning. The rule
+    /// itself is still the entity's; this only decides what a breach of it costs.
+    /// </summary>
+    private static Expense Record(
+        ExpenseCommand command,
+        long? unitId,
+        long? categoryId,
+        int position,
+        List<string>? warnings)
+    {
+        while (true)
+        {
             try
             {
-                lines.Add(Expense.Record(
+                return Expense.Record(
                     command.Description,
                     command.Amount,
                     command.Quantity,
@@ -70,15 +100,47 @@ internal static class ExpenseAssembly
                     command.CategoryRaw,
                     command.UnitRaw,
                     command.ListUnitPrice,
-                    command.DiscountAmount));
+                    command.DiscountAmount);
+            }
+            catch (ArgumentException exception)
+                when (warnings is not null && exception.ParamName is { } field && s_unseen.Contains(field))
+            {
+                if (field == "unitPrice")
+                {
+                    warnings.Add($"Line {position}: the unit price {command.UnitPrice} was not kept. {Reason(exception)}");
+                    command = command with { UnitPrice = null };
+                }
+                else
+                {
+                    warnings.Add(
+                        $"Line {position}: the discount (list price {Shown(command.ListUnitPrice)}, "
+                        + $"discount {Shown(command.DiscountAmount)}) was not kept. {Reason(exception)}");
+                    command = command with { ListUnitPrice = null, DiscountAmount = null };
+                }
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
                 throw DomainErrorTranslation.Expense(exception);
             }
         }
+    }
 
-        return lines;
+    private static string Shown(decimal? value) => value?.ToString(CultureInfo.InvariantCulture) ?? "none";
+
+    /// <summary>The entity's own sentence, without the parameter name .NET appends to it.</summary>
+    private static string Reason(ArgumentException exception)
+    {
+        string message = exception.Message;
+        int suffix = message.IndexOf(" (Parameter '", StringComparison.Ordinal);
+
+        if (suffix >= 0)
+        {
+            message = message[..suffix];
+        }
+
+        int actual = message.IndexOf("\nActual value", StringComparison.Ordinal);
+
+        return (actual >= 0 ? message[..actual] : message).Trim();
     }
 
     /// <summary>

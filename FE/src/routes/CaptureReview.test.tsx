@@ -259,3 +259,49 @@ describe('An invoice already recorded is flagged at review', () => {
     expect(screen.queryByTestId('already-recorded')).not.toBeInTheDocument()
   })
 })
+
+describe('Values the review screen does not show are warned about, never refused', () => {
+  it('warns about a unit price and a half discount, and still confirms', async () => {
+    const { onConfirm, confirm } = show(
+      captured({
+        state: 'NeedsReview',
+        validation: {
+          checks: [
+            {
+              name: 'line_discount',
+              outcome: 'Failed',
+              description: 'Line 1 lists 8.5 less 3, which is 5.5, but its amount is 2.5.',
+              values: {},
+            },
+          ],
+        },
+        result: {
+          ...captured().result,
+          candidates: [candidate({ unitPrice: 2.4885, listUnitPrice: 8.5, discountAmount: null })],
+        },
+      }),
+    )
+
+    const warnings = screen.getByTestId('unseen-warnings')
+    expect(warnings).toHaveTextContent('Line 1: the unit price 2.4885 will not be kept')
+    expect(warnings).toHaveTextContent('Line 1: the discount (list price 8.5, discount none)')
+    expect(screen.getByTestId('review-reasons')).toHaveTextContent('Line 1 lists 8.5 less 3')
+
+    await userEvent.click(confirm)
+
+    expect(onConfirm).toHaveBeenCalled()
+  })
+
+  it('shows no such warning when every unseen value can be kept', () => {
+    show(
+      captured({
+        result: {
+          ...captured().result,
+          candidates: [candidate({ listUnitPrice: 3, discountAmount: 0.5 })],
+        },
+      }),
+    )
+
+    expect(screen.queryByTestId('unseen-warnings')).not.toBeInTheDocument()
+  })
+})

@@ -533,6 +533,82 @@ public sealed class RecordPurchaseTests
         Assert.Empty(_ledger.Purchases);
     }
 
+    /// <summary>
+    /// The review screen shows a line's description, amount, quantity, unit and category, and
+    /// carries its unit price, list price and discount through unseen. A rule broken by one of
+    /// those is not something the person confirming could correct, so it does not refuse the
+    /// purchase: the value is dropped and the reason is reported.
+    /// </summary>
+    [Fact]
+    public async Task A_half_discount_on_a_confirmed_capture_is_dropped_with_a_warning()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(11));
+
+        var result = await Subject.Record(
+            s_occurred,
+            4.49m,
+            [new ExpenseCommand("Sladoled", 4.49m, UnitCode: Piece, ListUnitPrice: 8.50m)],
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.NeedsReview));
+
+        var expense = Assert.Single(result.Purchase.Expenses);
+        Assert.Null(expense.ListUnitPrice);
+        Assert.Null(expense.DiscountAmount);
+        var warning = Assert.Single(result.Warnings);
+        Assert.Contains("Line 1", warning, StringComparison.Ordinal);
+        Assert.Contains("8.50", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("Parameter", warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unseen_values_beyond_the_cent_on_a_confirmed_capture_are_dropped_with_warnings()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(12));
+
+        var result = await Subject.Record(
+            s_occurred,
+            6.24m,
+            [
+                new ExpenseCommand("Sladoled", 4.49m, UnitCode: Piece, UnitPrice: 4.4885m, ListUnitPrice: 8.50m, DiscountAmount: 4.01m),
+                new ExpenseCommand("Sljiva", 1.75m, UnitCode: Piece, ListUnitPrice: 2.1592m, DiscountAmount: -0.41m),
+            ],
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.NeedsReview));
+
+        Assert.Equal(2, result.Warnings.Count);
+        Assert.StartsWith("Line 1: the unit price", result.Warnings[0], StringComparison.Ordinal);
+        Assert.StartsWith("Line 2: the discount", result.Warnings[1], StringComparison.Ordinal);
+
+        // What could be kept was: the first line's discount was sound.
+        Assert.Null(result.Purchase.Expenses[0].UnitPrice);
+        Assert.Equal(8.50m, result.Purchase.Expenses[0].ListUnitPrice);
+        Assert.Equal(4.01m, result.Purchase.Expenses[0].DiscountAmount);
+        Assert.Null(result.Purchase.Expenses[1].ListUnitPrice);
+        Assert.Single(_ledger.Purchases);
+    }
+
+    /// <summary>A rule on a value the person can see and correct still refuses, capture or not.</summary>
+    [Fact]
+    public async Task A_visible_value_on_a_confirmed_capture_is_still_refused()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture(Jpeg(13));
+
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Subject.Record(
+            s_occurred,
+            4.49m,
+            [new ExpenseCommand("Sladoled", 4.495m, UnitCode: Piece)],
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.NeedsReview)));
+
+        Assert.Equal(ApplicationErrors.AmountPrecision, error.Error.Code);
+        Assert.True(_ledger.HasTemporaryCapture(tempKey));
+    }
+
+    [Fact]
+    public async Task A_purchase_recorded_by_hand_has_no_warnings()
+    {
+        var result = await Subject.Record(s_occurred, 4.49m, [new ExpenseCommand("Sladoled", 4.49m, UnitCode: Piece)]);
+
+        Assert.Empty(result.Warnings);
+    }
+
     [Fact]
     public async Task Date_taken_from_a_decoded_fiscal_receipt()
     {

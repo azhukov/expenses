@@ -9,4 +9,12 @@ public sealed record RecordPurchaseResult(
     PurchaseView Purchase,
     bool AlreadyRecorded,
     MerchantView? Merchant = null,
-    bool MerchantNewlyAdded = false);
+    bool MerchantNewlyAdded = false)
+{
+    /// <summary>
+    /// Values that were not kept, and why. Only a confirmed capture has any: a value extraction read
+    /// that the confirming person could not see, and that the ledger refuses, is dropped and named
+    /// here rather than refusing the purchase.
+    /// </summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+}

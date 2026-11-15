@@ -26,10 +26,21 @@ public sealed record RecordPurchaseToolResult(
             : $"Recorded {result.Purchase.Amount} on {result.Purchase.OccurredAt:yyyy-MM-dd HH:mm}"
               + $"{merchant}, identifier {result.Purchase.Id}.";
 
+        if (result.Warnings.Count > 0)
+        {
+            summary += " Not kept: " + string.Join(" ", result.Warnings);
+        }
+
         return new RecordPurchaseToolResult(
             summary,
             result.AlreadyRecorded,
             result.MerchantNewlyAdded,
-            result.Purchase);
+            result.Purchase)
+        {
+            Warnings = result.Warnings,
+        };
     }
+
+    /// <summary>Values extraction read that were not kept, and why. Empty unless a capture was confirmed.</summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
 }

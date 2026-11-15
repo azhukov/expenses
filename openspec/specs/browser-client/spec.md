@@ -320,6 +320,12 @@ warning. The user SHALL still be able to correct the affected values and confirm
 - **THEN** the screen states that the amounts did not reconcile
 - **AND** the lines are shown as the service stated them
 
+#### Scenario: A value the screen does not show is warned about, not refused
+
+- **WHEN** a line carries a unit price, list price or discount the ledger would not keep
+- **THEN** the screen warns, naming the line and the value, that it will not be kept
+- **AND** the warning does not prevent confirming
+
 ### Requirement: A failed extraction still allows manual entry
 
 Where an image capture returns Failed, the screen SHALL report the failure reason and SHALL let the user enter the date, amount and expense lines by hand rather than dead-ending; the temporary image remains confirmable with hand-entered data. A failed fiscal capture SHALL instead lead to the photograph control, as the fallback requirement states.

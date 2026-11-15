@@ -64,7 +64,11 @@ public sealed class PurchaseService(
             return AlreadyRecorded(already);
         }
 
-        var lines = await ExpenseAssembly.Build(expenses, categories, units, aliases, cancellationToken);
+        // Confirming a capture, a person has seen and could correct only some of each line; a rule
+        // broken by a value they never saw is reported to them rather than refusing the purchase.
+        // A purchase recorded by hand states every value it sends, so there it is still a refusal.
+        var warnings = capture is null ? null : new List<string>();
+        var lines = await ExpenseAssembly.Build(expenses, categories, units, aliases, cancellationToken, warnings);
         Reconcile(amount, lines);
 
         // Resolved only once the submission is known to be new, so a repeated request cannot add a
@@ -135,7 +139,10 @@ public sealed class PurchaseService(
             PurchaseView.Of(purchase),
             AlreadyRecorded: false,
             resolvedMerchant is null ? null : MerchantView.Of(resolvedMerchant.Merchant),
-            resolvedMerchant?.NewlyAdded ?? false);
+            resolvedMerchant?.NewlyAdded ?? false)
+        {
+            Warnings = warnings ?? [],
+        };
     }
 
     /// <summary>Returns one purchase with its expense lines, merchant and derived saving.</summary>
