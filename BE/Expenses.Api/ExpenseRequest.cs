@@ -25,6 +25,10 @@ namespace Expenses.Api;
 /// Accepted only so that it can be refused: a percentage is a rounded rendering of two numbers
 /// already stored, and keeping it would be a second, lossy source of truth (D19).
 /// </param>
+/// <param name="UnitInferred">
+/// Whether the unit is still the one extraction guessed from the quantity, untouched by the user.
+/// Such a line teaches no unit alias; nothing else about it changes.
+/// </param>
 public sealed record ExpenseRequest(
     string Description,
     decimal Amount,
@@ -37,7 +41,8 @@ public sealed record ExpenseRequest(
     decimal? ListUnitPrice = null,
     decimal? DiscountAmount = null,
 
-    decimal? DiscountPercentage = null)
+    decimal? DiscountPercentage = null,
+    bool UnitInferred = false)
 {
     public ExpenseCommand ToCommand() => new(
         Description,
@@ -49,5 +54,8 @@ public sealed record ExpenseRequest(
         CategoryRaw,
         UnitRaw,
         ListUnitPrice,
-        DiscountAmount);
+        DiscountAmount)
+    {
+        UnitInferred = UnitInferred,
+    };
 }

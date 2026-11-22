@@ -13,8 +13,11 @@ namespace Expenses.Application.Tests.Purchases;
 /// rejected"; and "Saving an expense line teaches a unit alias": "An unknown spelling is learned",
 /// "Learning applies to direct recording", "A known alias is not overridden", "A matched unit
 /// teaches nothing", "A code teaches nothing", "The earlier line decides within one save", "A
-/// rejected save teaches nothing", "History is not re-matched". From receipt-ingestion: "A receipt
-/// whose units all match can be confirmed unchanged".
+/// rejected save teaches nothing", "History is not re-matched", "An inferred unit confirmed
+/// untouched teaches nothing", "An inferred unit confirmed unedited from candidates teaches
+/// nothing", "A unit chosen in place of an inferred one is learned", "Marking a unit as inferred
+/// does not supply one". From receipt-ingestion: "A receipt whose units all match can be confirmed
+/// unchanged", "A receipt with inferred units can be confirmed unchanged".
 /// </summary>
 public sealed class UnitLearningTests
 {
@@ -209,6 +212,95 @@ public sealed class UnitLearningTests
         var confirmed = await Receipts.ConfirmCandidates(purchase.Id);
 
         Assert.Equal(["PCS", "KG"], confirmed.Expenses.Select(expense => CodeOf(expense.UnitId)));
+    }
+
+    // ---- Inferred units -------------------------------------------------------
+
+    [Fact]
+    public async Task An_inferred_unit_confirmed_untouched_teaches_nothing()
+    {
+        var tempKey = _ledger.GivenTemporaryCapture([0xFF, 0xD8, 0xFF, 0x04]);
+
+        var result = await Purchases.Record(
+            s_occurred,
+            0.20m,
+            [new ExpenseCommand("Deposit", 0.20m, Quantity: 2m, UnitCode: "PCS", UnitRaw: "Pfand") { UnitInferred = true }],
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.Extracted));
+
+        var expense = Assert.Single(result.Purchase.Expenses);
+        Assert.Equal(_piece.Id, expense.UnitId);
+        Assert.Equal("Pfand", expense.UnitRaw);
+        Assert.Null(AliasOf("pfand"));
+    }
+
+    [Fact]
+    public async Task An_inferred_unit_confirmed_unedited_from_candidates_teaches_nothing()
+    {
+        var candidate = ExtractionCandidate.Propose(1, "Milk", 1.50m, quantity: 1.5m, unitRaw: "LIT");
+        candidate.InferUnit(_kilogram.Id);
+        var purchase = GivenExtractedPurchase(candidate);
+
+        var confirmed = await Receipts.ConfirmCandidates(purchase.Id);
+
+        Assert.Equal(_kilogram.Id, Assert.Single(confirmed.Expenses).UnitId);
+        Assert.Null(AliasOf("lit"));
+    }
+
+    [Fact]
+    public async Task A_unit_chosen_in_place_of_an_inferred_one_is_learned()
+    {
+        var litre = _ledger.Given(Unit.Create("L", "Litre", "l", Unit.UnitKind.Volume));
+        var tempKey = _ledger.GivenTemporaryCapture([0xFF, 0xD8, 0xFF, 0x05]);
+
+        var result = await Purchases.Record(
+            s_occurred,
+            1.50m,
+            [new ExpenseCommand("Milk", 1.50m, Quantity: 1.5m, UnitCode: "L", UnitRaw: "LIT")],
+            capture: new CapturedReceiptCommand(tempKey, Purchase.ExtractionState.Extracted));
+
+        Assert.Equal(litre.Id, Assert.Single(result.Purchase.Expenses).UnitId);
+        Assert.Equal(litre.Id, AliasOf("lit"));
+    }
+
+    [Fact]
+    public async Task Marking_a_unit_as_inferred_does_not_supply_one()
+    {
+        var error = await Assert.ThrowsAsync<ExpensesException>(() => Purchases.Record(
+            s_occurred,
+            0.10m,
+            [new ExpenseCommand("Deposit", 0.10m, UnitRaw: "Pfand") { UnitInferred = true }]));
+
+        Assert.Equal(ApplicationErrors.ExpenseUnitRequired, error.Error.Code);
+    }
+
+    [Fact]
+    public async Task A_receipt_with_inferred_units_can_be_confirmed_unchanged()
+    {
+        var purchase = _ledger.Given(Purchase.Record(
+            s_occurred,
+            3.50m,
+            [Expense.Record("Groceries", 3.50m)],
+            receipt: _ledger.GivenReceiptFile([0xFF, 0xD8, 0xFF, 0x06]).AsReceipt(),
+            extraction: Purchase.ExtractionState.NeedsReview));
+        var vision = FakeStep.Producing(
+            "vision",
+            ExtractionStepResult.From(
+                purchase.Id,
+                "vision",
+                "1.0",
+                [
+                    ExtractionCandidate.Propose(1, "JAJA", 1.00m, unitRaw: "KOM"),
+                    ExtractionCandidate.Propose(2, "Deposit", 1.00m, quantity: 2m, unitRaw: "Pfand"),
+                    ExtractionCandidate.Propose(3, "Cheese", 1.50m, quantity: 0.482m),
+                ],
+                total: 3.50m)).ReadingImage();
+
+        await new ReceiptService(_ledger, _ledger, _ledger, _ledger, _ledger, _ledger, _ledger, new ExtractionCascade([vision]), _ledger)
+            .RerunExtraction(purchase.Id);
+        var confirmed = await Receipts.ConfirmCandidates(purchase.Id);
+
+        Assert.Equal(["PCS", "PCS", "KG"], confirmed.Expenses.Select(expense => CodeOf(expense.UnitId)));
+        Assert.Equal(["kom"], _ledger.UnitAliases.Select(alias => alias.Alias));
     }
 
     private Purchase GivenExtractedPurchase(ExtractionCandidate candidate)

@@ -93,6 +93,12 @@
   font-size: 0.8125rem;
 }
 
+/* A guess, not a fault: muted rather than in the failure colour, so it reads as "check this". */
+.hint {
+  color: var(--colour-ink-muted);
+  font-size: 0.8125rem;
+}
+
 /* Amounts and quantities are compared down the column, so they are figures of one width. */
 .number {
   font-variant-numeric: tabular-nums;

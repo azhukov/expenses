@@ -21,4 +21,11 @@ public sealed record ExpenseCommand(
     public long? MatchedCategoryId { get; init; }
 
     public long? MatchedUnitId { get; init; }
+
+    /// <summary>
+    /// The caller's statement that this line's unit is still the one guessed from its quantity,
+    /// untouched by a person. It only stops the line teaching an alias: it never supplies a unit nor
+    /// makes an unacceptable line acceptable, so it is safe to take on trust (default-unit-from-quantity, D3).
+    /// </summary>
+    public bool UnitInferred { get; init; }
 }

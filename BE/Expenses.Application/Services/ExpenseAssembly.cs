@@ -51,8 +51,10 @@ internal static class ExpenseAssembly
             // A person said what this printed text means, and nothing yet did: that is an alias.
             // Known text is left alone even when this line chose differently, so one line never
             // re-points a rule every later receipt relies on. Tracked rather than saved, so it
-            // commits with the expense or not at all (D16).
+            // commits with the expense or not at all (D16). A unit still as guessed from the
+            // quantity is no one's statement, so it teaches nothing (default-unit-from-quantity, D3).
             if (lookup is not null
+                && !command.UnitInferred
                 && UnitText.Normalise(command.UnitRaw) is { } printed
                 && !lookup.IsKnown(printed))
             {

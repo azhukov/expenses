@@ -24,6 +24,11 @@ export interface EditableLine {
   unitPrice: number | null
   listUnitPrice: number | null
   discountAmount: number | null
+  /**
+   * The unit is still the one extraction guessed from the quantity. Choosing a unit clears it;
+   * editing the quantity does not guess again, since the mark stays on screen to prompt a look.
+   */
+  unitInferred: boolean
 }
 
 export function asText(value: number | null | undefined): string {
@@ -51,6 +56,7 @@ export function emptyLine(key: number): EditableLine {
     unitPrice: null,
     listUnitPrice: null,
     discountAmount: null,
+    unitInferred: false,
   }
 }
 
@@ -71,7 +77,22 @@ export function lineOf(
     unitPrice: candidate.unitPrice,
     listUnitPrice: candidate.listUnitPrice,
     discountAmount: candidate.discountAmount,
+    unitInferred: candidate.unitInferred,
   }
+}
+
+/**
+ * A line with one field changed as the user typed it. Choosing a unit is the user saying what the
+ * line is in, so a guessed unit stops being a guess — and, confirmed, teaches its alias.
+ */
+export function withChange(
+  line: EditableLine,
+  field: 'description' | 'amount' | 'quantity' | 'categoryCode' | 'unitCode',
+  value: string,
+): EditableLine {
+  return field === 'unitCode'
+    ? { ...line, unitCode: value, unitInferred: false }
+    : { ...line, [field]: value }
 }
 
 /** The date the receipt itself established, where a fiscal code decoded one. */
@@ -185,6 +206,9 @@ export function unseenWarnings(lines: EditableLine[]): string[] {
  */
 const DESCRIPTION_MAX_LENGTH = 200
 
+/** The code of the one unit that is only ever counted whole. Codes are stable identity (D8). */
+const PIECE = 'PCS'
+
 /** The fields of a line the screen can refuse, and what is wrong with each. */
 export type LineErrors = Partial<Record<'description' | 'amount' | 'quantity' | 'unitCode', string>>
 
@@ -240,6 +264,14 @@ function lineProblems(line: EditableLine): LineErrors {
 
   if (line.unitCode === '') {
     errors.unitCode = 'A unit is required.'
+  } else if (
+    line.unitCode === PIECE &&
+    quantity === undefined &&
+    !Number.isInteger(Number(line.quantity))
+  ) {
+    // A screen rule, not a ledger one (default-unit-from-quantity, D5): it catches a weighed line
+    // left in pieces, which is what a fiscal "KOM" with a fraction or a hand edit produces.
+    errors.unitCode = 'Pieces need a whole-number quantity.'
   }
 
   return errors
@@ -338,6 +370,7 @@ export function confirmationOf(capture: CaptureResult, edits: Edits): RecordPurc
       unitRaw: line.unitRaw,
       listUnitPrice: line.listUnitPrice,
       discountAmount: line.discountAmount,
+      unitInferred: line.unitInferred,
     })),
     capture: {
       // An image capture is identified by its key; a fiscal one stored nothing and has none, so its

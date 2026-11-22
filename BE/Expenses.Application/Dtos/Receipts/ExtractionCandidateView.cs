@@ -21,7 +21,8 @@ public sealed record ExtractionCandidateView(
     long? CategoryId,
     long? UnitId,
     IReadOnlyDictionary<string, string> Provenance,
-    IReadOnlyDictionary<string, decimal> ReportedConfidence)
+    IReadOnlyDictionary<string, decimal> ReportedConfidence,
+    bool UnitInferred = false)
 {
     public static ExtractionCandidateView Of(ExtractionCandidate candidate) => new(
         candidate.LineNumber,
@@ -37,5 +38,6 @@ public sealed record ExtractionCandidateView(
         candidate.CategoryId,
         candidate.UnitId,
         candidate.Provenance,
-        candidate.ReportedConfidence);
+        candidate.ReportedConfidence,
+        candidate.UnitInferred);
 }

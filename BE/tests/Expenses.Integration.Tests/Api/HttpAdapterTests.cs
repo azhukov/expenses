@@ -277,6 +277,46 @@ public sealed class HttpAdapterTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    /// receipt-ingestion: "A line with no printed unit is inferred", as the HTTP client sees it. The
+    /// placeholder engine prints no unit and a quantity of 1, so its lines are guessed as pieces.
+    /// </summary>
+    [Fact]
+    public async Task An_inferred_unit_is_legible_in_the_capture_response()
+    {
+        var captured = await Capture(Jpeg(0x97));
+
+        long piece = (await ListUnits()).EnumerateArray()
+            .Single(unit => unit.GetProperty("code").GetString() == "PCS")
+            .GetProperty("id").GetInt64();
+        var candidates = captured.GetProperty("result").GetProperty("candidates").EnumerateArray().ToList();
+        Assert.NotEmpty(candidates);
+        Assert.All(candidates, candidate =>
+        {
+            Assert.Equal(piece, candidate.GetProperty("unitId").GetInt64());
+            Assert.True(candidate.GetProperty("unitInferred").GetBoolean());
+        });
+    }
+
+    /// <summary>purchase-recording: "An inferred unit confirmed untouched teaches nothing", over HTTP.</summary>
+    [Fact]
+    public async Task A_line_confirmed_as_inferred_teaches_no_alias()
+    {
+        string printed = $"pfand{Interlocked.Increment(ref s_sequence)}";
+        var captured = await Capture(Jpeg(0x98));
+
+        var response = await Record(new
+        {
+            occurredAt = Next(),
+            amount = 0.20m,
+            expenses = new[] { new { description = "Deposit", amount = 0.20m, quantity = 2m, unitCode = "PCS", unitRaw = printed, unitInferred = true } },
+            capture = new { tempKey = captured.GetProperty("tempKey").GetString(), state = captured.GetProperty("state").GetString() },
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.DoesNotContain(printed, Aliases(await ListUnits(), "PCS"));
+    }
+
     [Fact]
     public async Task Per_stage_provenance_and_each_arithmetic_check_are_reported()
     {

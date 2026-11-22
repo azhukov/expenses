@@ -67,6 +67,22 @@ public sealed class ExtractionCandidate
     /// </summary>
     public void MatchUnit(long unitId) => UnitId = unitId;
 
+    /// <summary>
+    /// Whether <see cref="UnitId"/> was guessed from the quantity rather than matched from printed
+    /// text. A guess is shown as one at review and, confirmed untouched, teaches no alias.
+    /// </summary>
+    public bool UnitInferred { get; private set; }
+
+    /// <summary>
+    /// Records a unit guessed from the quantity, for a line whose printed text matched nothing or
+    /// that printed none. The printed text is left as it is (D9).
+    /// </summary>
+    public void InferUnit(long unitId)
+    {
+        UnitId = unitId;
+        UnitInferred = true;
+    }
+
     public static ExtractionCandidate Propose(
         int lineNumber,
         string? description,

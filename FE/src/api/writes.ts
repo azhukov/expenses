@@ -77,6 +77,8 @@ export interface ExpenseRequest {
   unitRaw?: string | null
   listUnitPrice?: number | null
   discountAmount?: number | null
+  /** The unit is still the one extraction guessed, untouched by the user, so it teaches no alias. */
+  unitInferred?: boolean
 }
 
 /** A merchant as free text, matched or created server-side. */

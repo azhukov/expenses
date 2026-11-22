@@ -224,3 +224,31 @@ are now written without trailing zeros, and the spec says so. The malformed-date
 At the end of the change: `Expenses.Domain.Tests` 100 passed; `Expenses.Application.Tests` 249
 passed; `Expenses.Integration.Tests` 261 passed and 1 skipped (`ClaudeVisionGoldenPathTests`,
 manual only); the FE suite 272 passed in 18 files.
+
+## Scenarios added by `default-unit-from-quantity`
+
+A candidate line that matches no unit, or prints none, now carries a unit guessed from its quantity
+(PCS when whole, KG otherwise), marked as inferred. A line confirmed with its guess untouched
+teaches no alias. The review screen marks the guess and refuses PCS with a fractional quantity.
+Paths are relative to `BE/tests` unless they start with `FE/`.
+
+| Scenario | Where |
+| --- | --- |
+| receipt-ingestion: "Unknown text leaves the line unmatched" (now: matched to nothing, PCS inferred), "Unknown text with a fractional quantity is inferred as kilograms", "A line with no printed unit is inferred", "An absent quantity is inferred as pieces", "A whole quantity written with decimals is a whole number", "An inactive unit is not inferred", "A re-run uses the aliases as they now stand" (now: the inferred guess gives way to a new alias), "A fiscal invoice's units are matched" (now also: none inferred) | `Expenses.Application.Tests/Receipts/UnitMatchingTests` |
+| reference-data: "An alias of an inactive unit does not match" (now asserted as: not PACK, and inferred) | `Receipts/UnitMatchingTests` |
+| the inferred mark on a candidate | `Expenses.Domain.Tests/ExtractionCandidateTests` |
+| purchase-recording: "An inferred unit confirmed untouched teaches nothing", "An inferred unit confirmed unedited from candidates teaches nothing", "A unit chosen in place of an inferred one is learned", "Marking a unit as inferred does not supply one"; receipt-ingestion: "A receipt with inferred units can be confirmed unchanged" | `Expenses.Application.Tests/Purchases/UnitLearningTests` |
+| the inferred mark over HTTP, in a capture response and on a confirmed line | `Expenses.Integration.Tests/Api/HttpAdapterTests.An_inferred_unit_is_legible_in_the_capture_response`, `.A_line_confirmed_as_inferred_teaches_no_alias` |
+| browser-client: "An untouched inferred unit is confirmed as inferred", "Choosing a unit clears the guess", "Editing the quantity does not re-infer"; "Pieces with a fractional quantity are refused", "Pieces with a whole quantity are accepted", "A fiscal line printed in pieces with a fractional quantity must be corrected", "Other units allow fractional quantities" | `FE/src/capture/review.test.ts` |
+| browser-client: "An inferred unit is shown as a guess", "Choosing a unit clears the guess" (on screen) | `FE/src/routes/CaptureReview.test.tsx` |
+
+Some of these tests passed on their first run because they guard behaviour that already existed and
+that the new flag must not break: `A_matched_unit_is_not_marked_as_inferred` (the flag defaults to
+false), `An_inactive_unit_is_not_inferred` (before inference, no unit was given at all),
+`A_unit_chosen_in_place_of_an_inferred_one_is_learned`, `Marking_a_unit_as_inferred_does_not_supply_one`,
+and `An_inferred_unit_is_legible_in_the_capture_response`, whose view field went in with section 2,
+where the application tests needed it.
+
+At the end of the change: `Expenses.Domain.Tests` 102 passed; `Expenses.Application.Tests` 314
+passed; `Expenses.Integration.Tests` 306 passed and 1 skipped (`ClaudeVisionGoldenPathTests`,
+manual only); the FE suite 310 passed in 19 files.

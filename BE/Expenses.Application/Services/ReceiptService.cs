@@ -83,11 +83,15 @@ public sealed class ReceiptService(
     /// for every extraction path and any stage yet to come. It runs before the result is judged,
     /// stored or shown, so a stored re-run is already matched when it is read or confirmed. A line a
     /// stage matched itself is left as the stage had it, and the printed text is never touched (D9).
+    ///
+    /// A line whose text matches nothing, or that printed none, is given a unit guessed from its
+    /// quantity and marked as guessed, so review shows it as one and an untouched guess teaches no
+    /// alias when it is saved (default-unit-from-quantity, D1).
     /// </summary>
     private async Task MatchUnits(ExtractionStepResult? result, CancellationToken cancellationToken)
     {
         var unmatched = result?.Candidates
-            .Where(candidate => candidate.UnitId is null && candidate.UnitRaw is not null)
+            .Where(candidate => candidate.UnitId is null)
             .ToList();
 
         if (unmatched is not { Count: > 0 })
@@ -102,6 +106,10 @@ public sealed class ReceiptService(
             if (lookup.Match(candidate.UnitRaw) is { } unitId)
             {
                 candidate.MatchUnit(unitId);
+            }
+            else if (lookup.Infer(candidate.Quantity) is { } inferred)
+            {
+                candidate.InferUnit(inferred);
             }
         }
     }
@@ -401,11 +409,11 @@ public sealed class ReceiptService(
     /// confirmation, because a match must never erase what the receipt printed (D9) вЂ” and because
     /// the candidate itself does not survive, the expense is where that text then lives.
     ///
-    /// No unit code is passed and none is invented: the unit a candidate has is the one its printed
-    /// text was matched to after extraction. Where that matched nothing, the printed text is tried
-    /// once more when the line is saved — an alias may have been added since — and where it still
-    /// matches nothing, confirming without edited lines is refused rather than defaulted to a count
-    /// unit, which would state something the receipt did not.
+    /// No unit code is passed: the unit a candidate has is the one its printed text was matched to
+    /// after extraction or, where that matched nothing, the one guessed from its quantity. A guess is
+    /// passed on as one, so confirming it unedited records it but teaches no alias — a guess is not
+    /// what anyone said the printed text means (default-unit-from-quantity). A line left with no unit
+    /// at all, because the unit to guess was inactive, is still refused when saved.
     /// </summary>
     private static ExpenseCommand AsCommand(ExtractionCandidate candidate) => new(
         candidate.Description ?? string.Empty,
@@ -421,5 +429,6 @@ public sealed class ReceiptService(
     {
         MatchedCategoryId = candidate.CategoryId,
         MatchedUnitId = candidate.UnitId,
+        UnitInferred = candidate.UnitInferred,
     };
 }

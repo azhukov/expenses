@@ -17,6 +17,7 @@ import {
   reviewReasons,
   unseenWarnings,
   validate,
+  withChange,
 } from '../capture/review'
 
 import styles from './CaptureReview.module.css'
@@ -114,9 +115,9 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
   const errors = validate(edits, fiscalCreatedAt(capture))
   const marks = attempted ? errors : NOTHING_MARKED
 
-  function change(key: number, field: keyof EditableLine, value: string) {
+  function change(key: number, field: Parameters<typeof withChange>[1], value: string) {
     setLines(current =>
-      current.map(line => (line.key === key ? { ...line, [field]: value } : line)),
+      current.map(line => (line.key === key ? withChange(line, field, value) : line)),
     )
   }
 
@@ -351,6 +352,7 @@ export function CaptureReview({ capture, onConfirm, failure, isConfirming }: Rev
                   ))}
                 </select>
               </label>
+              {line.unitInferred && <span className={styles.hint}>Guessed from the quantity</span>}
               <Message
                 id={`line-${line.key}-unit-error`}
                 text={marks.byLine.get(line.key)?.unitCode}

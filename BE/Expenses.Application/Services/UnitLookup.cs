@@ -65,6 +65,18 @@ internal sealed class UnitLookup
             : null;
 
     /// <summary>
+    /// The unit a line that matched nothing is guessed to be in: pieces for a whole quantity, an
+    /// absent one counting as 1, and kilograms otherwise. Looked up by code like printed text, so an
+    /// inactive unit is never guessed; null then, and the line stays without one.
+    /// </summary>
+    public long? Infer(decimal? quantity)
+    {
+        decimal counted = quantity ?? 1m;
+
+        return Match(counted == decimal.Truncate(counted) ? "PCS" : "KG");
+    }
+
+    /// <summary>
     /// Whether the printed text is any unit's code or any alias, active or not. Known text is never
     /// learned as a new alias, which is what keeps learning from overriding anything.
     /// </summary>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CaptureResult } from '../api/types'
+import type { CaptureResult, ExtractionCandidateView } from '../api/types'
 
 import {
   confirmationOf,
@@ -8,8 +8,10 @@ import {
   type Edits,
   emptyLine,
   isValid,
+  lineOf,
   unseenWarnings,
   validate,
+  withChange,
 } from './review'
 
 /**
@@ -220,5 +222,134 @@ describe('Values the review screen does not show', () => {
     expect(
       isValid(validate(edits({ lines: [line({ unitPrice: 4.4885, listUnitPrice: 8.5 })] }))),
     ).toBe(true)
+  })
+})
+
+/**
+ * Scenarios from browser-client, "A successful capture is presented for review": "An untouched
+ * inferred unit is confirmed as inferred", "Choosing a unit clears the guess" and "Editing the
+ * quantity does not re-infer".
+ */
+describe('An inferred unit', () => {
+  function inferred(overrides: Partial<ExtractionCandidateView> = {}): ExtractionCandidateView {
+    return {
+      lineNumber: 1,
+      description: 'Deposit',
+      amount: 0.2,
+      quantity: 1,
+      unitPrice: null,
+      listUnitPrice: null,
+      discountAmount: null,
+      taxRatePercent: null,
+      categoryRaw: null,
+      unitRaw: 'Pfand',
+      categoryId: null,
+      unitId: 1,
+      provenance: {},
+      reportedConfidence: {},
+      unitInferred: true,
+      ...overrides,
+    }
+  }
+
+  const codeOfUnit = (id: number | null) => (id === 1 ? 'PCS' : '')
+  const noCategory = () => ''
+
+  it('is carried from the candidate onto the line', () => {
+    const editable = lineOf(inferred(), noCategory, codeOfUnit)
+
+    expect(editable.unitCode).toBe('PCS')
+    expect(editable.unitInferred).toBe(true)
+  })
+
+  it('is not set on a matched candidate or on a line added by hand', () => {
+    expect(lineOf(inferred({ unitInferred: false }), noCategory, codeOfUnit).unitInferred).toBe(
+      false,
+    )
+    expect(emptyLine(1).unitInferred).toBe(false)
+  })
+
+  it('is confirmed as inferred while untouched', () => {
+    const request = confirmationOf(
+      captureOf(),
+      edits({ lines: [line({ unitCode: 'PCS', quantity: '1', unitInferred: true })] }),
+    )
+
+    expect(request.expenses[0]?.unitCode).toBe('PCS')
+    expect(request.expenses[0]?.unitInferred).toBe(true)
+  })
+
+  it('is cleared when a unit is chosen', () => {
+    const chosen = withChange(line({ unitCode: 'KG', unitInferred: true }), 'unitCode', 'L')
+
+    expect(chosen.unitCode).toBe('L')
+    expect(chosen.unitInferred).toBe(false)
+
+    const request = confirmationOf(captureOf(), edits({ lines: [chosen] }))
+    expect(request.expenses[0]?.unitInferred).toBe(false)
+  })
+
+  it('is not re-inferred when the quantity is edited', () => {
+    const edited = withChange(
+      line({ unitCode: 'PCS', quantity: '1', unitInferred: true }),
+      'quantity',
+      '0.482',
+    )
+
+    expect(edited.quantity).toBe('0.482')
+    expect(edited.unitCode).toBe('PCS')
+    expect(edited.unitInferred).toBe(true)
+  })
+
+  function captureOf(): CaptureResult {
+    return {
+      tempKey: '0f2b0a3c-0000-4000-8000-000000000001',
+      state: 'Extracted',
+      failureReason: null,
+      result: null,
+      validation: null,
+      supplied: noFiscalDate,
+      extracted: noFiscalDate,
+      fiscalSource: 'DecodedFromCode',
+      fiscalPayload: null,
+      alreadyRecorded: null,
+    }
+  }
+})
+
+/**
+ * Scenarios from browser-client, "The review screen refuses an incomplete purchase": "Pieces with a
+ * fractional quantity are refused", "Pieces with a whole quantity are accepted", "A fiscal line
+ * printed in pieces with a fractional quantity must be corrected" and "Other units allow fractional
+ * quantities".
+ */
+describe('Pieces need a whole quantity', () => {
+  it('refuses pieces with a fractional quantity, on the unit', () => {
+    const errors = validate(edits({ lines: [line({ unitCode: 'PCS', quantity: '0.482' })] }))
+
+    expect(errors.byLine.get(1)?.unitCode).toMatch(/whole/i)
+    expect(isValid(errors)).toBe(false)
+  })
+
+  it('accepts pieces with a whole quantity', () => {
+    const errors = validate(
+      edits({ lines: [line({ unitCode: 'PCS', quantity: '3', amount: '1.06' })] }),
+    )
+
+    expect(isValid(errors)).toBe(true)
+  })
+
+  it('refuses a fiscal line printed in pieces with a fractional quantity until it is corrected', () => {
+    const errors = validate(
+      edits({ lines: [line({ unitCode: 'PCS', quantity: '0.350', unitRaw: 'KOM' })] }),
+    )
+
+    expect(errors.byLine.get(1)?.unitCode).toMatch(/whole/i)
+  })
+
+  it('allows a fractional quantity in any other unit', () => {
+    const errors = validate(edits({ lines: [line({ unitCode: 'PACK', quantity: '0.5' })] }))
+
+    expect(isValid(errors)).toBe(true)
   })
 })

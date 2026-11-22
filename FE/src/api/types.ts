@@ -139,6 +139,8 @@ export interface ExtractionCandidateView {
   unitId: number | null
   provenance: Record<string, string>
   reportedConfidence: Record<string, number>
+  /** True where `unitId` was guessed from the quantity because the printed unit matched nothing. */
+  unitInferred: boolean
 }
 
 /** What one run of the extraction cascade produced, with the engine that produced it. */

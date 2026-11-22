@@ -10,7 +10,12 @@ import { CaptureReview } from './CaptureReview'
 vi.mock('../api/queries', async importActual => ({
   ...(await importActual<typeof import('../api/queries')>()),
   useCategories: () => ({ data: [{ id: 3, code: 'groceries', name: 'Groceries' }] }),
-  useUnits: () => ({ data: [{ id: 5, code: 'kg', name: 'Kilogram', symbol: 'kg' }] }),
+  useUnits: () => ({
+    data: [
+      { id: 5, code: 'kg', name: 'Kilogram', symbol: 'kg' },
+      { id: 1, code: 'PCS', name: 'Piece', symbol: 'pcs' },
+    ],
+  }),
 }))
 
 const noFiscal = { ikof: null, jikr: null, issuerTaxNumber: null, createdAt: null, total: null }
@@ -31,6 +36,7 @@ function candidate(overrides: Record<string, unknown> = {}) {
     unitId: 5,
     provenance: {},
     reportedConfidence: {},
+    unitInferred: false,
     ...overrides,
   }
 }
@@ -350,5 +356,40 @@ describe('Values the review screen does not show are warned about, never refused
     )
 
     expect(screen.queryByTestId('unseen-warnings')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * Scenarios from browser-client, "A successful capture is presented for review": "An inferred unit
+ * is shown as a guess" and "Choosing a unit clears the guess".
+ */
+describe('An inferred unit is shown as a guess', () => {
+  function guessed() {
+    return captured({
+      result: {
+        ...captured().result!,
+        candidates: [candidate({ quantity: 0.482, unitRaw: 'LIT', unitInferred: true })],
+      },
+    })
+  }
+
+  it('marks a guessed unit as guessed from the quantity', () => {
+    show(guessed())
+
+    expect(within(line()).getByText(/guessed from the quantity/i)).toBeInTheDocument()
+  })
+
+  it('does not mark a matched unit', () => {
+    show()
+
+    expect(within(line()).queryByText(/guessed from the quantity/i)).not.toBeInTheDocument()
+  })
+
+  it('removes the mark when a unit is chosen', async () => {
+    show(guessed())
+
+    await userEvent.selectOptions(within(line()).getByLabelText(/unit/i), 'PCS')
+
+    expect(within(line()).queryByText(/guessed from the quantity/i)).not.toBeInTheDocument()
   })
 })

@@ -10,9 +10,16 @@ namespace Expenses.Application.Tests.Receipts;
 /// <summary>
 /// Scenarios from receipt-ingestion, "Extracted unit text is matched to a unit": "A fiscal invoice's
 /// units are matched", "Vision-extracted units are matched", "A code match is preferred to an
-/// alias", "Unknown text leaves the line unmatched", "A re-run uses the aliases as they now stand";
-/// and from reference-data: "Unit codes match in normalised form" and "An alias of an inactive unit
-/// does not match". Matching runs after every extraction path: capture, fiscal capture, re-run.
+/// alias", "Unknown text leaves the line unmatched", "Unknown text with a fractional quantity is
+/// inferred as kilograms", "A line with no printed unit is inferred", "An absent quantity is
+/// inferred as pieces", "A whole quantity written with decimals is a whole number", "An inactive
+/// unit is not inferred", "A re-run uses the aliases as they now stand"; and from reference-data:
+/// "Unit codes match in normalised form" and "An alias of an inactive unit does not match".
+/// Matching runs after every extraction path: capture, fiscal capture, re-run.
+///
+/// A line that matches nothing is no longer left without a unit: it carries one inferred from its
+/// quantity, marked as inferred (default-unit-from-quantity). "Matches no unit" is therefore
+/// asserted as "carries no matched unit": not the unit its text named, and marked as inferred.
 /// </summary>
 public sealed class UnitMatchingTests
 {
@@ -52,6 +59,7 @@ public sealed class UnitMatchingTests
         Assert.Equal(8, candidates.Count(line => line.UnitId == _piece.Id));
         Assert.Equal(6, candidates.Count(line => line.UnitId == _kilogram.Id));
         Assert.Equal(printed, candidates.Select(line => line.UnitRaw));
+        Assert.All(candidates, line => Assert.False(line.UnitInferred));
     }
 
     [Fact]
@@ -78,11 +86,64 @@ public sealed class UnitMatchingTests
     [Fact]
     public async Task Unknown_text_leaves_the_line_unmatched()
     {
-        var result = await Subject(FakeStep.Producing("fiscal", Lines("fiscal", "Pfand"))).CaptureFiscal(Payload);
+        var result = await Subject(FakeStep.Producing("fiscal", Line("Pfand", 2m))).CaptureFiscal(Payload);
+
+        var line = Assert.Single(result.Result!.Candidates);
+        Assert.Equal(_piece.Id, line.UnitId);
+        Assert.True(line.UnitInferred);
+        Assert.Equal("Pfand", line.UnitRaw);
+    }
+
+    [Fact]
+    public async Task Unknown_text_with_a_fractional_quantity_is_inferred_as_kilograms()
+    {
+        var result = await Subject(FakeStep.Producing("fiscal", Line("LIT", 1.5m))).CaptureFiscal(Payload);
+
+        var line = Assert.Single(result.Result!.Candidates);
+        Assert.Equal(_kilogram.Id, line.UnitId);
+        Assert.True(line.UnitInferred);
+        Assert.Equal("LIT", line.UnitRaw);
+    }
+
+    [Fact]
+    public async Task A_line_with_no_printed_unit_is_inferred()
+    {
+        var result = await Subject(FakeStep.Producing("fiscal", Line(null, 0.482m))).CaptureFiscal(Payload);
+
+        var line = Assert.Single(result.Result!.Candidates);
+        Assert.Equal(_kilogram.Id, line.UnitId);
+        Assert.True(line.UnitInferred);
+        Assert.Null(line.UnitRaw);
+    }
+
+    [Fact]
+    public async Task An_absent_quantity_is_inferred_as_pieces()
+    {
+        var result = await Subject(FakeStep.Producing("fiscal", Line(null, null))).CaptureFiscal(Payload);
+
+        var line = Assert.Single(result.Result!.Candidates);
+        Assert.Equal(_piece.Id, line.UnitId);
+        Assert.True(line.UnitInferred);
+    }
+
+    [Fact]
+    public async Task A_whole_quantity_written_with_decimals_is_a_whole_number()
+    {
+        var result = await Subject(FakeStep.Producing("fiscal", Line(null, 1.000m))).CaptureFiscal(Payload);
+
+        Assert.Equal(_piece.Id, Assert.Single(result.Result!.Candidates).UnitId);
+    }
+
+    [Fact]
+    public async Task An_inactive_unit_is_not_inferred()
+    {
+        _piece.Deactivate();
+
+        var result = await Subject(FakeStep.Producing("fiscal", Line("Pfand", 3m))).CaptureFiscal(Payload);
 
         var line = Assert.Single(result.Result!.Candidates);
         Assert.Null(line.UnitId);
-        Assert.Equal("Pfand", line.UnitRaw);
+        Assert.False(line.UnitInferred);
     }
 
     [Theory]
@@ -104,7 +165,11 @@ public sealed class UnitMatchingTests
 
         var result = await Subject(FakeStep.Producing("fiscal", Lines("fiscal", "pak", "PACK"))).CaptureFiscal(Payload);
 
-        Assert.All(result.Result!.Candidates, line => Assert.Null(line.UnitId));
+        Assert.All(result.Result!.Candidates, line =>
+        {
+            Assert.NotEqual(_pack.Id, line.UnitId);
+            Assert.True(line.UnitInferred);
+        });
     }
 
     [Fact]
@@ -114,12 +179,14 @@ public sealed class UnitMatchingTests
         var vision = FakeStep.Producing("vision", Lines("vision", "KD")).ReadingImage();
 
         await Subject(vision).RerunExtraction(purchase.Id);
-        Assert.Null(Assert.Single((await _ledger.FindLatest(purchase.Id))!.Candidates).UnitId);
+        Assert.True(Assert.Single((await _ledger.FindLatest(purchase.Id))!.Candidates).UnitInferred);
 
-        _ledger.Given(UnitAlias.Create(_piece.Id, "kd"));
+        _ledger.Given(UnitAlias.Create(_pack.Id, "kd"));
         await Subject(FakeStep.Producing("vision", Lines("vision", "KD")).ReadingImage()).RerunExtraction(purchase.Id);
 
-        Assert.Equal(_piece.Id, Assert.Single((await _ledger.FindLatest(purchase.Id))!.Candidates).UnitId);
+        var line = Assert.Single((await _ledger.FindLatest(purchase.Id))!.Candidates);
+        Assert.Equal(_pack.Id, line.UnitId);
+        Assert.False(line.UnitInferred);
     }
 
     [Fact]
@@ -144,6 +211,14 @@ public sealed class UnitMatchingTests
             "1.0",
             units.Select((unit, index) => ExtractionCandidate.Propose(index + 1, $"Line {index + 1}", 1.00m, unitRaw: unit)),
             total: units.Length);
+
+    private static ExtractionStepResult Line(string? unit, decimal? quantity)
+        => ExtractionStepResult.From(
+            0,
+            "fiscal",
+            "1.0",
+            [ExtractionCandidate.Propose(1, "Line 1", 1.00m, quantity: quantity, unitRaw: unit)],
+            total: 1.00m);
 
     private Purchase GivenPurchaseWithReceipt()
     {
